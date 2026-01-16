@@ -16,8 +16,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "23.0.0-FIX"
-        STATUS = "Blindagem de Reconhecimento"
+        VERSION = "24.0.0-ADMIN"
+        STATUS = "Gestão de Usuários Ativa"
 
 # 3. Conexão Supabase
 @st.cache_resource
@@ -26,7 +26,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS (COM LIMPEZA DE CACHE FORÇADA) ---
+# --- FUNÇÕES DE DADOS ---
 
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario, concurso=None):
@@ -40,7 +40,7 @@ def db_get_estudos(usuario, concurso=None):
         df = df.sort_values('dt_ordenacao', ascending=False)
     return df
 
-@st.cache_data(ttl=600) # Aumentamos o TTL, mas limpamos manualmente no INSERT
+@st.cache_data(ttl=600)
 def db_get_editais():
     res = supabase.table("editais_materias").select("*").execute()
     editais = {}
@@ -59,22 +59,23 @@ def db_get_editais():
     return editais
 
 # --- LOGIN ---
+res_u_global = supabase.table("perfil_usuarios").select("*").execute()
+users_global = {row['nome']: row for row in res_u_global.data}
+
 if 'usuario_logado' not in st.session_state:
-    res_u = supabase.table("perfil_usuarios").select("*").execute()
-    users = {row['nome']: row for row in res_u.data}
     c1, c2, c3 = st.columns([1, 1.8, 1])
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD LOGIN</h1>", unsafe_allow_html=True)
-        t_log, t_cad = st.tabs(["Acessar", "Novo Guerreiro"])
+        t_log, t_cad = st.tabs(["Acessar Base", "Novo Guerreiro"])
         with t_log:
             with st.form("login"):
-                u = st.selectbox("Guerreiro", list(users.keys()) if users else ["Nenhum"])
+                u = st.selectbox("Guerreiro", list(users_global.keys()) if users_global else ["Nenhum"])
                 p = st.text_input("PIN", type="password")
                 if st.form_submit_button("ENTRAR", use_container_width=True):
-                    if u in users and p == users[u]['pin']:
+                    if u in users_global and p == users_global[u]['pin']:
                         st.session_state.usuario_logado = u
                         st.rerun()
-                    else: st.error("PIN Incorreto.")
+                    else: st.error("Acesso Negado.")
         with t_cad:
             with st.form("cad"):
                 tk = st.text_input("Token de Convite")
@@ -86,142 +87,120 @@ if 'usuario_logado' not in st.session_state:
                         try:
                             supabase.table("perfil_usuarios").insert({"nome": n_cad, "pin": pi}).execute()
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
+                            st.cache_data.clear()
                             st.success("Guerreiro Cadastrado!")
                         except: st.error("Erro no cadastro.")
                     else: st.error("Token Inválido.")
     st.stop()
 
-# --- CENTRAL DE MISSÕES (SÓ APARECE SE NÃO HOUVER CONCURSO ATIVO) ---
+# --- CENTRAL DE MISSÕES ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 
 if 'concurso_ativo' not in st.session_state:
-    st.markdown(f"## 🥷 Guerreiro {usuario_atual}, para qual missão vamos hoje?")
-    
-    col_sel, col_novo = st.columns([1.5, 1])
-    
-    with col_sel:
-        st.subheader("🎯 Suas Missões")
-        if not editais: st.info("Nenhuma missão criada ainda.")
+    st.markdown(f"## 🥷 Bem-vindo, {usuario_atual}")
+    c_sel, c_nov = st.columns([1.5, 1])
+    with c_sel:
+        st.subheader("🎯 Selecionar Missão")
+        if not editais: st.info("Sem missões.")
         else:
             for conc in editais.keys():
-                if st.button(f"🚀 ENTRAR: {conc.upper()}", use_container_width=True, key=f"btn_{conc}"):
+                if st.button(f"🚀 {conc.upper()}", use_container_width=True):
                     st.session_state.concurso_ativo = conc
                     st.rerun()
-                    
-    with col_novo:
+    with c_nov:
         st.subheader("➕ Nova Missão")
-        with st.form("form_novo_edital"):
-            nome_edital = st.text_input("Nome do Concurso (Ex: PF, PC, Senado)")
-            cargo_edital = st.text_input("Cargo")
-            data_edital = st.date_input("Data da Prova", format="DD/MM/YYYY")
-            if st.form_submit_button("CRIAR E INICIAR", use_container_width=True):
-                if not nome_edital:
-                    st.error("Digite o NOME do concurso para que ele seja reconhecido!")
-                else:
-                    try:
-                        # Grava no banco com blindagem de campos obrigatórios
-                        supabase.table("editais_materias").insert({
-                            "concurso": nome_edital, "cargo": cargo_edital, 
-                            "data_prova": data_edital.strftime('%Y-%m-%d'), 
-                            "materia": "Geral", "topicos": [] 
-                        }).execute()
-                        
-                        # LIMPA O CACHE PARA O NOME APARECER NO RECONHECIMENTO
-                        st.cache_data.clear()
-                        st.session_state.concurso_ativo = nome_edital
-                        st.success(f"Missão {nome_edital} criada!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao salvar missão: {str(e)}")
+        with st.form("f_missao"):
+            nm = st.text_input("Concurso")
+            cg = st.text_input("Cargo")
+            dt = st.date_input("Prova", format="DD/MM/YYYY")
+            if st.form_submit_button("CRIAR"):
+                supabase.table("editais_materias").insert({"concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []}).execute()
+                st.cache_data.clear(); st.session_state.concurso_ativo = nm; st.rerun()
     st.stop()
 
-# --- AMBIENTE OPERACIONAL (MISSÃO SELECIONADA) ---
+# --- AMBIENTE OPERACIONAL ---
 concurso_ativo = st.session_state.concurso_ativo
 df_missao = db_get_estudos(usuario_atual, concurso_ativo)
 
 with st.sidebar:
     st.markdown(f"### 🥷 {usuario_atual}")
-    st.success(f"🎯 **Missão Ativa:**\n{concurso_ativo}")
-    if st.button("🔄 Trocar de Missão", use_container_width=True):
+    st.success(f"🎯 Missão: {concurso_ativo}")
+    if st.button("🔄 Trocar de Missão"):
         del st.session_state.concurso_ativo
         st.rerun()
-    
     st.markdown("---")
     menus = ["Dashboard", "Novo Registro", "Gestão do Edital", "Histórico"]
     if usuario_atual == "Fernando Pinheiro": menus.append("⚙️ Gestão de Sistema")
-    
-    selected = option_menu("Menu Tático", menus, icons=["bar-chart", "plus-circle", "book-half", "table", "gear"], default_index=0)
-    
+    selected = option_menu("Menu", menus, icons=["bar-chart", "plus-circle", "book-half", "table", "gear"], default_index=0)
     if st.button("🚪 Sair"):
         del st.session_state.usuario_logado
         if 'concurso_ativo' in st.session_state: del st.session_state.concurso_ativo
         st.rerun()
 
-# --- TELAS (FILTRADAS PELO CONCURSO_ATIVO) ---
-
+# --- TELAS ---
 if selected == "Dashboard":
-    st.title(f"📊 Desempenho: {concurso_ativo}")
+    st.title(f"📊 {concurso_ativo}")
     if not df_missao.empty:
         c1, c2 = st.columns(2)
         tot = int(df_missao['total'].sum())
-        c1.metric("Questões na Missão", tot, border=True)
-        c2.metric("Precisão Geral", f"{(df_missao['acertos'].sum()/tot*100):.1f}%", border=True)
-        df_p = df_missao.sort_values('dt_ordenacao').groupby('Data')['total'].sum().reset_index()
-        st.plotly_chart(px.line(df_p, x='Data', y='total', markers=True), use_container_width=True)
-    else: st.info(f"Nenhum registro para {concurso_ativo}.")
+        c1.metric("Questões", tot, border=True)
+        c2.metric("Precisão", f"{(df_missao['acertos'].sum()/tot*100):.1f}%", border=True)
+        st.plotly_chart(px.line(df_missao.sort_values('dt_ordenacao').groupby('Data')['total'].sum().reset_index(), x='Data', y='total', markers=True), use_container_width=True)
+    else: st.info("Sem dados.")
 
 elif selected == "Novo Registro":
-    st.title(f"📝 Registro: {concurso_ativo}")
-    # Verifica se o edital existe no dicionário para carregar as matérias
-    if concurso_ativo in editais:
-        materias = list(editais[concurso_ativo]["materias"].keys())
-        mat = st.selectbox("Selecione a Matéria", materias)
-        with st.form("reg_estudo"):
-            dt = st.date_input("Data do Estudo", datetime.date.today(), format="DD/MM/YYYY")
-            ass_lista = editais[concurso_ativo]["materias"].get(mat) or ["Geral"]
-            ass = st.selectbox("Assunto", ass_lista)
-            a = st.number_input("Acertos", 0); t = st.number_input("Total", 1)
-            if st.form_submit_button("SALVAR REGISTRO"):
-                supabase.table("registros_estudos").insert({
-                    "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
-                    "concurso": concurso_ativo, "materia": mat, "assunto": ass, 
-                    "acertos": int(a), "total": int(t), "taxa": (a/t*100)
-                }).execute()
-                st.cache_data.clear(); st.success("Salvo!")
-    else: st.error("Erro ao carregar matérias. Tente 'Sincronizar Tudo'.")
+    st.title("📝 Novo Registro")
+    materias = list(editais[concurso_ativo]["materias"].keys())
+    mat = st.selectbox("Matéria", materias)
+    with st.form("r"):
+        d = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
+        a_list = editais[concurso_ativo]["materias"].get(mat) or ["Geral"]
+        asnt = st.selectbox("Assunto", a_list)
+        ac = st.number_input("Acertos", 0); tt = st.number_input("Total", 1)
+        if st.form_submit_button("SALVAR"):
+            supabase.table("registros_estudos").insert({"data_estudo": d.strftime('%Y-%m-%d'), "usuario": usuario_atual, "concurso": concurso_ativo, "materia": mat, "assunto": asnt, "acertos": int(ac), "total": int(tt), "taxa": (ac/tt*100)}).execute()
+            st.cache_data.clear(); st.success("Salvo!")
 
 elif selected == "Gestão do Edital":
-    st.title(f"📑 Ajustar Missão: {concurso_ativo}")
-    # Permite adicionar matérias apenas para o concurso que está aberto
-    st.subheader("Adicionar Matéria ao Edital")
-    m_n = st.text_input("Nome da Matéria")
-    if st.button("Confirmar Adição"):
-        if m_n:
-            supabase.table("editais_materias").insert({
-                "concurso": concurso_ativo, "materia": m_n, "topicos": [], 
-                "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']
-            }).execute()
-            st.cache_data.clear(); st.rerun()
-        else: st.warning("Digite um nome!")
-
-    st.markdown("---")
-    # Edição de tópicos das matérias existentes
+    st.title(f"📑 Gestão: {concurso_ativo}")
+    m_n = st.text_input("Nova Matéria")
+    if st.button("Adicionar"):
+        supabase.table("editais_materias").insert({"concurso": concurso_ativo, "materia": m_n, "topicos": [], "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']}).execute()
+        st.cache_data.clear(); st.rerun()
     for m, t in editais[concurso_ativo]["materias"].items():
         with st.expander(f"📚 {m}"):
-            txt = st.text_area("Tópicos (separe por ;)", value="; ".join(t), key=f"t_{m}")
-            if st.button("Salvar Assuntos", key=f"bt_{m}"):
-                novos = [x.strip() for x in txt.split(";") if x.strip()]
+            tx = st.text_area("Tópicos (;)", value="; ".join(t), key=f"t_{m}")
+            if st.button("Salvar", key=f"b_{m}"):
+                novos = [x.strip() for x in tx.split(";") if x.strip()]
                 supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
                 st.cache_data.clear(); st.rerun()
-            if st.checkbox(f"Excluir {m}", key=f"c_{m}"):
-                if st.button(f"🗑️ Deletar {m}", key=f"d_{m}"):
-                    supabase.table("editais_materias").delete().eq("concurso", concurso_ativo).eq("materia", m).execute()
-                    st.cache_data.clear(); st.rerun()
 
 elif selected == "⚙️ Gestão de Sistema":
-    st.title("⚙️ Sistema")
-    if st.button("📥 Gerar Backup JSON"):
+    st.title("⚙️ Painel do Administrador")
+    
+    # --- SEÇÃO DO JOÃO (GESTÃO DE GUERREIROS) ---
+    st.subheader("👥 Gestão de Guerreiros (Squad)")
+    st.write("Verifique se o João está na lista abaixo e se o PIN está correto.")
+    df_u = pd.DataFrame(list(users_global.values()))
+    if not df_u.empty:
+        st.dataframe(df_u[['nome', 'pin']], use_container_width=True, hide_index=True)
+        
+        u_del = st.selectbox("Remover Guerreiro para refazer cadastro:", [""] + list(users_global.keys()))
+        if u_del and st.button(f"🗑️ Excluir {u_del}"):
+            supabase.table("perfil_usuarios").delete().eq("nome", u_del).execute()
+            st.success(f"{u_del} removido. Gere um novo token para ele.")
+            st.rerun()
+    
+    st.markdown("---")
+    st.subheader("🎟️ Gerar Acesso (Tokens)")
+    if st.button("Novo Token"):
+        tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        supabase.table("tokens_convite").insert({"codigo": tk}).execute()
+        st.code(tk)
+    
+    st.markdown("---")
+    if st.button("📥 Baixar Backup JSON"):
         ed = supabase.table("editais_materias").select("*").execute().data
         re = supabase.table("registros_estudos").select("*").execute().data
-        st.download_button("Baixar Backup", json.dumps({"editais": ed, "registros": re}), "squad_backup.json")
+        st.download_button("Download", json.dumps({"editais": ed, "registros": re}), "backup.json")
