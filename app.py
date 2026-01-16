@@ -7,22 +7,32 @@ import plotly.graph_objects as go
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO (SEM FIRULAS VISUAIS EXTRAS) ---
+# --- 1. CONFIGURAÇÃO BASE ---
 st.set_page_config(page_title="SQUAD COMMANDER", page_icon="💀", layout="wide")
 
+# CSS Minimalista e Funcional
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #0E0E0E; color: #EEE; }
     header {visibility: hidden;}
+    .block-container { padding-top: 2rem !important; }
     
-    /* Cores de Urgência baseadas no acerto */
-    .card-critico { border-left: 5px solid #EF4444 !important; background-color: #1F1111; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #333; }
-    .card-atencao { border-left: 5px solid #F59E0B !important; background-color: #1F1A11; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #333; }
-    .card-safe    { border-left: 5px solid #10B981 !important; background-color: #111F15; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #333; }
+    /* Estilo dos Cards de Revisão */
+    .rev-card {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid #333;
+        background-color: #171717;
+    }
+    .border-red { border-left: 5px solid #EF4444; }    /* Ruim < 60% */
+    .border-orange { border-left: 5px solid #F59E0B; } /* Médio 60-80% */
+    .border-green { border-left: 5px solid #10B981; }  /* Bom > 80% */
     
-    .txt-meta { font-size: 0.8em; color: #888; }
-    .txt-strong { font-weight: bold; color: #FFF; }
+    .card-title { font-weight: 700; font-size: 1rem; color: #FFF; margin-bottom: 4px; }
+    .card-sub { font-size: 0.85rem; color: #A3A3A3; }
+    .card-footer { font-size: 0.75rem; color: #555; margin-top: 8px; display: flex; justify-content: space-between; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -33,7 +43,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- 3. FUNÇÕES ---
+# --- 3. FUNÇÕES DE SUPORTE ---
 def get_editais():
     try:
         res = supabase.table("editais_materias").select("*").execute()
@@ -52,212 +62,201 @@ def get_stats(concurso):
         return pd.DataFrame(res.data)
     except: return pd.DataFrame()
 
-# --- LÓGICA PURA DE REVISÃO (STICKY + PERFORMANCE) ---
-def calcular_pendencias(df):
+def processar_revisoes(df):
     if df.empty: return pd.DataFrame()
     hoje = datetime.date.today()
-    df['dt_temp'] = pd.to_datetime(df['data_estudo']).dt.date
+    df['dt_estudo_obj'] = pd.to_datetime(df['data_estudo']).dt.date
     
     pendencias = []
-    
-    # Proteção contra falta de colunas no banco
-    for col in ['rev_24h', 'rev_07d', 'rev_15d', 'rev_30d']:
-        if col not in df.columns: df[col] = False
-    
+    colunas_rev = ['rev_24h', 'rev_07d', 'rev_15d', 'rev_30d']
+    for c in colunas_rev:
+        if c not in df.columns: df[c] = False
+
     for _, row in df.iterrows():
-        dias = (hoje - row['dt_temp']).days
-        # Define cor baseada no desempenho (Critério do Usuário: Errou muito = Treina mais)
-        taxa = row['taxa'] if 'taxa' in row else 0
-        if taxa < 60: css = "card-critico" # Vermelho
-        elif taxa < 80: css = "card-atencao" # Amarelo
-        else: css = "card-safe" # Verde
+        delta = (hoje - row['dt_estudo_obj']).days
+        taxa = row.get('taxa', 0)
         
-        base_obj = {
+        # Define a cor do card pela performance
+        cor = "border-red" if taxa < 60 else "border-orange" if taxa < 80 else "border-green"
+        
+        base = {
             "id": row['id'], "Materia": row['materia'], "Assunto": row['assunto'],
-            "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css
+            "Data": row['dt_estudo_obj'].strftime('%d/%m'), "Taxa": taxa, "Cor": cor
         }
         
-        # Lógica Cumulativa: Se passou do dia E não marcou feito, entra na lista.
-        if dias >= 1 and not row['rev_24h']:
-            p = base_obj.copy(); p["Fase"] = "24h"; pendencias.append(p)
-            
-        if dias >= 7 and not row['rev_07d']:
-            p = base_obj.copy(); p["Fase"] = "07d"; pendencias.append(p)
-            
-        if dias >= 15 and not row['rev_15d']:
-            p = base_obj.copy(); p["Fase"] = "15d"; pendencias.append(p)
-            
-        if dias >= 30 and not row['rev_30d']:
-            p = base_obj.copy(); p["Fase"] = "30d"; pendencias.append(p)
+        # Critérios D1, D7, D15, D30
+        if delta >= 1 and not row['rev_24h']: 
+            d = base.copy(); d.update({"Fase": "24h", "Label": "🔥 D1"}); pendencias.append(d)
+        if delta >= 7 and not row['rev_07d']: 
+            d = base.copy(); d.update({"Fase": "07d", "Label": "📅 D7"}); pendencias.append(d)
+        if delta >= 15 and not row['rev_15d']: 
+            d = base.copy(); d.update({"Fase": "15d", "Label": "🧠 D15"}); pendencias.append(d)
+        if delta >= 30 and not row['rev_30d']: 
+            d = base.copy(); d.update({"Fase": "30d", "Label": "💎 D30"}); pendencias.append(d)
             
     return pd.DataFrame(pendencias)
 
-# --- 4. APP ---
+# --- 4. NAVEGAÇÃO ---
 if 'missao_ativa' not in st.session_state: st.session_state.missao_ativa = None
 
-# TELA INICIAL
+# CENTRAL DE COMANDO
 if st.session_state.missao_ativa is None:
     st.title("💀 CENTRAL DE COMANDO")
     editais = get_editais()
-    if not editais: st.warning("Cadastre uma missão no menu lateral ou abaixo.")
     
-    c1, c2 = st.columns([3, 1])
+    c1, c2 = st.columns([2, 1])
     with c1:
         for nome, dados in editais.items():
             with st.container(border=True):
                 col_a, col_b = st.columns([3, 1])
-                col_a.markdown(f"### {nome}\n*{dados['cargo']}*")
-                if col_b.button("ACESSAR", key=f"go_{nome}"):
+                col_a.subheader(nome)
+                col_a.caption(f"Cargo: {dados['cargo']}")
+                if col_b.button("ACESSAR", key=f"ac_{nome}"):
                     st.session_state.missao_ativa = nome
                     st.rerun()
     with c2:
-        with st.form("new_mission"):
-            st.markdown("**Nova Missão**")
-            n = st.text_input("Nome (Ex: PF)")
-            c = st.text_input("Cargo")
-            d = st.date_input("Data Prova")
-            if st.form_submit_button("CRIAR"):
-                supabase.table("editais_materias").insert({"concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral"}).execute()
-                st.rerun()
+        with st.container(border=True):
+            st.markdown("### ➕ Nova Missão")
+            with st.form("new_m"):
+                n = st.text_input("Nome")
+                c = st.text_input("Cargo")
+                d = st.date_input("Data Prova")
+                if st.form_submit_button("CRIAR"):
+                    supabase.table("editais_materias").insert({"concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral"}).execute()
+                    st.rerun()
 
-# TELA DA MISSÃO
+# MODO OPERACIONAL
 else:
     missao = st.session_state.missao_ativa
-    dados = get_editais().get(missao, {})
     df = get_stats(missao)
+    dados = get_editais().get(missao, {})
     
     with st.sidebar:
-        st.header(missao)
-        if st.button("🔙 VOLTAR"): st.session_state.missao_ativa = None; st.rerun()
+        st.title(f"🎯 {missao}")
+        if st.button("🔙 VOLTAR AO COMANDO"):
+            st.session_state.missao_ativa = None
+            st.rerun()
         st.divider()
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
-                           icons=["graph-up", "check-square", "pencil", "gear", "clock"], default_index=1)
+                           icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-check"], default_index=1)
 
+    # --- DASHBOARD ---
     if menu == "Dashboard":
-        st.title("📊 Indicadores")
+        st.subheader("📊 Performance Geral")
         if df.empty: st.info("Sem dados.")
         else:
-            tot = int(df['total'].sum())
-            ac = int(df['acertos'].sum())
-            if 'tempo' in df.columns: mins = df['tempo'].fillna(0).sum()
-            else: mins = 0
-            
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", tot)
-            c2.metric("Precisão Geral", f"{(ac/tot*100):.1f}%")
-            c3.metric("Tempo Total", f"{int(mins//60)}h {int(mins%60)}m")
-
-    # --- O CORAÇÃO DO SISTEMA: REVISÕES ---
-    elif menu == "Revisões":
-        st.title("🔄 Cronograma de Repetição")
-        st.markdown("**Regra:** Errou muito (Vermelho)? Revisão Pesada. Acertou muito (Verde)? Leitura Rápida.")
-        
-        df_pend = calcular_pendencias(df)
-        
-        if df_pend.empty:
-            st.success("✅ Tudo limpo. Nenhuma pendência nas camadas de memória.")
-        else:
-            cols = st.columns(4)
-            phases = ["24h", "07d", "15d", "30d"]
-            titles = ["🔥 D1 (Fixação)", "📅 D7 (Consolidação)", "🧠 D15 (Automação)", "💎 D30 (Manutenção)"]
+            tot = df['total'].sum()
+            ac = df['acertos'].sum()
+            c1.metric("Questões", int(tot))
+            c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
+            if 'tempo' in df.columns:
+                h = df['tempo'].sum() // 60
+                c3.metric("Horas Líquidas", f"{int(h)}h")
             
-            for i, fase in enumerate(phases):
+            st.markdown("---")
+            df_g = df.copy()
+            df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
+            fig = px.line(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#444', '#DC2626'])
+            st.plotly_chart(fig, use_container_width=True)
+
+    # --- REVISÕES (LÓGICA STICKY) ---
+    elif menu == "Revisões":
+        st.subheader("🔄 Cronograma de Revisão (Dívida Ativa)")
+        df_p = processar_revisoes(df)
+        
+        if df_p.empty:
+            st.success("✅ Nenhuma revisão pendente!")
+        else:
+            fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
+            cols = st.columns(4)
+            
+            for i, (f_id, f_label) in enumerate(fases):
                 with cols[i]:
-                    st.markdown(f"### {titles[i]}")
-                    itens = df_pend[df_pend['Fase'] == fase]
-                    if itens.empty:
-                        st.caption("Vazio")
+                    st.markdown(f"#### {f_label}")
+                    itens = df_p[df_p['Fase'] == f_id]
+                    if itens.empty: st.caption("Vazio")
                     else:
                         for _, row in itens.iterrows():
-                            # Card HTML Simples e Direto
+                            # Card Visual
                             st.markdown(f"""
-                            <div class="{row['CSS']}">
-                                <div class="txt-strong">{row['Materia']}</div>
-                                <div style="font-size:0.9em">{row['Assunto']}</div>
-                                <div class="txt-meta">
-                                    Origem: {row['Data']} | Acerto: <b>{row['Taxa']:.0f}%</b>
+                            <div class="rev-card {row['Cor']}">
+                                <div class="card-title">{row['Materia']}</div>
+                                <div class="card-sub">{row['Assunto']}</div>
+                                <div class="card-footer">
+                                    <span>📅 {row['Data']}</span>
+                                    <span>🎯 <b>{row['Taxa']:.0f}%</b></span>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
-                            
-                            # Botão de Conclusão da Fase
-                            key_btn = f"chk_{row['id']}_{fase}"
-                            if st.button("Concluir", key=key_btn):
-                                col_db = f"rev_{fase}" # Ex: rev_24h
-                                try:
-                                    supabase.table("registros_estudos").update({col_db: True}).eq("id", row['id']).execute()
-                                    st.toast("Revisão registrada!")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error("Erro: Verifique se criou as colunas rev_24h, rev_07d... no Supabase.")
+                            if st.button("Concluir", key=f"btn_{row['id']}_{f_id}"):
+                                supabase.table("registros_estudos").update({f"rev_{f_id}": True}).eq("id", row['id']).execute()
+                                st.toast("Revisão registrada!")
+                                time.sleep(0.5); st.rerun()
 
+    # --- REGISTRAR ---
     elif menu == "Registrar":
-        st.title("📝 Registrar Sessão")
+        st.subheader("📝 Registrar Questões")
         mats = list(dados.get('materias', {}).keys())
-        if not mats: st.warning("Cadastre matérias primeiro.")
+        if not mats: st.warning("Cadastre matérias primeiro!")
         else:
-            c1, c2 = st.columns(2)
-            mat = c1.selectbox("Matéria", mats)
-            top = dados['materias'].get(mat, []) or ["Geral"]
-            assunto = c1.selectbox("Assunto", top)
-            dt = c2.date_input("Data Estudo")
-            
-            c3, c4, c5, c6 = st.columns(4)
-            ac = c3.number_input("Acertos", 0)
-            tot = c4.number_input("Total", 1)
-            h = c5.selectbox("Hs", range(13))
-            m = c6.selectbox("Min", range(60))
-            
-            if st.button("SALVAR", type="primary"):
-                try:
+            with st.form("reg_q"):
+                c1, c2 = st.columns(2)
+                mat = c1.selectbox("Matéria", mats)
+                assunto = c1.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
+                dt = c2.date_input("Data")
+                ac = c2.number_input("Acertos", 0)
+                tot = c2.number_input("Total", 1)
+                h, m = st.columns(2)
+                hs = h.selectbox("Horas", range(13))
+                mi = m.selectbox("Minutos", range(60))
+                if st.form_submit_button("SALVAR REGISTRO"):
                     supabase.table("registros_estudos").insert({
                         "concurso": missao, "materia": mat, "assunto": assunto,
-                        "data_estudo": dt.strftime('%Y-%m-%d'), 
-                        "acertos": ac, "total": tot, "taxa": (ac/tot)*100, 
-                        "tempo": h*60+m,
-                        # Reseta as revisões para o novo registro
+                        "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot,
+                        "taxa": (ac/tot*100), "tempo": hs*60+mi,
                         "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
                     }).execute()
-                    st.success("Salvo! Revisões agendadas.")
-                except Exception as e: st.error(str(e))
+                    st.success("Registrado!"); time.sleep(0.5); st.rerun()
 
+    # --- CONFIGURAR ---
     elif menu == "Configurar":
-        st.title("⚙️ Matérias")
-        n = st.text_input("Nova Matéria")
-        if st.button("Adicionar"):
-            supabase.table("editais_materias").insert({"concurso": missao, "materia": n, "topicos": []}).execute()
-            st.rerun()
-        
+        st.subheader("⚙️ Configurar Edital")
+        with st.container(border=True):
+            nova_m = st.text_input("Nova Matéria")
+            if st.button("Adicionar"):
+                supabase.table("editais_materias").insert({"concurso": missao, "materia": nova_m, "topicos": []}).execute()
+                st.rerun()
         st.divider()
         for m, t in dados.get('materias', {}).items():
-            with st.expander(m):
-                txt = st.text_area("Tópicos (;)", "; ".join(t), key=f"t_{m}")
-                if st.button("Salvar", key=f"s_{m}"):
-                    l = [x.strip() for x in txt.split(";") if x.strip()]
+            with st.expander(f"📚 {m}"):
+                tops = st.text_area("Tópicos (separar por ;)", "; ".join(t), key=f"tx_{m}")
+                c_s, c_d = st.columns([4, 1])
+                if c_s.button("Salvar", key=f"sv_{m}"):
+                    l = [x.strip() for x in tops.split(";") if x.strip()]
                     supabase.table("editais_materias").update({"topicos": l}).eq("concurso", missao).eq("materia", m).execute()
                     st.rerun()
+                if c_d.button("🗑️", key=f"del_{m}"):
+                    supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
+                    st.rerun()
 
+    # --- HISTÓRICO ---
     elif menu == "Histórico":
-        st.title("📜 Histórico")
-        if not df.empty:
-            df['data_estudo'] = pd.to_datetime(df['data_estudo']).dt.date
-            # Tabela Editável
-            edited = st.data_editor(df[['id','data_estudo','materia','acertos','total']], hide_index=True, key='edit_hist')
-            col_btn_1, col_btn_2 = st.columns(2)
-            
-            if col_btn_1.button("Salvar Alterações"):
-                # Lógica de update simples
-                for i, r in edited.iterrows():
-                    supabase.table("registros_estudos").update({
-                        "acertos": r['acertos'], "total": r['total'], 
-                        "taxa": (r['acertos']/r['total']*100)
-                    }).eq("id", r['id']).execute()
+        st.subheader("📜 Histórico de Estudos")
+        if df.empty: st.info("Vazio.")
+        else:
+            # Editor de tabela
+            df_e = df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']]
+            edited = st.data_editor(df_e, hide_index=True, use_container_width=True)
+            if st.button("Salvar Alterações"):
+                for _, r in edited.iterrows():
+                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100)}).eq("id", r['id']).execute()
                 st.rerun()
-                
-            # Zona de Exclusão Simples
-            to_del = st.selectbox("Apagar registro:", df['id'].astype(str) + " - " + df['materia'], index=None)
-            if to_del and col_btn_2.button("Excluir"):
-                rid = to_del.split(" - ")[0]
-                supabase.table("registros_estudos").delete().eq("id", rid).execute()
+            
+            st.divider()
+            st.markdown("### 🗑️ Excluir Registro")
+            opcoes = {f"{r['data_estudo']} - {r['materia']} ({r['id']})": r['id'] for _, r in df.iterrows()}
+            alvo_del = st.selectbox("Escolha um registro", list(opcoes.keys()), index=None)
+            if alvo_del and st.button("EXCLUIR REGISTRO", type="primary"):
+                supabase.table("registros_estudos").delete().eq("id", opcoes[alvo_del]).execute()
                 st.rerun()
