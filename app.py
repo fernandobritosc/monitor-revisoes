@@ -262,6 +262,7 @@ elif selected == "Novo Registro":
         st.subheader("Relatório de Estudo")
         with st.form("form_estudo", clear_on_submit=True):
             c_data, c_vazio = st.columns([1, 2])
+            # AQUI: Garantindo que o input mostre DD/MM/YYYY
             data_input = c_data.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
             
             if topicos_possiveis:
@@ -302,13 +303,13 @@ elif selected == "Novo Registro":
 elif selected == "Gestão de Editais":
     st.title("📑 Edital Verticalizado")
     
-    # 1. CRIAR CONCURSO (DATA CORRIGIDA)
+    # 1. CRIAR CONCURSO
     with st.expander("➕ Criar Novo Concurso", expanded=not bool(editais)):
         with st.form("form_novo_concurso"):
             c1, c2, c3 = st.columns(3)
             novo_nome = c1.text_input("Nome (ex: PF 2026)")
             novo_cargo = c2.text_input("Cargo (ex: Agente)")
-            # AQUI ESTÁ A CORREÇÃO DO FORMATO
+            # AQUI: Garantindo DD/MM/YYYY na criação
             nova_data = c3.date_input("Data da Prova", format="DD/MM/YYYY") 
             
             if st.form_submit_button("Criar Concurso"):
@@ -316,7 +317,7 @@ elif selected == "Gestão de Editais":
                     if novo_nome not in editais:
                         editais[novo_nome] = {
                             "cargo": novo_cargo,
-                            "data_prova": nova_data.strftime('%Y-%m-%d'),
+                            "data_prova": nova_data.strftime('%Y-%m-%d'), # Salva interno como ISO
                             "materias": {} 
                         }
                         salvar_editais(editais)
@@ -331,7 +332,18 @@ elif selected == "Gestão de Editais":
     if editais:
         concurso_ativo = st.selectbox("📂 Selecione o Concurso para Editar:", list(editais.keys()))
         dados = editais[concurso_ativo]
-        st.info(f"**Cargo:** {dados.get('cargo', '-')} | **Prova:** {dados.get('data_prova', '-')}")
+        
+        # --- AQUI ESTÁ A CORREÇÃO VISUAL DA DATA ---
+        data_banco = dados.get('data_prova', '-')
+        try:
+            # Tenta converter do formato ISO para Brasileiro visualmente
+            d = datetime.datetime.strptime(data_banco, "%Y-%m-%d")
+            data_visual = d.strftime("%d/%m/%Y")
+        except:
+            data_visual = data_banco
+        
+        st.info(f"**Cargo:** {dados.get('cargo', '-')} | **Prova:** {data_visual}")
+        # ---------------------------------------------
 
         col_add_mat, col_view_mat = st.columns([1, 2])
 
@@ -360,36 +372,27 @@ elif selected == "Gestão de Editais":
             for mat, topicos in materias.items():
                 with st.expander(f"📚 {mat} ({len(topicos)} tópicos)"):
                     
-                    # --- NOVO: IMPORTAÇÃO EM LOTE ---
                     st.caption("🚀 Importação Rápida: Cole os tópicos separados por ponto e vírgula (;) ou Enter.")
                     texto_importacao = st.text_area(f"Colar Tópicos para {mat}:", height=100, key=f"txt_{concurso_ativo}_{mat}")
                     
                     c_btn_imp, c_btn_limp = st.columns([2, 1])
                     
-                    # Botão de Importar
                     if c_btn_imp.button(f"📥 Importar Lista em {mat}", key=f"btn_imp_{concurso_ativo}_{mat}"):
                         if texto_importacao:
-                            # Lógica para "explodir" o texto
-                            # 1. Troca quebras de linha por ponto e vírgula
                             texto_unificado = texto_importacao.replace("\n", ";")
-                            # 2. Divide por ponto e vírgula
                             novos_itens = texto_unificado.split(";")
-                            # 3. Limpa espaços e vazios
                             novos_limpos = [item.strip() for item in novos_itens if item.strip()]
                             
-                            # Adiciona à lista existente
                             if novos_limpos:
                                 topicos.extend(novos_limpos)
                                 salvar_editais(editais)
                                 st.success(f"{len(novos_limpos)} tópicos importados!")
                                 st.rerun()
                     
-                    # Listagem
                     if topicos:
                         df_topicos = pd.DataFrame(topicos, columns=["Assuntos do Edital"])
                         st.dataframe(df_topicos, use_container_width=True, hide_index=True)
                         
-                        # Botão de Limpar
                         if c_btn_limp.button("🗑️ Limpar Tudo", key=f"clean_{concurso_ativo}_{mat}"):
                             dados["materias"][mat] = []
                             salvar_editais(editais)
