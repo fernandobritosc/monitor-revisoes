@@ -72,7 +72,7 @@ with st.sidebar:
 if not st.session_state.df_dados.empty:
     df_calc = st.session_state.df_dados.copy()
     
-    # Tratamento de dados para gráficos
+    # Tratamento numérico
     df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
     df_calc['Total'] = pd.to_numeric(df_calc['Total'], errors='coerce').fillna(1)
     df_calc['Data_Ordenacao'] = pd.to_datetime(df_calc['Proxima_Revisao'], dayfirst=True, errors='coerce')
@@ -90,39 +90,46 @@ if not st.session_state.df_dados.empty:
 
     st.markdown("---")
 
-    # 2. ABAS (Gráficos e Tabela)
+    # 2. ABAS
     t1, t2 = st.tabs(["📊 Gráficos", "📝 Gestão de Registros"])
     
     with t1:
         g1, g2 = st.columns(2)
         
-        # Gráfico de Barras (Matérias)
+        # Gráfico de Barras
         with g1:
             st.caption("Desempenho por Matéria")
             df_g = df_calc.groupby("Materia").apply(lambda x: (x['Acertos'].sum()/x['Total'].sum()*100)).reset_index(name="Nota")
-            fig_barras = px.bar(df_g, x="Materia", y="Nota", color="Nota", range_y=[0,100], color_continuous_scale="RdYlGn", text_auto='.0f')
+            
+            fig_barras = px.bar(
+                df_g, x="Materia", y="Nota", color="Nota", 
+                range_y=[0,100], color_continuous_scale="RdYlGn", text_auto='.0f',
+                labels={"Nota": "Aproveitamento (%)"} # Nome bonito no tooltip
+            )
             st.plotly_chart(fig_barras, use_container_width=True)
         
-        # Gráfico de Linha (Ritmo) - AQUI ESTÁ A CORREÇÃO
+        # Gráfico de Linha (AQUI ESTÁ A MUDANÇA)
         with g2:
             st.caption("Ritmo Diário")
             df_calc['Data_Real'] = pd.to_datetime(df_calc['Data_Estudo'], dayfirst=True, errors='coerce')
             df_t = df_calc.groupby("Data_Real")['Total'].sum().reset_index()
             
-            fig_linha = px.line(df_t, x="Data_Real", y="Total", markers=True)
-            
-            # --- O COMANDO MÁGICO DE FORMATAÇÃO ---
-            fig_linha.update_xaxes(
-                tickformat="%d/%m",  # Mostra apenas Dia/Mês (ex: 16/01)
-                dtick="D1"           # Força um traço por dia (evita horas quebradas)
+            fig_linha = px.line(
+                df_t, 
+                x="Data_Real", 
+                y="Total", 
+                markers=True,
+                # ESTE COMANDO RENOMEIA AS LEGENDAS
+                labels={"Data_Real": "Data", "Total": "Questões"} 
             )
             
+            fig_linha.update_xaxes(tickformat="%d/%m", dtick="D1")
             st.plotly_chart(fig_linha, use_container_width=True)
 
     # 3. TABELA EDITÁVEL
     with t2:
         st.subheader("📝 Editar ou Excluir")
-        st.info("Selecione a caixinha à esquerda da linha e pressione DEL no teclado para apagar.")
+        st.info("Selecione a linha e pressione DEL para apagar.")
         
         df_editado = st.data_editor(
             st.session_state.df_dados,
