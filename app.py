@@ -11,17 +11,14 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Faca na Caveira - Concursos", page_icon="💀", layout="wide")
 
 DB_FILE = "estudos_data.csv"
-EDITAIS_FILE = "editais_db.json" # <--- NOVO ARQUIVO PARA GUARDAR OS EDITAIS
+EDITAIS_FILE = "editais_db.json"
 META_QUESTOES = 2000 
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÕES ---
 def carregar_dados():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE, sep=';', dtype=str)
-            # Garante que a coluna Concurso existe (para compatibilidade com dados antigos)
-            if "Concurso" not in df.columns:
-                df["Concurso"] = "Geral"
             return df
         except:
             return pd.DataFrame(columns=["Data_Estudo", "Concurso", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
@@ -49,11 +46,13 @@ def calcular_revisao(data_base, taxa):
     else: dias = 21
     return data_base + datetime.timedelta(days=dias)
 
-# Função Streak (Mantida)
 def calcular_metricas_streak(df):
     if df.empty: return 0, 0
     try:
-        dates = pd.to_datetime(df['Data_Estudo'], dayfirst=True).dt.normalize().unique()
+        # Garante que Data_Estudo existe antes de processar
+        if 'Data_Estudo' not in df.columns: return 0, 0
+        
+        dates = pd.to_datetime(df['Data_Estudo'], dayfirst=True, errors='coerce').dt.normalize().dropna().unique()
         dates = sorted(dates)
         if not len(dates): return 0, 0
         
@@ -95,6 +94,14 @@ if 'df_dados' not in st.session_state:
     st.session_state.df_dados = carregar_dados()
 if 'editais' not in st.session_state:
     st.session_state.editais = carregar_editais()
+
+# --- CORREÇÃO DE COMPATIBILIDADE (A VACINA) ---
+# Verifica se a tabela carregada tem a coluna nova. Se não tiver, cria.
+if "Concurso" not in st.session_state.df_dados.columns:
+    st.session_state.df_dados["Concurso"] = "Geral"
+    # Salva imediatamente para corrigir o arquivo CSV
+    salvar_dados(st.session_state.df_dados)
+    st.rerun() # Recarrega a página para aplicar a correção
 
 df = st.session_state.df_dados
 editais = st.session_state.editais
@@ -145,12 +152,12 @@ with st.sidebar:
 
 # --- CONTEÚDO ---
 
-# === PÁGINA 1: DASHBOARD ===
+# === DASHBOARD ===
 if selected == "Dashboard":
     st.title("📊 Painel de Performance")
     
     if not df.empty:
-        # Filtro Global por Concurso no Dashboard
+        # Filtro
         lista_concursos = ["Todos"] + sorted(list(df['Concurso'].unique()))
         filtro_concurso = st.selectbox("Visualizar dados de:", lista_concursos)
         
@@ -159,7 +166,7 @@ if selected == "Dashboard":
             df_view = df_view[df_view['Concurso'] == filtro_concurso]
 
         if df_view.empty:
-            st.warning("Sem dados para este concurso ainda.")
+            st.warning("Sem dados para este concurso.")
         else:
             df_calc = df_view.copy()
             df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
@@ -170,10 +177,9 @@ if selected == "Dashboard":
             media_g = (df_calc['Acertos'].sum() / total_q * 100) if total_q > 0 else 0
             hoje = pd.Timestamp.now().normalize()
             pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje].shape[0]
-            streak_atual, recorde_hist = calcular_metricas_streak(df) # Streak conta estudo global
+            streak_atual, recorde_hist = calcular_metricas_streak(df)
 
-            # Barra de Meta (Ajustada se filtrar concurso)
-            meta_local = META_QUESTOES if filtro_concurso == "Todos" else int(META_QUESTOES / 2) # Exemplo de meta dinamica
+            meta_local = META_QUESTOES if filtro_concurso == "Todos" else int(META_QUESTOES / 2)
             progresso = min(total_q / meta_local, 1.0)
             st.caption(f"🚀 Meta ({filtro_concurso}): {int(total_q)} / {meta_local} Questões")
             st.progress(progresso, text=f"{progresso*100:.1f}%")
@@ -237,13 +243,12 @@ if selected == "Dashboard":
     else:
         st.info("Comece registando um edital e depois um estudo.")
 
-# === PÁGINA 2: NOVO REGISTRO (INTEGRADO AO EDITAL) ===
+# === NOVO REGISTRO ===
 elif selected == "Novo Registro":
     st.title("📝 Lançamento Inteligente")
     
     if not editais:
         st.warning("⚠️ Nenhum Edital cadastrado. Vá em 'Gestão de Editais' primeiro.")
-        # Fallback para manual
         opcoes_concurso = ["Avulso"]
     else:
         opcoes_concurso = list(editais.keys())
@@ -253,25 +258,12 @@ elif selected == "Novo Registro":
             c_data, c_conc = st.columns([1, 2])
             data_input = c_data.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
             
-            # --- O SEGREDO: SELEÇÃO EM CASCATA ---
-            # O Streamlit recarrega ao mudar o selectbox se usarmos session_state, 
-            # mas dentro de Form ele não atualiza dinamicamente. 
-            # Solução: Selecionar Edital FORA do form ou usar lógica simples.
-            # Aqui usaremos uma abordagem simplificada para o form funcionar:
-            
-            # Nota: Para interatividade total (escolhe Edital -> Muda Matéria), teríamos de tirar do st.form.
-            # Mas vamos manter o form e usar caixas de seleção.
-            
             concurso_sel = c_conc.selectbox("Concurso / Edital", options=opcoes_concurso)
             
-            # Lógica para preencher matérias baseado no concurso escolhido
-            # Obs: Dentro do form, ele vai pegar o estado atual.
             lista_materias = []
             if concurso_sel in editais:
                 lista_materias = list(editais[concurso_sel].keys())
             
-            # Se não houver matérias cadastradas ou for avulso, deixa digitar? 
-            # Para "Concurseiro Bruto", forçamos o cadastro. Mas vamos deixar um input híbrido.
             if lista_materias:
                 materia_sel = st.selectbox("Disciplina", options=lista_materias)
             else:
@@ -294,7 +286,7 @@ elif selected == "Novo Registro":
                 
                 nova = pd.DataFrame([{
                     "Data_Estudo": data_input.strftime('%d/%m/%Y'),
-                    "Concurso": concurso_sel, # Nova Coluna
+                    "Concurso": concurso_sel, 
                     "Materia": materia_sel,
                     "Assunto": assunto,
                     "Acertos": str(ac),
@@ -307,11 +299,9 @@ elif selected == "Novo Registro":
                 salvar_dados(st.session_state.df_dados)
                 st.success(f"Registrado para {concurso_sel}! Revisão: {data_rev.strftime('%d/%m/%Y')}")
 
-# === PÁGINA 3: GESTÃO DE EDITAIS (NOVA) ===
+# === GESTÃO DE EDITAIS ===
 elif selected == "Gestão de Editais":
     st.title("📑 Cadastro de Editais")
-    st.markdown("Aqui você monta a sua estratégia. Cadastre os concursos e as matérias que vai estudar.")
-
     col_add, col_view = st.columns([1, 1])
 
     with col_add:
@@ -322,14 +312,9 @@ elif selected == "Gestão de Editais":
             
             if st.button("💾 Adicionar ao Sistema"):
                 if novo_concurso and nova_materia:
-                    # Carrega estado atual
                     editais_atuais = st.session_state.editais
-                    
-                    # Lógica de dicionário
                     if novo_concurso not in editais_atuais:
                         editais_atuais[novo_concurso] = {}
-                    
-                    # Adiciona matéria se não existir (inicializa com lista vazia de assuntos futuramente)
                     if nova_materia not in editais_atuais[novo_concurso]:
                         editais_atuais[novo_concurso][nova_materia] = []
                         st.session_state.editais = editais_atuais
@@ -337,7 +322,7 @@ elif selected == "Gestão de Editais":
                         st.success(f"Adicionado: {nova_materia} em {novo_concurso}")
                         st.rerun()
                     else:
-                        st.warning("Matéria já existe neste concurso.")
+                        st.warning("Matéria já existe.")
                 else:
                     st.error("Preencha o nome e a matéria.")
 
@@ -351,13 +336,12 @@ elif selected == "Gestão de Editais":
                     st.write("**Matérias:**")
                     for m in mats.keys():
                         st.text(f"- {m}")
-                    
                     if st.button(f"Excluir {conc}", key=f"del_{conc}"):
                         del st.session_state.editais[conc]
                         salvar_editais(st.session_state.editais)
                         st.rerun()
 
-# === PÁGINA 4: HISTÓRICO ===
+# === HISTÓRICO ===
 elif selected == "Histórico":
     st.title("🗂️ Base de Dados Completa")
     
