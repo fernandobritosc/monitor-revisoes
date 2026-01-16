@@ -8,7 +8,7 @@ import plotly.express as px
 import secrets
 import string
 
-# Tenta importar a versão, se falhar (arquivo não existe), usa valores padrão
+# Tenta importar a versão. Se o arquivo não existir, usa valores padrão para não travar o app.
 try:
     import version
 except ImportError:
@@ -26,8 +26,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS (DATA BLINDADA) ---
-
+# --- FUNÇÕES DE DADOS ---
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
@@ -58,7 +57,7 @@ def db_get_editais():
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
-# --- LOGIN ---
+# --- LOGIN (Simplificado) ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
@@ -66,13 +65,13 @@ if 'usuario_logado' not in st.session_state:
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD PRIVADO</h1>", unsafe_allow_html=True)
         with st.form("login"):
-            u = st.selectbox("Usuário", list(users.keys()))
+            u = st.selectbox("Guerreiro", list(users.keys()))
             p = st.text_input("PIN", type="password")
             if st.form_submit_button("ENTRAR", use_container_width=True):
                 if p == users[u]['pin']:
                     st.session_state.usuario_logado = u
                     st.rerun()
-                else: st.error("Erro!")
+                else: st.error("Acesso Negado.")
     st.stop()
 
 # --- AMBIENTE OPERACIONAL ---
@@ -97,7 +96,7 @@ with st.sidebar:
         del st.session_state.usuario_logado
         st.rerun()
 
-# 1. DASHBOARD
+# --- DASHBOARD ---
 if selected == "Dashboard":
     st.title("📊 Desempenho")
     if not df_meu.empty:
@@ -112,9 +111,9 @@ if selected == "Dashboard":
         st.plotly_chart(fig, use_container_width=True)
     else: st.info("Sem dados.")
 
-# 2. NOVO REGISTRO
+# --- NOVO REGISTRO ---
 elif selected == "Novo Registro":
-    st.title("📝 Registro")
+    st.title("📝 Novo Registro")
     if not editais: st.warning("Cadastre um edital.")
     else:
         conc = st.selectbox("Concurso", list(editais.keys()))
@@ -132,7 +131,7 @@ elif selected == "Novo Registro":
                 st.cache_data.clear()
                 st.success("Salvo!")
 
-# 4. GESTÃO DE EDITAIS
+# --- GESTÃO DE EDITAIS (Onde estava o erro da linha 161) ---
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
@@ -146,7 +145,6 @@ elif selected == "Gestão Editais":
                     "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []
                 }).execute()
                 st.cache_data.clear()
-                st.success("Criado!")
                 st.rerun()
     with t2:
         if editais:
@@ -154,7 +152,7 @@ elif selected == "Gestão Editais":
             st.success(f"📍 Cargo: {editais[sel]['cargo']} | 📅 Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Adicionar"):
-                # CORREÇÃO DA LINHA 156: Enviando Cargo e Data para evitar APIError
+                # CORREÇÃO DA LINHA 161: Puxando cargo e data_prova do edital selecionado
                 supabase.table("editais_materias").insert({
                     "concurso": sel, "materia": m_n, "topicos": [],
                     "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
@@ -163,13 +161,13 @@ elif selected == "Gestão Editais":
                 st.success("Matéria adicionada!")
                 st.rerun()
 
-# 5. HISTÓRICO
+# --- HISTÓRICO ---
 elif selected == "Histórico":
     st.title("📜 Histórico")
     if not df_meu.empty:
         st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], use_container_width=True, hide_index=True)
 
-# 6. GESTÃO DE SISTEMA (Backup e Tokens)
+# --- SISTEMA (FERNANDO) ---
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Sistema")
     if st.button("🎟️ Gerar Token de Convite"):
