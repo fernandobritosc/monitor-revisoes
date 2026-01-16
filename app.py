@@ -20,7 +20,6 @@ st.markdown("""
     
     header {visibility: hidden;}
     
-    /* Botões */
     .stButton button {
         background-color: #1E1E1E;
         color: #E0E0E0;
@@ -34,7 +33,6 @@ st.markdown("""
         border-color: #FF4B4B;
     }
     
-    /* Métricas e Cards */
     div[data-testid="stMetric"] {
         background-color: #0E0E0E;
         padding: 15px 20px;
@@ -43,13 +41,11 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #050505;
         border-right: 1px solid #222;
     }
     
-    /* Tabelas Editáveis */
     [data-testid="stDataFrame"] {
         border: 1px solid #333;
         border-radius: 8px;
@@ -100,7 +96,6 @@ def get_editais():
 
 def get_stats(concurso):
     try:
-        # Importante: Buscamos também o ID para poder editar/excluir
         res = supabase.table("registros_estudos").select("*").eq("concurso", concurso).order("data_estudo", desc=True).execute()
         return pd.DataFrame(res.data)
     except: return pd.DataFrame()
@@ -109,9 +104,11 @@ def calcular_revisoes(df):
     if df.empty: return pd.DataFrame()
     hoje = datetime.date.today()
     revisoes = []
-    df['dt_obj'] = pd.to_datetime(df['data_estudo']).dt.date
+    # Garante conversão segura para data
+    df['dt_temp'] = pd.to_datetime(df['data_estudo']).dt.date
+    
     for _, row in df.iterrows():
-        delta = (hoje - row['dt_obj']).days
+        delta = (hoje - row['dt_temp']).days
         motivo = None
         if delta == 1: motivo = "🔥 24 Horas"
         elif delta == 7: motivo = "📅 7 Dias"
@@ -120,7 +117,7 @@ def calcular_revisoes(df):
             revisoes.append({
                 "Matéria": row['materia'],
                 "Assunto": row['assunto'],
-                "Original": row['dt_obj'].strftime('%d/%m'),
+                "Original": row['dt_temp'].strftime('%d/%m'),
                 "Tipo": motivo
             })
     return pd.DataFrame(revisoes)
@@ -329,25 +326,25 @@ else:
                         supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
                         st.rerun()
 
-    # --- HISTÓRICO INTELIGENTE (SMART GRID) ---
+    # --- HISTÓRICO COM CORREÇÃO DE TIPO DE DADOS ---
     elif menu == "Histórico":
         st.title("📜 Histórico Interativo")
         st.info("💡 Dica: Você pode editar os valores diretamente na tabela. Marque a caixa 'Excluir' para apagar.")
         
         if not df.empty:
-            # Prepara o DataFrame para edição
+            # FIX: Força a conversão da data para objeto Date antes de mandar pro editor
+            # Isso resolve o erro StreamlitAPIException
             df_edit = df.copy()
-            df_edit['Excluir'] = False # Cria a coluna de checkbox
+            df_edit['data_estudo'] = pd.to_datetime(df_edit['data_estudo']).dt.date
             
-            # Organiza as colunas
+            df_edit['Excluir'] = False
             df_edit = df_edit[['id', 'Excluir', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa']]
             
-            # Configura o Editor
             edited_df = st.data_editor(
                 df_edit,
                 column_config={
-                    "id": None, # Esconde o ID (mas ele existe pro sistema)
-                    "Excluir": st.column_config.CheckboxColumn(help="Marque para apagar este registro"),
+                    "id": None,
+                    "Excluir": st.column_config.CheckboxColumn(help="Apagar?"),
                     "data_estudo": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                     "materia": st.column_config.TextColumn("Matéria"),
                     "assunto": st.column_config.TextColumn("Assunto"),
@@ -355,28 +352,24 @@ else:
                     "total": st.column_config.NumberColumn("Total", min_value=1),
                     "taxa": st.column_config.ProgressColumn("Precisão", format="%.1f%%", min_value=0, max_value=100),
                 },
-                disabled=["taxa"], # Taxa é calculada, não editada
+                disabled=["taxa"],
                 hide_index=True,
                 use_container_width=True
             )
             
             st.write("")
             if st.button("💾 SALVAR ALTERAÇÕES", type="primary"):
-                # 1. Processa Exclusões
+                # Excluir
                 to_delete = edited_df[edited_df['Excluir'] == True]['id'].tolist()
                 if to_delete:
                     supabase.table("registros_estudos").delete().in_("id", to_delete).execute()
                 
-                # 2. Processa Edições (Atualiza tudo que não foi excluído)
-                # Iterar e atualizar é mais seguro para garantir consistência
+                # Editar
                 rows_to_update = edited_df[edited_df['Excluir'] == False]
-                
                 for index, row in rows_to_update.iterrows():
-                    # Recalcula taxa para garantir integridade
                     nova_taxa = (row['acertos'] / row['total'] * 100) if row['total'] > 0 else 0
-                    
                     supabase.table("registros_estudos").update({
-                        "data_estudo": row['data_estudo'], # Supabase aceita string ISO ou objeto date
+                        "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'), # Converte de volta pra string pro banco
                         "materia": row['materia'],
                         "assunto": row['assunto'],
                         "acertos": row['acertos'],
@@ -384,9 +377,7 @@ else:
                         "taxa": nova_taxa
                     }).eq("id", row['id']).execute()
                 
-                st.success("Histórico atualizado com sucesso!")
-                time.sleep(1)
-                st.rerun()
+                st.success("Histórico atualizado!"); time.sleep(1); st.rerun()
                 
         else:
             st.info("Sem dados para exibir.")
