@@ -12,20 +12,22 @@ DB_FILE = "estudos_data.csv"
 def carregar_dados():
     if os.path.exists(DB_FILE):
         try:
-            df = pd.read_csv(DB_FILE, sep=';')
-            df['Data_Estudo'] = pd.to_datetime(df['Data_Estudo'], dayfirst=True)
-            df['Proxima_Revisao'] = pd.to_datetime(df['Proxima_Revisao'], dayfirst=True)
+            # Lemos tudo como string primeiro para evitar que o Python mude as datas
+            df = pd.read_csv(DB_FILE, sep=';', dtype=str)
+            # Convertemos para data real apenas para ordenar internamente
+            df['Data_Ordenacao'] = pd.to_datetime(df['Proxima_Revisao'], dayfirst=True)
             return df
         except:
             return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
     return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
 
 def salvar_dados(dataframe):
-    df_para_salvar = dataframe.copy()
-    # Garante que salva no CSV como texto legível para o Excel
-    df_para_salvar['Data_Estudo'] = df_para_salvar['Data_Estudo'].dt.strftime('%d/%m/%Y')
-    df_para_salvar['Proxima_Revisao'] = df_para_salvar['Proxima_Revisao'].dt.strftime('%d/%m/%Y')
-    df_para_salvar.to_csv(DB_FILE, index=False, sep=';', encoding='utf-8-sig')
+    # Removemos a coluna de ordenação antes de salvar no CSV/Excel
+    if 'Data_Ordenacao' in dataframe.columns:
+        df_save = dataframe.drop(columns=['Data_Ordenacao'])
+    else:
+        df_save = dataframe
+    df_save.to_csv(DB_FILE, index=False, sep=';', encoding='utf-8-sig')
 
 def calcular_revisao(data_base, taxa):
     if taxa < 70: dias = 1
@@ -42,8 +44,10 @@ df = carregar_dados()
 with st.sidebar:
     st.header("📥 Novo Registro")
     with st.form("form_estudo", clear_on_submit=True):
-        # O seletor de data agora tentará usar o formato local do seu sistema
-        data_input = st.date_input("Data do Estudo (Dia/Mês/Ano)", datetime.date.today())
+        # Calendário
+        data_input = st.date_input("Data do Estudo", datetime.date.today())
+        # Confirmação visual da data para o usuário
+        st.caption(f"Data selecionada: {data_input.strftime('%d/%m/%Y')}")
         
         materia = st.text_input("Matéria")
         assunto = st.text_input("Assunto")
@@ -59,13 +63,13 @@ with st.sidebar:
         data_rev = calcular_revisao(data_input, taxa_calc)
         
         nova_linha = pd.DataFrame([{
-            "Data_Estudo": pd.to_datetime(data_input),
+            "Data_Estudo": data_input.strftime('%d/%m/%Y'),
             "Materia": materia,
             "Assunto": assunto,
-            "Acertos": ac,
-            "Total": tot,
+            "Acertos": str(ac),
+            "Total": str(tot),
             "Taxa": f"{taxa_calc:.1f}%",
-            "Proxima_Revisao": pd.to_datetime(data_rev)
+            "Proxima_Revisao": data_rev.strftime('%d/%m/%Y')
         }])
         
         df = pd.concat([df, nova_linha], ignore_index=True)
@@ -74,7 +78,6 @@ with st.sidebar:
         st.balloons()
         st.rerun()
 
-    # --- BOTÃO DE APAGAR (Fica fora do formulário) ---
     st.markdown("---")
     if st.button("🗑️ Apagar Último Registro"):
         if not df.empty:
@@ -87,16 +90,17 @@ with st.sidebar:
 st.subheader("📋 Histórico de Estudos")
 
 if not df.empty:
-    df_view = df.sort_values(by="Proxima_Revisao", ascending=True).copy()
+    # Ordenação pela data de revisão (mais urgente primeiro)
+    # Criamos a coluna de ordenação temporária se ela não existir
+    df['Data_Ordenacao'] = pd.to_datetime(df['Proxima_Revisao'], dayfirst=True)
+    df_view = df.sort_values(by="Data_Ordenacao", ascending=True)
     
-    # Formatação visual da tabela
-    df_view['Data_Estudo'] = df_view['Data_Estudo'].dt.strftime('%d/%m/%Y')
-    df_view['Proxima_Revisao'] = df_view['Proxima_Revisao'].dt.strftime('%d/%m/%Y')
-    
-    st.dataframe(df_view, use_container_width=True, hide_index=True)
+    # Exibir apenas as colunas certas
+    cols_display = ["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"]
+    st.dataframe(df_view[cols_display], use_container_width=True, hide_index=True)
     
     # Backup
-    csv_excel = df_view.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    csv_excel = df_view[cols_display].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     st.download_button(
         label="📥 Baixar para Excel",
         data=csv_excel,
@@ -104,4 +108,4 @@ if not df.empty:
         mime="text/csv",
     )
 else:
-    st.info("Ainda não há registros. Use a barra lateral para começar!")
+    st.info("Ainda não há registros.")
