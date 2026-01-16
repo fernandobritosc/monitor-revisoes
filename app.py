@@ -227,10 +227,8 @@ else:
             total = int(df['total'].sum())
             acertos = int(df['acertos'].sum())
             erros = total - acertos
-            # AQUI ESTAVA O ERRO, AGORA CORRIGIDO:
             precisao = (acertos / total * 100) if total > 0 else 0
             
-            # Cálculo de Horas (Se a coluna 'tempo' existir)
             if 'tempo' in df.columns:
                 total_minutos = df['tempo'].fillna(0).sum()
                 horas_liquidas = int(total_minutos // 60)
@@ -300,8 +298,9 @@ else:
                 with c3:
                     st.write("⏱️ **Tempo Líquido**")
                     t_h, t_m = st.columns(2)
-                    horas = t_h.number_input("Hs", 0, 24, 0, label_visibility="collapsed")
-                    minutos = t_m.number_input("Min", 0, 59, 0, label_visibility="collapsed")
+                    # CORREÇÃO: LISTA DE HORAS ATÉ 12
+                    horas = t_h.selectbox("Hs", list(range(13)), index=0)
+                    minutos = t_m.selectbox("Min", list(range(60)), index=0)
                 
                 st.divider()
                 c_a, c_t = st.columns(2)
@@ -309,23 +308,20 @@ else:
                 total = c_t.number_input("Total", 1, step=1)
                 
                 if st.button("SALVAR REGISTRO", type="primary", use_container_width=True):
-                    # Calcula total em minutos para salvar no banco
                     tempo_total_min = (horas * 60) + minutos
-                    
                     try:
                         supabase.table("registros_estudos").insert({
                             "concurso": missao, "materia": mat, "assunto": assunto,
                             "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos,
                             "total": total, "taxa": (acertos/total)*100,
-                            "tempo": tempo_total_min # Salva em minutos
+                            "tempo": tempo_total_min
                         }).execute()
                         st.toast(f"Salvo! {horas}h {minutos}m registrados.", icon="🔥")
                         time.sleep(0.5)
                     except Exception as e:
                         if "column \"tempo\"" in str(e) or "does not exist" in str(e):
-                            st.error("ERRO CRÍTICO: Você precisa criar a coluna 'tempo' no Supabase! (Tipo: int8)")
-                        else:
-                            st.error(f"Erro: {e}")
+                            st.error("ERRO: Crie a coluna 'tempo' no Supabase! (int8)")
+                        else: st.error(f"Erro: {e}")
 
     elif menu == "Configurar":
         st.title("⚙️ Configuração")
@@ -360,8 +356,6 @@ else:
             df_edit = df.copy()
             df_edit['data_estudo'] = pd.to_datetime(df_edit['data_estudo']).dt.date
             df_edit['Excluir'] = False
-            
-            # Se a coluna tempo não existir no dataframe (registros antigos), cria como 0
             if 'tempo' not in df_edit.columns: df_edit['tempo'] = 0
             
             df_edit = df_edit[['id', 'Excluir', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo']]
@@ -393,7 +387,6 @@ else:
                 rows_to_update = edited_df[edited_df['Excluir'] == False]
                 for index, row in rows_to_update.iterrows():
                     nova_taxa = (row['acertos'] / row['total'] * 100) if row['total'] > 0 else 0
-                    
                     try:
                         supabase.table("registros_estudos").update({
                             "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
@@ -405,7 +398,6 @@ else:
                             "tempo": row['tempo']
                         }).eq("id", row['id']).execute()
                     except:
-                        # Fallback se não tiver a coluna tempo ainda
                         supabase.table("registros_estudos").update({
                             "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
                             "materia": row['materia'],
@@ -416,6 +408,5 @@ else:
                         }).eq("id", row['id']).execute()
                 
                 st.success("Histórico atualizado!"); time.sleep(1); st.rerun()
-                
         else:
             st.info("Sem dados para exibir.")
