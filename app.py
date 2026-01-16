@@ -11,13 +11,13 @@ import string
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
 
-# 2. Segurança: Import de Versão Blindado
+# 2. Segurança: Proteção contra ausência do arquivo version.py
 try:
     import version
 except ImportError:
     class version:
-        VERSION = "19.0.0-MASTER"
-        STATUS = "Sistema Unificado"
+        VERSION = "20.0.0-MASTER"
+        STATUS = "Central de Missões Unificada"
 
 # 3. Conexão Supabase
 @st.cache_resource
@@ -27,12 +27,10 @@ def init_connection():
 supabase: Client = init_connection()
 
 # --- FUNÇÕES DE DADOS ---
-
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario, concurso=None):
     query = supabase.table("registros_estudos").select("*").eq("usuario", usuario)
-    if concurso:
-        query = query.eq("concurso", concurso)
+    if concurso: query = query.eq("concurso", concurso)
     res = query.execute()
     df = pd.DataFrame(res.data)
     if not df.empty:
@@ -74,10 +72,10 @@ if 'usuario_logado' not in st.session_state:
                     if u in users and p == users[u]['pin']:
                         st.session_state.usuario_logado = u
                         st.rerun()
-                    else: st.error("Acesso Negado")
+                    else: st.error("PIN Incorreto")
         with t_cad:
             with st.form("cad"):
-                tk = st.text_input("Token de Convite")
+                tk = st.text_input("Token")
                 n = st.text_input("Nome")
                 pi = st.text_input("PIN (4 dígitos)", max_chars=4, type="password")
                 if st.form_submit_button("CRIAR CONTA"):
@@ -85,30 +83,46 @@ if 'usuario_logado' not in st.session_state:
                     if res_tk.data:
                         supabase.table("perfil_usuarios").insert({"nome": n, "pin": pi}).execute()
                         supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
-                        st.success("Conta criada! Vá em Acessar.")
+                        st.success("Guerreiro Recrutado!")
                     else: st.error("Token Inválido")
     st.stop()
 
-# --- SELETOR DE MISSÃO (NOVA LÓGICA) ---
+# --- CENTRAL DE MISSÕES (Escolha ou Criação de Concurso) ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 
 if 'concurso_ativo' not in st.session_state:
-    st.markdown(f"## 🥷 Guerreiro {usuario_atual}, selecione sua missão:")
-    if not editais:
-        if st.button("➕ Criar Primeiro Edital"):
-            st.session_state.concurso_ativo = "Novo Edital"
-            st.rerun()
-    else:
-        cols = st.columns(2)
-        for i, conc in enumerate(editais.keys()):
-            with cols[i % 2]:
+    st.markdown(f"## 🥷 Guerreiro {usuario_atual}, para qual guerra vamos?")
+    
+    col_sel, col_novo = st.columns([2, 1.2])
+    
+    with col_sel:
+        st.subheader("🎯 Selecionar Missão")
+        if not editais: st.info("Nenhum edital ativo.")
+        else:
+            for conc in editais.keys():
                 if st.button(f"🚀 {conc.upper()}", use_container_width=True):
                     st.session_state.concurso_ativo = conc
                     st.rerun()
+                    
+    with col_novo:
+        st.subheader("➕ Novo Edital")
+        with st.form("novo_concurso_inicial"):
+            n = st.text_input("Nome do Concurso")
+            c = st.text_input("Cargo")
+            d = st.date_input("Data da Prova", format="DD/MM/YYYY")
+            if st.form_submit_button("CRIAR E ENTRAR", use_container_width=True):
+                # Blindagem contra APIError: envia materia e topicos iniciais
+                supabase.table("editais_materias").insert({
+                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
+                    "materia": "Geral", "topicos": [] 
+                }).execute()
+                st.cache_data.clear()
+                st.session_state.concurso_ativo = n
+                st.rerun()
     st.stop()
 
-# --- AMBIENTE OPERACIONAL ---
+# --- AMBIENTE OPERACIONAL (Missão Ativa) ---
 concurso_ativo = st.session_state.concurso_ativo
 df_missao = db_get_estudos(usuario_atual, concurso_ativo)
 
@@ -127,75 +141,55 @@ with st.sidebar:
         if 'concurso_ativo' in st.session_state: del st.session_state.concurso_ativo
         st.rerun()
 
-# --- NAVEGAÇÃO ---
-
+# --- TELAS ---
 if selected == "Dashboard":
     st.title(f"📊 Performance: {concurso_ativo}")
     if not df_missao.empty:
         c1, c2 = st.columns(2)
         tot = int(df_missao['total'].sum())
-        c1.metric("Questões na Missão", tot, border=True)
+        c1.metric("Questões", tot, border=True)
         c2.metric("Precisão", f"{(df_missao['acertos'].sum()/tot*100):.1f}%", border=True)
         df_p = df_missao.sort_values('dt_ordenacao').groupby('Data')['total'].sum().reset_index()
-        st.plotly_chart(px.line(df_p, x='Data', y='total', markers=True, title="Evolução Diária"), use_container_width=True)
-    else: st.info("Registre estudos para ver o gráfico.")
+        st.plotly_chart(px.line(df_p, x='Data', y='total', markers=True), use_container_width=True)
+    else: st.info("Sem dados nesta missão.")
 
 elif selected == "Novo Registro":
     st.title(f"📝 Registro: {concurso_ativo}")
-    if concurso_ativo in editais:
-        materias = list(editais[concurso_ativo]["materias"].keys())
-        mat = st.selectbox("Matéria", materias)
-        with st.form("reg"):
-            dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
-            ass_list = editais[concurso_ativo]["materias"].get(mat) or ["Geral"]
-            ass = st.selectbox("Assunto", ass_list)
-            a = st.number_input("Acertos", 0); t = st.number_input("Total", 1)
-            if st.form_submit_button("SALVAR REGISTRO"):
-                supabase.table("registros_estudos").insert({
-                    "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
-                    "concurso": concurso_ativo, "materia": mat, "assunto": ass, 
-                    "acertos": int(a), "total": int(t), "taxa": (a/t*100)
-                }).execute()
-                st.cache_data.clear(); st.success("Salvo com sucesso!")
-    else: st.error("Edital não encontrado.")
+    materias = list(editais[concurso_ativo]["materias"].keys())
+    mat = st.selectbox("Matéria", materias)
+    with st.form("reg"):
+        dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
+        ass = st.selectbox("Assunto", editais[concurso_ativo]["materias"].get(mat) or ["Geral"])
+        a = st.number_input("Acertos", 0); t = st.number_input("Total", 1)
+        if st.form_submit_button("SALVAR REGISTRO"):
+            supabase.table("registros_estudos").insert({
+                "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
+                "concurso": concurso_ativo, "materia": mat, "assunto": ass, 
+                "acertos": int(a), "total": int(t), "taxa": (a/t*100)
+            }).execute()
+            st.cache_data.clear(); st.success("Salvo!")
 
 elif selected == "Gestão do Edital":
-    st.title(f"📑 Gestão: {concurso_ativo}")
-    tab1, tab2 = st.tabs(["📚 Matérias e Assuntos", "➕ Novo Concurso Global"])
-    
-    with tab1:
-        if concurso_ativo != "Novo Edital":
-            st.subheader(f"Configurando matérias para {concurso_ativo}")
-            m_n = st.text_input("Nome da Nova Matéria")
-            if st.button("Adicionar Matéria"):
-                supabase.table("editais_materias").insert({
-                    "concurso": concurso_ativo, "materia": m_n, "topicos": [], 
-                    "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']
-                }).execute()
+    st.title(f"📑 Gestão de Matérias: {concurso_ativo}")
+    m_n = st.text_input("Nova Matéria")
+    if st.button("Adicionar"):
+        supabase.table("editais_materias").insert({
+            "concurso": concurso_ativo, "materia": m_n, "topicos": [], 
+            "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']
+        }).execute()
+        st.cache_data.clear(); st.rerun()
+    st.markdown("---")
+    for m, t in editais[concurso_ativo]["materias"].items():
+        with st.expander(f"📚 {m}"):
+            txt = st.text_area("Assuntos (separe por ;)", value="; ".join(t), key=f"t_{m}")
+            if st.button("Salvar Tópicos", key=f"bt_{m}"):
+                novos = [x.strip() for x in txt.split(";") if x.strip()]
+                supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
                 st.cache_data.clear(); st.rerun()
-            
-            st.markdown("---")
-            for m, t in editais[concurso_ativo]["materias"].items():
-                with st.expander(f"📚 {m}"):
-                    txt = st.text_area("Assuntos (separe por ;)", value="; ".join(t), key=f"t_{m}")
-                    if st.button("Salvar Assuntos", key=f"bt_{m}"):
-                        novos = [x.strip() for x in txt.split(";") if x.strip()]
-                        supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
-                        st.cache_data.clear(); st.rerun()
-                    if st.checkbox(f"Excluir {m}", key=f"c_{m}"):
-                        if st.button(f"Confirmar exclusão de {m}", key=f"d_{m}"):
-                            supabase.table("editais_materias").delete().eq("concurso", concurso_ativo).eq("materia", m).execute()
-                            st.cache_data.clear(); st.rerun()
-
-    with tab2:
-        with st.form("novo_c"):
-            st.write("Crie um novo edital que ficará disponível na tela inicial.")
-            n = st.text_input("Nome do Concurso")
-            c = st.text_input("Cargo")
-            d = st.date_input("Data Prova", format="DD/MM/YYYY")
-            if st.form_submit_button("CRIAR CONCURSO"):
-                supabase.table("editais_materias").insert({"concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []}).execute()
-                st.cache_data.clear(); st.success("Concurso criado! Troque de missão para acessá-lo."); st.rerun()
+            if st.checkbox(f"Excluir {m}", key=f"c_{m}"):
+                if st.button(f"🗑️ Deletar {m}", key=f"d_{m}"):
+                    supabase.table("editais_materias").delete().eq("concurso", concurso_ativo).eq("materia", m).execute()
+                    st.cache_data.clear(); st.rerun()
 
 elif selected == "Histórico":
     st.title(f"📜 Histórico: {concurso_ativo}")
@@ -204,16 +198,11 @@ elif selected == "Histórico":
 
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Sistema e Segurança")
-    st.subheader("📥 Backup de Segurança (Snapshot)")
-    st.write("Baixe uma cópia de todos os seus dados. Se algo sumir, você terá este arquivo.")
-    if st.button("Gerar Backup JSON"):
-        ed_b = supabase.table("editais_materias").select("*").execute().data
-        re_b = supabase.table("registros_estudos").select("*").execute().data
-        st.download_button("Clique para Baixar", json.dumps({"editais": ed_b, "registros": re_b}), "backup_squad.json")
-    
-    st.markdown("---")
-    st.subheader("🎟️ Convites")
-    if st.button("Gerar Novo Token"):
+    if st.button("📥 Gerar Snapshot JSON (Backup)"):
+        ed = supabase.table("editais_materias").select("*").execute().data
+        re = supabase.table("registros_estudos").select("*").execute().data
+        st.download_button("Baixar Backup", json.dumps({"editais": ed, "registros": re}), "squad_backup.json")
+    if st.button("🎟️ Novo Token"):
         tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         supabase.table("tokens_convite").insert({"codigo": tk}).execute()
         st.code(tk)
