@@ -8,25 +8,25 @@ st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide")
 
 DB_FILE = "estudos_data.csv"
 
-# Função para carregar os dados
+# --- FUNÇÕES DE DADOS ---
 def carregar_dados():
     if os.path.exists(DB_FILE):
-        return pd.read_csv(DB_FILE)
-    return pd.DataFrame(columns=["Materia", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
+        df = pd.read_csv(DB_FILE)
+        # Garante que as datas são lidas como texto para não haver confusão de formato
+        return df
+    return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
 
-# Função para guardar os dados
 def salvar_dados(dataframe):
     dataframe.to_csv(DB_FILE, index=False)
 
-# Lógica de Revisão Espaçada
-def calcular_revisao(taxa):
-    hoje = datetime.date.today()
+def calcular_revisao(data_base, taxa):
     if taxa < 70: dias = 1
     elif taxa < 90: dias = 7
     else: dias = 21
-    return hoje + datetime.timedelta(days=dias)
+    return data_base + datetime.timedelta(days=dias)
 
-st.title("🎯 Sistema de Revisão Blindado")
+# --- INTERFACE ---
+st.title("🎯 Monitor de Revisão Espaçada")
 
 df = carregar_dados()
 
@@ -34,35 +34,55 @@ df = carregar_dados()
 with st.sidebar:
     st.header("📥 Novo Registro")
     with st.form("form_estudo", clear_on_submit=True):
-        mat = st.text_input("Matéria/Assunto")
-        c1, c2 = st.columns(2)
-        ac = c1.number_input("Acertos", min_value=0, step=1)
-        tot = c2.number_input("Total", min_value=1, step=1)
+        # Novo campo de Data de Estudo
+        data_estudo = st.date_input("Data do Estudo", datetime.date.today())
+        
+        materia = st.text_input("Matéria (Ex: Direito Constitucional)")
+        assunto = st.text_input("Assunto (Ex: Direitos Fundamentais)")
+        
+        col1, col2 = st.columns(2)
+        ac = col1.number_input("Acertos", min_value=0, step=1)
+        tot = col2.number_input("Total Questões", min_value=1, step=1)
+        
         btn = st.form_submit_button("Salvar Estudo")
 
-    if btn and mat:
+    if btn and materia and assunto:
         taxa_calc = (ac/tot)*100
-        data_rev = calcular_revisao(taxa_calc)
+        # Calcula a revisão com base na data que escolheste no seletor
+        data_rev = calcular_revisao(data_estudo, taxa_calc)
         
+        # Formatação das datas para o padrão 15/01/2026
         nova_linha = pd.DataFrame([{
-            "Materia": mat, "Acertos": ac, "Total": tot, 
-            "Taxa": f"{taxa_calc:.1f}%", "Proxima_Revisao": str(data_rev)
+            "Data_Estudo": data_estudo.strftime('%d/%m/%Y'),
+            "Materia": materia,
+            "Assunto": assunto,
+            "Acertos": ac,
+            "Total": tot,
+            "Taxa": f"{taxa_calc:.1f}%",
+            "Proxima_Revisao": data_rev.strftime('%d/%m/%Y')
         }])
         
         df = pd.concat([df, nova_linha], ignore_index=True)
         salvar_dados(df)
-        st.success(f"Salvo! Revisar em: {data_rev}")
+        st.success(f"Salvo! Próxima revisão em: {data_rev.strftime('%d/%m/%Y')}")
         st.balloons()
         st.rerun()
 
 # --- PAINEL PRINCIPAL ---
-st.subheader("📋 Cronograma de Estudos")
+st.subheader("📋 Histórico e Cronograma")
+
 if not df.empty:
-    # Destacar o que é para hoje
-    hoje = str(datetime.date.today())
-    def highlight_hoje(s):
-        return ['background-color: #ff4b4b' if v <= hoje else '' for v in s]
+    # Exibir a tabela com as colunas organizadas
+    st.dataframe(df, use_container_width=True, hide_index=True)
     
-    st.dataframe(df.style.apply(highlight_hoje, subset=['Proxima_Revisao']), use_container_width=True)
+    # Botão de Backup
+    st.markdown("---")
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Descarregar Backup (Excel/CSV)",
+        data=csv,
+        file_name=f"revisoes_{datetime.date.today()}.csv",
+        mime="text/csv",
+    )
 else:
-    st.info("Ainda não há dados. Começa a registar agora!")
+    st.info("Ainda não há dados. Começa a registar os teus estudos!")
