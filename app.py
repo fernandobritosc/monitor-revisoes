@@ -11,12 +11,12 @@ import string
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
 
-# 2. Segurança: Proteção contra ausência do arquivo version.py
+# 2. Segurança: Proteção contra ausência do ficheiro version.py
 try:
     import version
 except ImportError:
     class version:
-        VERSION = "24.0.0-ADMIN"
+        VERSION = "24.1.0-RESCUE"
         STATUS = "Gestão de Usuários Ativa"
 
 # 3. Conexão Supabase
@@ -75,7 +75,7 @@ if 'usuario_logado' not in st.session_state:
                     if u in users_global and p == users_global[u]['pin']:
                         st.session_state.usuario_logado = u
                         st.rerun()
-                    else: st.error("Acesso Negado.")
+                    else: st.error("PIN Incorreto.")
         with t_cad:
             with st.form("cad"):
                 tk = st.text_input("Token de Convite")
@@ -88,9 +88,9 @@ if 'usuario_logado' not in st.session_state:
                             supabase.table("perfil_usuarios").insert({"nome": n_cad, "pin": pi}).execute()
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
                             st.cache_data.clear()
-                            st.success("Guerreiro Cadastrado!")
-                        except: st.error("Erro no cadastro.")
-                    else: st.error("Token Inválido.")
+                            st.success("Guerreiro Cadastrado! Faça o Login.")
+                        except: st.error("Erro: Nome já existe ou falha no banco.")
+                    else: st.error("Token Inválido ou já usado.")
     st.stop()
 
 # --- CENTRAL DE MISSÕES ---
@@ -98,10 +98,10 @@ usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 
 if 'concurso_ativo' not in st.session_state:
-    st.markdown(f"## 🥷 Bem-vindo, {usuario_atual}")
+    st.markdown(f"## 🥷 Missão: {usuario_atual}")
     c_sel, c_nov = st.columns([1.5, 1])
     with c_sel:
-        st.subheader("🎯 Selecionar Missão")
+        st.subheader("🎯 Selecionar Operação")
         if not editais: st.info("Sem missões.")
         else:
             for conc in editais.keys():
@@ -109,12 +109,12 @@ if 'concurso_ativo' not in st.session_state:
                     st.session_state.concurso_ativo = conc
                     st.rerun()
     with c_nov:
-        st.subheader("➕ Nova Missão")
+        st.subheader("➕ Novo Edital")
         with st.form("f_missao"):
             nm = st.text_input("Concurso")
             cg = st.text_input("Cargo")
             dt = st.date_input("Prova", format="DD/MM/YYYY")
-            if st.form_submit_button("CRIAR"):
+            if st.form_submit_button("CRIAR E ENTRAR"):
                 supabase.table("editais_materias").insert({"concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []}).execute()
                 st.cache_data.clear(); st.session_state.concurso_ativo = nm; st.rerun()
     st.stop()
@@ -126,7 +126,7 @@ df_missao = db_get_estudos(usuario_atual, concurso_ativo)
 with st.sidebar:
     st.markdown(f"### 🥷 {usuario_atual}")
     st.success(f"🎯 Missão: {concurso_ativo}")
-    if st.button("🔄 Trocar de Missão"):
+    if st.button("🔄 Trocar de Missão", use_container_width=True):
         del st.session_state.concurso_ativo
         st.rerun()
     st.markdown("---")
@@ -171,25 +171,29 @@ elif selected == "Gestão do Edital":
     for m, t in editais[concurso_ativo]["materias"].items():
         with st.expander(f"📚 {m}"):
             tx = st.text_area("Tópicos (;)", value="; ".join(t), key=f"t_{m}")
-            if st.button("Salvar", key=f"b_{m}"):
+            if st.button("Salvar Tópicos", key=f"b_{m}"):
                 novos = [x.strip() for x in tx.split(";") if x.strip()]
                 supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
                 st.cache_data.clear(); st.rerun()
+            if st.checkbox(f"Excluir {m}", key=f"c_{m}"):
+                if st.button(f"Confirmar Delete {m}", key=f"d_{m}"):
+                    supabase.table("editais_materias").delete().eq("concurso", concurso_ativo).eq("materia", m).execute()
+                    st.cache_data.clear(); st.rerun()
 
 elif selected == "⚙️ Gestão de Sistema":
-    st.title("⚙️ Painel do Administrador")
+    st.title("⚙️ Painel Administrador")
     
-    # --- SEÇÃO DO JOÃO (GESTÃO DE GUERREIROS) ---
+    # --- RESGATE DO JOÃO (GESTÃO DE GUERREIROS) ---
     st.subheader("👥 Gestão de Guerreiros (Squad)")
-    st.write("Verifique se o João está na lista abaixo e se o PIN está correto.")
+    st.write("Verifica abaixo se o João aparece na lista.")
     df_u = pd.DataFrame(list(users_global.values()))
     if not df_u.empty:
         st.dataframe(df_u[['nome', 'pin']], use_container_width=True, hide_index=True)
         
-        u_del = st.selectbox("Remover Guerreiro para refazer cadastro:", [""] + list(users_global.keys()))
+        u_del = st.selectbox("Remover Guerreiro (Erro de Cadastro):", [""] + list(users_global.keys()))
         if u_del and st.button(f"🗑️ Excluir {u_del}"):
             supabase.table("perfil_usuarios").delete().eq("nome", u_del).execute()
-            st.success(f"{u_del} removido. Gere um novo token para ele.")
+            st.success(f"{u_del} removido. Gera um novo token para ele.")
             st.rerun()
     
     st.markdown("---")
@@ -198,9 +202,3 @@ elif selected == "⚙️ Gestão de Sistema":
         tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         supabase.table("tokens_convite").insert({"codigo": tk}).execute()
         st.code(tk)
-    
-    st.markdown("---")
-    if st.button("📥 Baixar Backup JSON"):
-        ed = supabase.table("editais_materias").select("*").execute().data
-        re = supabase.table("registros_estudos").select("*").execute().data
-        st.download_button("Download", json.dumps({"editais": ed, "registros": re}), "backup.json")
