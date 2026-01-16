@@ -1,1 +1,12 @@
-
+def carregar_json(caminho):
+    if os.path.exists(caminho):
+        try:
+            with open(caminho, "r", encoding="utf-8") as f:
+                # Verifica se o arquivo tem conteúdo antes de tentar ler
+                conteudo = f.read().strip()
+                if not conteudo:
+                    return {}
+                return json.loads(conteudo)
+        except (json.JSONDecodeError, Exception):
+            return {} # Se der erro na leitura, retorna vazio e não trava
+    return {}
