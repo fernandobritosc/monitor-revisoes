@@ -24,9 +24,9 @@ def carregar_json(caminho):
     if os.path.exists(caminho):
         try:
             with open(caminho, "r", encoding="utf-8") as f:
-                content = f.read()
+                content = f.read().strip()
                 return json.loads(content) if content else {}
-        except: return {}
+        except Exception: return {}
     return {}
 
 def salvar_json(caminho, dado):
@@ -82,6 +82,7 @@ def get_streak_metrics(df):
     except: return 0, 0
 
 # --- SISTEMA DE LOGIN E CADASTRO ---
+# Forçamos a leitura dos arquivos em cada iteração da tela de login
 users_db = carregar_json(USERS_FILE)
 tokens_db = carregar_json(TOKENS_FILE)
 
@@ -93,8 +94,9 @@ if 'usuario_logado' not in st.session_state:
         tab_login, tab_cadastro, tab_reset = st.tabs(["Acessar Base", "Novo Guerreiro", "Recuperar PIN"])
         
         with tab_login:
+            # Se o banco de dados de usuários estiver vazio, oferecemos a geração do primeiro token
             if not users_db:
-                st.info("Nenhum usuário cadastrado. Gere um token inicial.")
+                st.info("Nenhum usuário cadastrado no sistema.")
                 if st.button("Gerar Token de Primeiro Acesso"):
                     tk = gerar_novo_token()
                     st.success(f"Token de Acesso: {tk}")
@@ -113,22 +115,31 @@ if 'usuario_logado' not in st.session_state:
                 t_token = st.text_input("Token de Convite")
                 n_user = st.text_input("Nome Completo (Ex: Fernando Pinheiro)")
                 n_pin = st.text_input("PIN (4 dígitos)", type="password", max_chars=4)
-                n_rec = st.text_input("Palavra-Chave (Para reset de senha)")
+                n_rec = st.text_input("Palavra-Chave (CPF ou Palavra secreta)")
                 if st.form_submit_button("CRIAR CONTA"):
+                    # Recarregar tokens dentro do form para garantir precisão
+                    tokens_db = carregar_json(TOKENS_FILE)
                     ativos = tokens_db.get("ativos", [])
-                    if t_token not in ativos: st.error("Token inválido ou já usado.")
-                    elif n_user in users_db: st.error("Usuário já existe.")
+                    
+                    if t_token not in ativos: st.error("Token inválido ou já utilizado.")
+                    elif n_user in users_db: st.error("Este nome já está cadastrado.")
+                    elif len(n_pin) < 4: st.error("O PIN precisa ter 4 dígitos.")
                     else:
+                        # Salva o novo usuário
                         users_db[n_user] = {"pin": n_pin, "chave": n_rec}
                         salvar_json(USERS_FILE, users_db)
+                        
+                        # Invalida o token usado
                         ativos.remove(t_token)
                         tokens_db["ativos"] = ativos
                         salvar_json(TOKENS_FILE, tokens_db)
-                        st.success("Conta criada! Faça login na aba ao lado.")
+                        
+                        st.success("Conta criada com sucesso! Vá para 'Acessar Base'.")
+                        st.rerun()
 
         with tab_reset:
             with st.form("reset_form"):
-                r_user = st.selectbox("Resetar senha de:", list(users_db.keys())) if users_db else st.selectbox("Nenhum usuário", ["-"])
+                r_user = st.selectbox("Recuperar PIN de:", list(users_db.keys())) if users_db else st.selectbox("Nenhum usuário", ["-"])
                 r_chave = st.text_input("Sua Palavra-Chave cadastrada")
                 r_novo_pin = st.text_input("Novo PIN", type="password", max_chars=4)
                 if st.form_submit_button("REDEFINIR PIN"):
@@ -136,7 +147,7 @@ if 'usuario_logado' not in st.session_state:
                         users_db[r_user]['pin'] = r_novo_pin
                         salvar_json(USERS_FILE, users_db)
                         st.success("PIN alterado com sucesso!")
-                    else: st.error("Dados de validação incorretos.")
+                    else: st.error("Chave de recuperação incorreta.")
     st.stop()
 
 # --- ÁREA LOGADA ---
@@ -145,7 +156,7 @@ df_global = carregar_dados()
 editais = carregar_json(EDITAIS_FILE)
 df_meu = df_global[df_global['Usuario'] == usuario_atual].copy()
 
-# Menu Lateral com trava de ADM para Fernando Pinheiro
+# Barra Lateral
 with st.sidebar:
     st.markdown(f"### 🥷 {usuario_atual}")
     if st.button("🚪 SAIR DO SISTEMA"):
@@ -155,7 +166,7 @@ with st.sidebar:
     menus = ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"]
     icons = ["bar-chart", "plus-circle", "trophy", "book-half", "table"]
     
-    # LIBERA O GERADOR DE CONVITES SÓ PARA VOCÊ
+    # Trava de ADM para Fernando Pinheiro
     if usuario_atual == "Fernando Pinheiro":
         menus.append("Gerar Convites")
         icons.append("ticket-perforated")
@@ -193,34 +204,34 @@ if selected == "Dashboard":
             df_meu['Data_Real'] = pd.to_datetime(df_meu['Data_Estudo'], dayfirst=True, errors='coerce')
             df_t = df_meu.groupby("Data_Real")['Total'].sum().reset_index()
             st.plotly_chart(px.line(df_t, x="Data_Real", y="Total", markers=True).update_traces(line_color='#00E676'), use_container_width=True)
-    else: st.info("Bora começar os estudos para gerar dados! 💀")
+    else: st.info("Registre seus estudos para ver as estatísticas! 💀")
 
 elif selected == "Novo Registro":
     st.title("📝 Novo Registro")
-    if not editais: st.warning("Cadastre um Edital primeiro na aba 'Gestão Editais'.")
+    if not editais: st.warning("Cadastre um Edital primeiro em 'Gestão Editais'.")
     else:
-        conc = st.selectbox("Escolha o Edital:", list(editais.keys()))
+        conc = st.selectbox("Edital:", list(editais.keys()))
         mats = list(editais[conc]["materias"].keys())
-        mat = st.selectbox("Escolha a Disciplina:", mats) if mats else None
+        mat = st.selectbox("Disciplina:", mats) if mats else None
         topicos = editais[conc]["materias"][mat] if mat else []
         with st.form("reg_form", clear_on_submit=True):
-            d_in = st.date_input("Data do Estudo", datetime.date.today(), format="DD/MM/YYYY")
-            ass = st.selectbox("Selecione o Tópico:", topicos) if topicos else st.text_input("Tópico")
+            d_in = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
+            ass = st.selectbox("Tópico:", topicos) if topicos else st.text_input("Tópico")
             a, t = st.columns(2)
-            ac, tot = a.number_input("Acertos", 0), t.number_input("Total de Questões", 1)
+            ac, tot = a.number_input("Acertos", 0), t.number_input("Total", 1)
             if st.form_submit_button("SALVAR REGISTRO", use_container_width=True):
                 tx = (ac/tot*100)
                 nova = pd.DataFrame([{"Data_Estudo": d_in.strftime('%d/%m/%Y'), "Usuario": usuario_atual, "Concurso": conc, "Materia": mat, "Assunto": ass, "Acertos": str(ac), "Total": str(tot), "Taxa": f"{tx:.1f}%", "Proxima_Revisao": calcular_revisao(d_in, tx).strftime('%d/%m/%Y')}])
                 salvar_dados(pd.concat([df_global, nova], ignore_index=True))
-                st.success("Estudo registrado com sucesso!")
+                st.success("Estudo registrado!")
 
 elif selected == "Ranking Squad":
-    st.title("🏆 Ranking dos Guerreiros")
+    st.title("🏆 Ranking do Esquadrão")
     if not df_global.empty:
         df_g = df_global.copy()
         df_g['Total'] = pd.to_numeric(df_g['Total'], errors='coerce').fillna(0)
         rank = df_g.groupby("Usuario")['Total'].sum().reset_index().sort_values("Total", ascending=False)
-        st.plotly_chart(px.bar(rank, x="Total", y="Usuario", orientation='h', color="Usuario", title="Volume Total de Questões"), use_container_width=True)
+        st.plotly_chart(px.bar(rank, x="Total", y="Usuario", orientation='h', color="Usuario"), use_container_width=True)
         
         stats = []
         for u in users_db.keys():
@@ -235,42 +246,33 @@ elif selected == "Gestão Editais":
         with st.form("new_ed"):
             n, c, d = st.columns(3)
             name, cargo, date = n.text_input("Concurso"), c.text_input("Cargo"), d.date_input("Data da Prova", format="DD/MM/YYYY")
-            if st.form_submit_button("Criar Edital"):
+            if st.form_submit_button("Criar"):
                 editais[name] = {"cargo": cargo, "data": date.strftime('%Y-%m-%d'), "materias": {}}
                 salvar_json(EDITAIS_FILE, editais); st.rerun()
     if editais:
-        ed_sel = st.selectbox("Selecione para Editar:", list(editais.keys()))
+        ed_sel = st.selectbox("Editar:", list(editais.keys()))
         c1, c2 = st.columns([1, 2])
         with c1:
-            st.markdown("#### Add Disciplina")
-            nm = st.text_input("Nome da Matéria")
+            st.markdown("#### Add Matéria")
+            nm = st.text_input("Disciplina")
             if st.button("Salvar Matéria") and nm:
                 editais[ed_sel]["materias"][nm] = []; salvar_json(EDITAIS_FILE, editais); st.rerun()
         with c2:
             for m, t in editais[ed_sel]["materias"].items():
-                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
-                    txt = st.text_area(f"Importar Tópicos para {m} (separe por ; ou Enter)", key=f"t_{m}")
-                    if st.button("Importar Lista", key=f"b_{m}") and txt:
+                with st.expander(f"{m} ({len(t)} tópicos)"):
+                    txt = st.text_area(f"Importar Tópicos para {m}", key=f"t_{m}")
+                    if st.button("OK", key=f"b_{m}") and txt:
                         editais[ed_sel]["materias"][m].extend([x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()])
                         salvar_json(EDITAIS_FILE, editais); st.rerun()
 
 elif selected == "Histórico":
     st.title("🗂️ Meus Dados")
-    st.info("Aqui você só visualiza e edita os seus próprios registros.")
     df_edit = st.data_editor(df_meu, use_container_width=True, num_rows="dynamic")
     if not df_edit.equals(df_meu):
         salvar_dados(pd.concat([df_global[df_global['Usuario'] != usuario_atual], df_edit], ignore_index=True))
-        st.success("Histórico atualizado com segurança!")
+        st.success("Atualizado!")
 
 elif selected == "Gerar Convites":
-    st.title("🎟️ Central de Convites")
-    st.markdown("Gere tokens únicos para os seus parceiros de squad.")
-    if st.button("Gerar Novo Token"): 
-        tk = gerar_novo_token()
-        st.code(tk, language="text")
-        st.success("Mande esse código para o seu amigo.")
-    
-    ativos = carregar_json(TOKENS_FILE).get("ativos", [])
-    if ativos:
-        st.markdown("---")
-        st.write("Tokens aguardando uso:", ativos)
+    st.title("🎟️ Convites")
+    if st.button("Gerar Novo"): st.code(gerar_novo_token())
+    st.write("Ativos:", carregar_json(TOKENS_FILE).get("ativos", []))
