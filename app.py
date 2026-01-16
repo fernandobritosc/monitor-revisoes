@@ -8,13 +8,13 @@ import plotly.express as px
 import secrets
 import string
 
-# Tenta importar a versão. Se o arquivo não existir, usa valores padrão para não travar o app.
+# Proteção para o import de versão
 try:
     import version
 except ImportError:
     class version:
         VERSION = "13.0.1-temp"
-        STATUS = "Aguardando version.py"
+        STATUS = "Criar ficheiro version.py"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -26,7 +26,8 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÕES DE DADOS (BLINDADAS) ---
+
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
@@ -57,15 +58,15 @@ def db_get_editais():
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
-# --- LOGIN (Simplificado) ---
+# --- LOGIN ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
     c1, c2, c3 = st.columns([1, 1.8, 1])
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD PRIVADO</h1>", unsafe_allow_html=True)
-        with st.form("login"):
-            u = st.selectbox("Guerreiro", list(users.keys()))
+        with st.form("login_f"):
+            u = st.selectbox("Quem está acessando?", list(users.keys()))
             p = st.text_input("PIN", type="password")
             if st.form_submit_button("ENTRAR", use_container_width=True):
                 if p == users[u]['pin']:
@@ -84,7 +85,6 @@ with st.sidebar:
     menus = ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"]
     if usuario_atual == "Fernando Pinheiro":
         menus.append("⚙️ Gestão de Sistema")
-    
     selected = option_menu("Menu Tático", menus, default_index=0)
     
     st.markdown("---")
@@ -96,25 +96,33 @@ with st.sidebar:
         del st.session_state.usuario_logado
         st.rerun()
 
-# --- DASHBOARD ---
+# 1. DASHBOARD COM ANALYTICS
 if selected == "Dashboard":
-    st.title("📊 Desempenho")
+    st.title("📊 Termômetro de Desempenho")
     if not df_meu.empty:
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         tot = int(df_meu['total'].sum())
-        c1.metric("Questões", tot, border=True)
-        c2.metric("Precisão", f"{(df_meu['acertos'].sum()/tot*100):.1f}%", border=True)
+        prec = (df_meu['acertos'].sum()/tot*100) if tot > 0 else 0
+        c1.metric("Questões Totais", tot, border=True)
+        c2.metric("Precisão Geral", f"{prec:.1f}%", border=True)
         
+        # Gráfico forçado como categoria para data BR
         df_p = df_meu.sort_values('dt_ordenacao').groupby('Data')['total'].sum().reset_index()
-        fig = px.line(df_p, x='Data', y='total', markers=True)
+        fig = px.line(df_p, x='Data', y='total', markers=True, title="Evolução Diária")
         fig.update_xaxes(type='category', title="Data") 
         st.plotly_chart(fig, use_container_width=True)
-    else: st.info("Sem dados.")
+        
+        st.subheader("🔥 Performance por Matéria")
+        df_mat = df_meu.groupby('materia').agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
+        df_mat['Precisão'] = (df_mat['acertos'] / df_mat['total'] * 100).round(1)
+        fig_mat = px.bar(df_mat, x='Precisão', y='materia', orientation='h', color='Precisão', color_continuous_scale='RdYlGn')
+        st.plotly_chart(fig_mat, use_container_width=True)
+    else: st.info("Sem dados registrados.")
 
-# --- NOVO REGISTRO ---
+# 2. NOVO REGISTRO
 elif selected == "Novo Registro":
-    st.title("📝 Novo Registro")
-    if not editais: st.warning("Cadastre um edital.")
+    st.title("📝 Registrar Estudo")
+    if not editais: st.warning("Cadastre um edital primeiro.")
     else:
         conc = st.selectbox("Concurso", list(editais.keys()))
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
@@ -131,7 +139,7 @@ elif selected == "Novo Registro":
                 st.cache_data.clear()
                 st.success("Salvo!")
 
-# --- GESTÃO DE EDITAIS (Onde estava o erro da linha 161) ---
+# 4. GESTÃO DE EDITAIS (CORRIGIDO PARA SUPABASE)
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
@@ -141,10 +149,13 @@ elif selected == "Gestão Editais":
             c = st.text_input("Cargo")
             d = st.date_input("Data da Prova", datetime.date.today(), format="DD/MM/YYYY")
             if st.form_submit_button("CRIAR"):
+                # CORREÇÃO: Adicionado o campo 'topicos': [] para evitar o erro da imagem 31894e
                 supabase.table("editais_materias").insert({
-                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []
+                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
+                    "materia": "Geral", "topicos": []
                 }).execute()
                 st.cache_data.clear()
+                st.success("Concurso criado!")
                 st.rerun()
     with t2:
         if editais:
@@ -152,24 +163,29 @@ elif selected == "Gestão Editais":
             st.success(f"📍 Cargo: {editais[sel]['cargo']} | 📅 Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Adicionar"):
-                # CORREÇÃO DA LINHA 161: Puxando cargo e data_prova do edital selecionado
+                # CORREÇÃO: Adicionados campos obrigatórios para evitar erro da imagem 318284
                 supabase.table("editais_materias").insert({
-                    "concurso": sel, "materia": m_n, "topicos": [],
+                    "concurso": sel, "materia": m_n, "topicos": [], 
                     "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
                 }).execute()
                 st.cache_data.clear()
                 st.success("Matéria adicionada!")
                 st.rerun()
 
-# --- HISTÓRICO ---
+# 5. HISTÓRICO
 elif selected == "Histórico":
     st.title("📜 Histórico")
     if not df_meu.empty:
         st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], use_container_width=True, hide_index=True)
 
-# --- SISTEMA (FERNANDO) ---
+# 6. GESTÃO DE SISTEMA (BACKUP)
 elif selected == "⚙️ Gestão de Sistema":
-    st.title("⚙️ Sistema")
+    st.title("⚙️ Painel de Segurança")
+    if st.button("📥 Gerar Snapshot de Backup (JSON)"):
+        ed_data = supabase.table("editais_materias").select("*").execute().data
+        reg_data = supabase.table("registros_estudos").select("*").execute().data
+        snapshot = {"editais": ed_data, "registros": reg_data}
+        st.download_button("Baixar Backup", json.dumps(snapshot), "squad_backup.json", "application/json")
     if st.button("🎟️ Gerar Token de Convite"):
         tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         supabase.table("tokens_convite").insert({"codigo": tk}).execute()
