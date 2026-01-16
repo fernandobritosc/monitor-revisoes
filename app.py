@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd  # CORREÇÃO IMAGEM 3D57AC
+import pandas as pd  # CORREÇÃO DA IMAGEM 3D57AC
 import datetime
 import json
 from supabase import create_client, Client
@@ -11,22 +11,14 @@ import plotly.express as px
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
 
-# 2. Segurança
-try:
-    import version
-except ImportError:
-    class version:
-        VERSION = "32.0.0-STABLE"
-        STATUS = "Sincronização Total e Cache"
-
-# 3. Conexão Supabase
+# 2. Conexão Supabase
 @st.cache_resource
 def init_connection():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS (COM LIMPEZA DE CACHE) ---
+# --- FUNÇÕES DE DADOS (COM PROTEÇÃO DE CACHE) ---
 
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario, concurso=None):
@@ -42,7 +34,7 @@ def db_get_estudos(usuario, concurso=None):
 
 @st.cache_data(ttl=600)
 def db_get_editais(usuario_logado):
-    # Busca editais do usuário ou legados (sem dono) para evitar KeyError (image_3e3928.png)
+    # CORREÇÃO: Busca editais do usuário ou legados para evitar KeyError (image_3e3928.png)
     try:
         res = supabase.table("editais_materias").select("*").or_(f"usuario.eq.{usuario_logado},usuario.is.null").execute()
     except:
@@ -63,7 +55,7 @@ def db_get_editais(usuario_logado):
         if materia: editais[conc]["materias"][materia] = row.get('topicos') or []
     return editais
 
-# --- LOGIN ---
+# --- LOGIN E CADASTRO ---
 res_u_global = supabase.table("perfil_usuarios").select("*").execute()
 users_global = {row['nome']: row for row in res_u_global.data}
 
@@ -71,8 +63,8 @@ if 'usuario_logado' not in st.session_state:
     c1, c2, c3 = st.columns([1, 1.8, 1])
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD LOGIN</h1>", unsafe_allow_html=True)
-        tab_log, tab_cad = st.tabs(["Acessar", "Novo Guerreiro"])
-        with tab_log:
+        t_log, t_cad = st.tabs(["Acessar", "Novo Guerreiro"])
+        with t_log:
             with st.form("login"):
                 u = st.selectbox("Guerreiro", list(users_global.keys()) if users_global else ["Nenhum"])
                 p = st.text_input("PIN", type="password")
@@ -81,7 +73,7 @@ if 'usuario_logado' not in st.session_state:
                         st.session_state.usuario_logado = u
                         st.rerun()
                     else: st.error("Acesso Negado.")
-        with tab_cad:
+        with t_cad:
             with st.form("cad"):
                 tk = st.text_input("Token")
                 n_cad = st.text_input("Nome")
@@ -90,12 +82,12 @@ if 'usuario_logado' not in st.session_state:
                     res_tk = supabase.table("tokens_convite").select("*").eq("codigo", tk).eq("usado", False).execute()
                     if res_tk.data:
                         try:
-                            # CORREÇÃO IMAGEM 3CD3B0: Envio de campos de privacidade
+                            # CORREÇÃO IMAGEM 3CD3B0: Envio de campos obrigatórios
                             supabase.table("perfil_usuarios").insert({"nome": n_cad, "pin": pi}).execute()
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
-                            st.cache_data.clear() # Limpa cache para o novo nome aparecer
-                            st.success("Guerreiro Recrutado! Vá em Acessar.")
-                        except: st.error("Nome já existe ou erro no banco.")
+                            st.cache_data.clear()
+                            st.success("Cadastrado! Agora vá em Acessar.")
+                        except: st.error("Erro no cadastro. Tente outro nome.")
                     else: st.error("Token Inválido.")
     st.stop()
 
@@ -108,7 +100,7 @@ if 'concurso_ativo' not in st.session_state:
     c_sel, c_nov = st.columns([1.5, 1])
     with c_sel:
         st.subheader("🎯 Selecionar Missão")
-        if not editais: st.info("Sem editais.")
+        if not editais: st.info("Sem missões.")
         else:
             for conc in editais.keys():
                 if st.button(f"🚀 {conc.upper()}", use_container_width=True):
@@ -121,12 +113,12 @@ if 'concurso_ativo' not in st.session_state:
             cg = st.text_input("Cargo")
             dt = st.date_input("Data da Prova", format="DD/MM/YYYY")
             if st.form_submit_button("CRIAR E INICIAR", use_container_width=True):
-                # CORREÇÃO IMAGEM 31894E: Injetando a coluna usuario
+                # CORREÇÃO IMAGEM 31894E: Injetando privacidade e tópicos vazios
                 supabase.table("editais_materias").insert({
                     "concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), 
                     "materia": "Geral", "topicos": [], "usuario": usuario_atual
                 }).execute()
-                st.cache_data.clear() # FORÇA A ATUALIZAÇÃO DO ECRÃ
+                st.cache_data.clear() # FORÇA O SUMIÇO DO ANTIGO E APARECIMENTO DO NOVO
                 st.session_state.concurso_ativo = nm
                 st.rerun()
     st.stop()
@@ -136,7 +128,7 @@ concurso_ativo = st.session_state.concurso_ativo
 
 # PROTEÇÃO CONTRA KEYERROR (image_3e3928.png)
 if concurso_ativo not in editais:
-    st.warning("Contexto de missão perdido ou edital de outro usuário.")
+    st.warning("Missão não encontrada ou de outro usuário.")
     if st.button("Voltar para Base"): 
         del st.session_state.concurso_ativo
         st.rerun()
@@ -183,15 +175,15 @@ elif selected == "Novo Registro":
             st.cache_data.clear(); st.success("Salvo!")
 
 elif selected == "Gestão do Edital":
-    st.title("📑 Ajustar Missão")
+    st.title("📑 Gestão da Missão")
     
-    # EXCLUSÃO DE CONCURSO (COM LIMPEZA DE CACHE)
+    # EXCLUSÃO DE CONCURSO (image_fa548.png)
     with st.expander("⚠️ EXCLUIR CONCURSO ATUAL"):
-        st.warning("Cuidado! Esta ação é irreversível.")
-        if st.checkbox("Confirmo que quero apagar tudo deste edital"):
-            if st.button("ELIMINAR DEFINITIVAMENTE"):
+        st.warning("Ação irreversível.")
+        if st.checkbox("Confirmar exclusão total"):
+            if st.button("ELIMINAR AGORA"):
                 supabase.table("editais_materias").delete().eq("concurso", concurso_ativo).eq("usuario", usuario_atual).execute()
-                st.cache_data.clear() # ISSO FAZ O REGISTRO SUMIR DO ECRÃ
+                st.cache_data.clear() # ESSENCIAL: FAZ O ECRÃ ATUALIZAR E O DADO SUMIR
                 del st.session_state.concurso_ativo
                 st.rerun()
 
@@ -202,13 +194,15 @@ elif selected == "Gestão do Edital":
         supabase.table("editais_materias").insert({"concurso": concurso_ativo, "materia": m_n, "topicos": [], "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso'], "usuario": usuario_atual}).execute()
         st.cache_data.clear(); st.rerun()
     
-    for m, t in editais[concurso_ativo]["materias"].items():
-        with st.expander(f"📚 {m}"):
-            tx = st.text_area("Tópicos (;)", value="; ".join(t), key=f"t_{m}")
-            if st.button("Salvar Assuntos", key=f"b_{m}"):
-                novos = [x.strip() for x in tx.split(";") if x.strip()]
-                supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).eq("usuario", usuario_atual).execute()
-                st.cache_data.clear(); st.rerun()
+    # PROTEÇÃO LINHA 212 (image_3e3928.png)
+    if concurso_ativo in editais:
+        for m, t in editais[concurso_ativo]["materias"].items():
+            with st.expander(f"📚 {m}"):
+                tx = st.text_area("Tópicos (;)", value="; ".join(t), key=f"t_{m}")
+                if st.button("Salvar Assuntos", key=f"b_{m}"):
+                    novos = [x.strip() for x in tx.split(";") if x.strip()]
+                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).eq("usuario", usuario_atual).execute()
+                    st.cache_data.clear(); st.rerun()
 
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Painel Administrador")
@@ -216,10 +210,10 @@ elif selected == "⚙️ Gestão de Sistema":
     res_gl = supabase.table("editais_materias").select("concurso, usuario").execute()
     df_gl = pd.DataFrame(res_gl.data).drop_duplicates()
     if not df_gl.empty:
-        alvo = st.selectbox("Apagar Missão de qualquer usuário:", [f"{r['concurso']} ({r['usuario']})" for _, r in df_gl.iterrows()])
-        if st.button("ELIMINAR AGORA"):
+        alvo = st.selectbox("Missão para ELIMINAR:", [f"{r['concurso']} ({r['usuario']})" for _, r in df_gl.iterrows()])
+        if st.button("ELIMINAR DEFINITIVAMENTE"):
             c_alvo = alvo.split(" (")[0]
             u_alvo = alvo.split(" (")[1].replace(")", "")
             supabase.table("editais_materias").delete().eq("concurso", c_alvo).eq("usuario", u_alvo).execute()
-            st.cache_data.clear() # LIMPA O CACHE GLOBAL
+            st.cache_data.clear() # LIMPA A MEMÓRIA GLOBAL
             st.success("Missão eliminada!"); st.rerun()
