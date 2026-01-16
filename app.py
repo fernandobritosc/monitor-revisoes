@@ -20,7 +20,6 @@ st.markdown("""
     
     header {visibility: hidden;}
     
-    /* Botões */
     .stButton button {
         background-color: #1E1E1E;
         color: #E0E0E0;
@@ -34,7 +33,6 @@ st.markdown("""
         border-color: #FF4B4B;
     }
     
-    /* Métricas (Cards) */
     div[data-testid="stMetric"] {
         background-color: #0E0E0E;
         padding: 15px 20px;
@@ -43,14 +41,14 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #050505;
         border-right: 1px solid #222;
     }
     
-    /* Ajuste de Gráficos */
-    .js-plotly-plot {
+    /* Estilo para Tabela de Revisão */
+    .stDataFrame {
+        border: 1px solid #333;
         border-radius: 8px;
     }
 </style>
@@ -103,6 +101,35 @@ def get_stats(concurso):
         return pd.DataFrame(res.data)
     except: return pd.DataFrame()
 
+# --- NOVA LÓGICA DE REVISÃO ---
+def calcular_revisoes(df):
+    """Analisa o histórico e diz o que revisar hoje"""
+    if df.empty: return pd.DataFrame()
+    
+    hoje = datetime.date.today()
+    revisoes = []
+    
+    # Converte data
+    df['dt_obj'] = pd.to_datetime(df['data_estudo']).dt.date
+    
+    for _, row in df.iterrows():
+        delta = (hoje - row['dt_obj']).days
+        motivo = None
+        
+        if delta == 1: motivo = "🔥 24 Horas"
+        elif delta == 7: motivo = "📅 7 Dias"
+        elif delta == 30: motivo = "🧠 30 Dias"
+        
+        if motivo:
+            revisoes.append({
+                "Matéria": row['materia'],
+                "Assunto": row['assunto'],
+                "Original": row['dt_obj'].strftime('%d/%m'),
+                "Tipo": motivo
+            })
+            
+    return pd.DataFrame(revisoes)
+
 # --- 4. FLUXO PRINCIPAL ---
 
 if 'missao_ativa' not in st.session_state:
@@ -151,7 +178,6 @@ if st.session_state.missao_ativa is None:
                 
                 if st.form_submit_button("CRIAR MISSÃO", use_container_width=True):
                     if nm:
-                        # CORREÇÃO: Tenta inserir com usuário, se falhar, tenta sem (fallback)
                         try:
                             supabase.table("editais_materias").insert({
                                 "concurso": nm, "cargo": cg, 
@@ -159,18 +185,14 @@ if st.session_state.missao_ativa is None:
                                 "materia": "Geral", "topicos": [], "usuario": "Commander"
                             }).execute()
                         except:
-                            # Se der erro (coluna usuario não existe), tenta sem ela
                              supabase.table("editais_materias").insert({
                                 "concurso": nm, "cargo": cg, 
                                 "data_prova": dt.strftime('%Y-%m-%d'),
                                 "materia": "Geral", "topicos": []
                             }).execute()
-                            
                         st.toast(f"Missão {nm} criada!")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        st.warning("Digite um nome.")
 
         st.write("") 
         with st.container(border=True):
@@ -178,11 +200,11 @@ if st.session_state.missao_ativa is None:
             lista_del = ["Selecione..."] + list(editais.keys())
             alvo = st.selectbox("Apagar Missão:", lista_del)
             if alvo != "Selecione...":
-                st.warning(f"Apagar TODO o histórico de '{alvo}'?")
+                st.warning(f"Apagar histórico de '{alvo}'?")
                 if st.button("CONFIRMAR EXCLUSÃO", type="primary", use_container_width=True):
                     supabase.table("registros_estudos").delete().eq("concurso", alvo).execute()
                     supabase.table("editais_materias").delete().eq("concurso", alvo).execute()
-                    st.success("Missão eliminada.")
+                    st.success("Eliminado.")
                     time.sleep(1)
                     st.rerun()
 
@@ -202,77 +224,85 @@ else:
             st.rerun()
             
         st.markdown("---")
+        # ADICIONEI A OPÇÃO "REVISÕES" AQUI
         menu = option_menu(
             menu_title=None,
-            options=["Dashboard", "Registrar", "Configurar", "Histórico"],
-            icons=["bar-chart-fill", "pencil-square", "gear-fill", "clock-history"],
+            options=["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"],
+            icons=["bar-chart-fill", "repeat", "pencil-square", "gear-fill", "clock-history"],
             default_index=0,
             styles={"nav-link-selected": {"background-color": "#FF4B4B"}}
         )
 
     if menu == "Dashboard":
         st.title("📊 Painel Tático")
-        
         if df.empty:
-            st.info("Aguardando dados de combate. Inicie os registros.")
+            st.info("Inicie os registros para ver estatísticas.")
         else:
             total = int(df['total'].sum())
             acertos = int(df['acertos'].sum())
             erros = total - acertos
             precisao = (acertos / total * 100) if total > 0 else 0
             
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Questões Resolvidas", total)
-            col2.metric("Acertos Totais", acertos)
-            col3.metric("Precisão Atual", f"{precisao:.1f}%")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Questões", total)
+            c2.metric("Acertos", acertos)
+            c3.metric("Precisão", f"{precisao:.1f}%")
             
             st.markdown("---")
-            
             g1, g2 = st.columns([2, 1], gap="medium")
-            
             with g1:
-                st.markdown("#### 📈 Evolução Temporal")
+                st.markdown("#### 📈 Evolução")
                 df['Data'] = pd.to_datetime(df['data_estudo']).dt.strftime('%d/%m')
                 df_chart = df.groupby('Data')[['total', 'acertos']].sum().reset_index()
-                
                 fig_area = px.area(df_chart, x='Data', y=['total', 'acertos'], 
-                              color_discrete_sequence=['#333333', '#FF4B4B'],
-                              labels={'value': 'Qtd', 'variable': 'Métrica'})
-                
-                fig_area.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    height=350,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
+                              color_discrete_sequence=['#333333', '#FF4B4B'])
+                fig_area.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=20,r=20,t=20,b=20))
                 st.plotly_chart(fig_area, use_container_width=True)
-                
             with g2:
-                st.markdown("#### 🎯 Precisão Visual")
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=['Acertos', 'Erros'], 
-                    values=[acertos, erros],
-                    hole=.6, 
-                    marker=dict(colors=['#FF4B4B', '#333333']),
-                    textinfo='percent'
-                )])
-                
-                fig_pie.update_layout(
-                    showlegend=True,
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    height=350, 
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.1)
-                )
+                st.markdown("#### 🎯 Alvo")
+                fig_pie = go.Figure(data=[go.Pie(labels=['Acertos', 'Erros'], values=[acertos, erros], hole=.6, marker=dict(colors=['#FF4B4B', '#333333']), textinfo='percent')])
+                fig_pie.update_layout(showlegend=True, height=350, paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=20,r=20,t=20,b=20), legend=dict(orientation="h", y=-0.1))
                 st.plotly_chart(fig_pie, use_container_width=True)
+
+    # --- ABA DE REVISÕES (A GRANDE NOVIDADE) ---
+    elif menu == "Revisões":
+        st.title("🔄 Radar de Revisão (24h - 7d - 30d)")
+        
+        df_rev = calcular_revisoes(df)
+        
+        if df_rev.empty:
+            st.success("✅ Nenhuma revisão pendente para hoje, Comandante! Você está em dia.")
+            st.markdown("O sistema calcula automaticamente baseado no que você estudou há 1, 7 ou 30 dias.")
+        else:
+            st.warning(f"⚠️ Atenção! Você tem {len(df_rev)} tópicos para revisar hoje.")
+            
+            # Mostra tabelas separadas por urgência
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("### 🔥 24 Horas")
+                rev_24 = df_rev[df_rev['Tipo'] == "🔥 24 Horas"]
+                if not rev_24.empty:
+                    st.dataframe(rev_24[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
+                
+            with c2:
+                st.markdown("### 📅 7 Dias")
+                rev_7 = df_rev[df_rev['Tipo'] == "📅 7 Dias"]
+                if not rev_7.empty:
+                    st.dataframe(rev_7[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
+
+            with c3:
+                st.markdown("### 🧠 30 Dias")
+                rev_30 = df_rev[df_rev['Tipo'] == "🧠 30 Dias"]
+                if not rev_30.empty:
+                    st.dataframe(rev_30[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
 
     elif menu == "Registrar":
         st.title("📝 Novo Registro")
         materias = list(dados.get('materias', {}).keys())
-        
-        if not materias:
-            st.warning("⚠️ Adicione matérias em 'Configurar' antes de registrar.")
+        if not materias: st.warning("⚠️ Adicione matérias em 'Configurar'.")
         else:
             with st.container(border=True):
                 c1, c2 = st.columns(2)
@@ -282,15 +312,11 @@ else:
                     assunto = st.selectbox("Assunto", topicos)
                 with c2:
                     dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
-                
                 st.divider()
                 c3, c4 = st.columns(2)
-                acertos = c3.number_input("Acertos", min_value=0, step=1)
-                total = c4.number_input("Total", min_value=1, step=1)
-                
+                acertos = c3.number_input("Acertos", 0, step=1)
+                total = c4.number_input("Total", 1, step=1)
                 if st.button("SALVAR REGISTRO", type="primary", use_container_width=True):
-                    # CORREÇÃO PRINCIPAL: Removemos o campo 'usuario' daqui
-                    # pois a tabela registros_estudos provavelmente não tem essa coluna.
                     try:
                         supabase.table("registros_estudos").insert({
                             "concurso": missao, "materia": mat, "assunto": assunto,
@@ -299,44 +325,29 @@ else:
                         }).execute()
                         st.toast("Salvo!", icon="🔥")
                         time.sleep(0.5)
-                    except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
+                    except Exception as e: st.error(f"Erro: {e}")
 
     elif menu == "Configurar":
         st.title("⚙️ Configuração")
         c1, c2 = st.columns([1, 2], gap="medium")
-        
         with c1:
             st.markdown("#### Nova Matéria")
             with st.form("add_mat"):
                 nm = st.text_input("Nome")
                 if st.form_submit_button("ADICIONAR"):
-                    # Tenta com usuario, fallback sem
-                    try:
-                        supabase.table("editais_materias").insert({
-                            "concurso": missao, "materia": nm, "topicos": [],
-                            "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso'),
-                            "usuario": "Commander"
-                        }).execute()
-                    except:
-                        supabase.table("editais_materias").insert({
-                            "concurso": missao, "materia": nm, "topicos": [],
-                            "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso')
-                        }).execute()
+                    try: supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": [], "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso'), "usuario": "Commander"}).execute()
+                    except: supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": [], "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso')}).execute()
                     st.rerun()
-        
         with c2:
             st.markdown("#### Matérias")
             for m, t in dados.get('materias', {}).items():
                 with st.expander(f"📚 {m}"):
-                    current = "; ".join(t)
-                    new_tops = st.text_area(f"Tópicos", value=current, key=f"t_{m}")
+                    new_tops = st.text_area(f"Tópicos", value="; ".join(t), key=f"t_{m}")
                     c_s, c_d = st.columns([4, 1])
                     if c_s.button("Salvar", key=f"s_{m}"):
                         l = [x.strip() for x in new_tops.split(";") if x.strip()]
                         supabase.table("editais_materias").update({"topicos": l}).eq("concurso", missao).eq("materia", m).execute()
-                        st.toast("Atualizado!")
-                        time.sleep(0.5); st.rerun()
+                        st.rerun()
                     if c_d.button("🗑️", key=f"d_{m}"):
                         supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
                         st.rerun()
