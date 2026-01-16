@@ -1,3 +1,49 @@
+
+
+Iniciar teste gratuito
+
+Compartilhar
+Na aba vertical "Gestão de Editais" > Novo> data da prova, campo data da prova a sequencia da data esta invertida e eu não consigo arrumar, me ajuda!!
+
+pasted_content.txt
+Texto · 9.57 KB
+Lite
+Entendido. Vou analisar o problema no campo "data da prova" e ajudá-lo a corrigir a sequência da data. Deixe-me examinar o conteúdo que você enviou para entender melhor o que está acontecendo.
+Analisando o arquivo enviado para entender a inversão na data da prova, identificarei a causa antes de propor uma solução eficaz.
+
+O arquivo mostra que as datas das provas estão armazenadas no formato ISO ('%Y-%m-%d') e convertidas para 'dd/mm/yyyy' na leitura. A inversão pode estar acontecendo na origem ou na exibição. Ainda preciso validar a entrada de dados para identificar o erro. Próximo passo: verificar onde a data é inserida ou alterada.
+
+Lite
+Analisei o código que você enviou. O problema está na forma como o componente st.date_input do Streamlit lida com o formato de exibição. Por padrão, ele segue a localidade do navegador ou do sistema, mas no seu código, a data é salva no banco de dados no formato ISO (YYYY-MM-DD) e exibida em outros lugares como DD/MM/YYYY.
+Vou preparar uma explicação detalhada e a correção para o seu código.
+Verifiquei que a data é armazenada no formato ISO e exibida em `DD/MM/YYYY`, podendo ocorrer inversão na origem ou exibição. Próximo passo: ajustar o componente de entrada de data.
+
+Analisei o arquivo e identifiquei a necessidade de ajustar o componente de entrada de data para evitar inversões no formato DD/MM/YYYY. Próximo passo: implementar a correção.
+
+Lite
+Olá! Identifiquei o problema no seu código Streamlit.
+O campo st.date_input por padrão exibe a data no formato americano (YYYY/MM/DD) ou de acordo com a localidade do navegador. Para forçar a exibição no formato brasileiro (DD/MM/YYYY), você precisa adicionar o parâmetro format="DD/MM/YYYY" dentro da função.
+Fiz as seguintes correções no seu código:
+Na Gestão de Editais: No campo "Data Prova", adicionei o parâmetro de formato.
+No Novo Registro: Também apliquei a mesma correção no campo "Data do Estudo" para manter a consistência.
+O que mudou no código:
+Python
+# Antes:
+d = st.date_input("Data Prova")
+
+# Depois (Corrigido):
+d = st.date_input("Data Prova", format="DD/MM/YYYY")
+O arquivo completo com as correções aplicadas está anexado. Basta substituir o seu código atual por este. Se precisar de mais alguma ajuda, estou à disposição!
+codigo_corrigido.py
+Código · 9.75 KB
+
+Ver todos os arquivos nesta tarefa
+Tarefa concluída
+Como foi este resultado?
+Sugestões de acompanhamento
+Enviar mensagem para Manus
+
+codigo_corrigido.py
 import streamlit as st
 import pandas as pd
 import datetime
@@ -141,7 +187,8 @@ elif selected == "Novo Registro":
         conc = st.selectbox("Concurso", list(editais.keys()))
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
         with st.form("reg_s"):
-            dt = st.date_input("Data do Estudo", datetime.date.today())
+            # CORREÇÃO: Adicionado o parâmetro format="DD/MM/YYYY"
+            dt = st.date_input("Data do Estudo", datetime.date.today(), format="DD/MM/YYYY")
             ass = st.selectbox("Tópico", editais[conc]["materias"][mat] if editais[conc]["materias"][mat] else ["Geral"])
             a = st.number_input("Acertos", 0)
             t = st.number_input("Total", 1)
@@ -171,7 +218,8 @@ elif selected == "Gestão Editais":
         with st.form("n_ed"):
             n = st.text_input("Nome Concurso")
             c = st.text_input("Cargo")
-            d = st.date_input("Data Prova")
+            # CORREÇÃO: Adicionado o parâmetro format="DD/MM/YYYY"
+            d = st.date_input("Data Prova", format="DD/MM/YYYY")
             if st.form_submit_button("Criar"):
                 supabase.table("editais_materias").insert({
                     "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []
