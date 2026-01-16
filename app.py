@@ -13,8 +13,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "13.2.0-temp"
-        STATUS = "Ajuste de Banco"
+        VERSION = "13.3.0"
+        STATUS = "Blindagem de Constraints"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -26,8 +26,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS ---
-
+# --- FUNÇÕES DE DADOS (BLINDAGEM BR) ---
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
@@ -58,7 +57,7 @@ def db_get_editais():
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
-# --- ACESSO ---
+# --- LOGIN ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
@@ -72,7 +71,7 @@ if 'usuario_logado' not in st.session_state:
                 if p == users[u]['pin']:
                     st.session_state.usuario_logado = u
                     st.rerun()
-                else: st.error("Incorreto")
+                else: st.error("Acesso Negado")
     st.stop()
 
 # --- AMBIENTE OPERACIONAL ---
@@ -89,7 +88,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.caption(f"🚀 Versão: {version.VERSION}")
-    if st.button("🔄 Sincronizar"):
+    if st.button("🔄 Sincronizar Tudo"):
         st.cache_data.clear()
         st.rerun()
     if st.button("Sair"):
@@ -131,22 +130,26 @@ elif selected == "Novo Registro":
                 st.cache_data.clear()
                 st.success("Salvo!")
 
-# 6. GESTÃO DE EDITAIS (CORREÇÃO DOS ERROS DE API)
+# 6. GESTÃO DE EDITAIS (CORREÇÃO CIRÚRGICA)
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
     with t1:
         with st.form("n"):
-            n = st.text_input("Concurso")
+            n = st.text_input("Nome do Concurso")
             c = st.text_input("Cargo")
             d = st.date_input("Data Prova", format="DD/MM/YYYY")
+            # AQUI ESTAVA O ERRO DA LINHA 148:
             if st.form_submit_button("Criar"):
-                # CORREÇÃO LINHA 146: Adicionado "topicos": [] (Obrigatório no Supabase)
                 supabase.table("editais_materias").insert({
-                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
-                    "materia": "Geral", "topicos": []
+                    "concurso": n, 
+                    "cargo": c, 
+                    "data_prova": d.strftime('%Y-%m-%d'), 
+                    "materia": "Geral", # Adicionado (Obrigatório)
+                    "topicos": []       # Adicionado (Obrigatório)
                 }).execute()
                 st.cache_data.clear()
+                st.success("Concurso Criado!")
                 st.rerun()
     with t2:
         if editais:
@@ -154,13 +157,15 @@ elif selected == "Gestão Editais":
             st.success(f"Cargo: {editais[sel]['cargo']} | Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Confirmar Adição"):
-                # CORREÇÃO LINHA 161: Adicionado campos obrigatórios para evitar APIError
                 supabase.table("editais_materias").insert({
-                    "concurso": sel, "materia": m_n, "topicos": [], 
-                    "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
+                    "concurso": sel, 
+                    "materia": m_n, 
+                    "topicos": [], 
+                    "cargo": editais[sel]['cargo'], 
+                    "data_prova": editais[sel]['data_iso']
                 }).execute()
                 st.cache_data.clear()
-                st.success("Adicionado!")
+                st.success("Matéria adicionada!")
                 st.rerun()
 
 # 7. HISTÓRICO
@@ -170,14 +175,10 @@ elif selected == "Histórico":
         st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], 
                      use_container_width=True, hide_index=True)
 
-# 8. GESTÃO DE SISTEMA (SÓ FERNANDO)
+# 8. SISTEMA
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Sistema")
-    if st.button("📥 Gerar Snapshot (Backup)"):
+    if st.button("📥 Gerar Backup"):
         ed = supabase.table("editais_materias").select("*").execute().data
         reg = supabase.table("registros_estudos").select("*").execute().data
         st.download_button("Baixar JSON", json.dumps({"editais": ed, "registros": reg}), "backup.json")
-    if st.button("🎟️ Novo Token"):
-        tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
-        supabase.table("tokens_convite").insert({"codigo": tk}).execute()
-        st.code(tk)
