@@ -20,7 +20,6 @@ def carregar_dados():
     return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
 
 def salvar_dados(dataframe):
-    # Salva o dataframe limpo
     dataframe.to_csv(DB_FILE, index=False, sep=';', encoding='utf-8-sig')
 
 def calcular_revisao(data_base, taxa):
@@ -32,13 +31,12 @@ def calcular_revisao(data_base, taxa):
 # --- INTERFACE ---
 st.title("🚀 Dashboard de Performance")
 
-# Carrega os dados na memória
 if 'df_dados' not in st.session_state:
     st.session_state.df_dados = carregar_dados()
 
 df = st.session_state.df_dados
 
-# --- BARRA LATERAL (ADICIONAR) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
     st.header("📥 Novo Registro")
     with st.form("form_estudo", clear_on_submit=True):
@@ -64,7 +62,6 @@ with st.sidebar:
             "Proxima_Revisao": data_rev.strftime('%d/%m/%Y')
         }])
         
-        # Atualiza o estado e salva
         st.session_state.df_dados = pd.concat([df, nova_linha], ignore_index=True)
         salvar_dados(st.session_state.df_dados)
         st.success("Salvo!")
@@ -75,7 +72,7 @@ with st.sidebar:
 if not st.session_state.df_dados.empty:
     df_calc = st.session_state.df_dados.copy()
     
-    # Converter para números para os gráficos
+    # Tratamento de dados para gráficos
     df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
     df_calc['Total'] = pd.to_numeric(df_calc['Total'], errors='coerce').fillna(1)
     df_calc['Data_Ordenacao'] = pd.to_datetime(df_calc['Proxima_Revisao'], dayfirst=True, errors='coerce')
@@ -93,40 +90,50 @@ if not st.session_state.df_dados.empty:
 
     st.markdown("---")
 
-    # 2. GRÁFICOS
-    t1, t2 = st.tabs(["📊 Gráficos", "📝 Gestão de Registros (Editar/Excluir)"])
+    # 2. ABAS (Gráficos e Tabela)
+    t1, t2 = st.tabs(["📊 Gráficos", "📝 Gestão de Registros"])
     
     with t1:
         g1, g2 = st.columns(2)
+        
+        # Gráfico de Barras (Matérias)
         with g1:
             st.caption("Desempenho por Matéria")
             df_g = df_calc.groupby("Materia").apply(lambda x: (x['Acertos'].sum()/x['Total'].sum()*100)).reset_index(name="Nota")
-            fig = px.bar(df_g, x="Materia", y="Nota", color="Nota", range_y=[0,100], color_continuous_scale="RdYlGn", text_auto='.0f')
-            st.plotly_chart(fig, use_container_width=True)
+            fig_barras = px.bar(df_g, x="Materia", y="Nota", color="Nota", range_y=[0,100], color_continuous_scale="RdYlGn", text_auto='.0f')
+            st.plotly_chart(fig_barras, use_container_width=True)
+        
+        # Gráfico de Linha (Ritmo) - AQUI ESTÁ A CORREÇÃO
         with g2:
             st.caption("Ritmo Diário")
             df_calc['Data_Real'] = pd.to_datetime(df_calc['Data_Estudo'], dayfirst=True, errors='coerce')
             df_t = df_calc.groupby("Data_Real")['Total'].sum().reset_index()
-            st.plotly_chart(px.line(df_t, x="Data_Real", y="Total", markers=True), use_container_width=True)
+            
+            fig_linha = px.line(df_t, x="Data_Real", y="Total", markers=True)
+            
+            # --- O COMANDO MÁGICO DE FORMATAÇÃO ---
+            fig_linha.update_xaxes(
+                tickformat="%d/%m",  # Mostra apenas Dia/Mês (ex: 16/01)
+                dtick="D1"           # Força um traço por dia (evita horas quebradas)
+            )
+            
+            st.plotly_chart(fig_linha, use_container_width=True)
 
-    # 3. TABELA EDITÁVEL (AQUI ESTÁ A NOVIDADE)
+    # 3. TABELA EDITÁVEL
     with t2:
-        st.subheader("📝 Tabela de Registros")
-        st.info("💡 Dica: Selecione as linhas à esquerda e clique na lixeira (canto superior direito da tabela) para apagar.")
+        st.subheader("📝 Editar ou Excluir")
+        st.info("Selecione a caixinha à esquerda da linha e pressione DEL no teclado para apagar.")
         
-        # O data_editor permite apagar linhas!
         df_editado = st.data_editor(
             st.session_state.df_dados,
             use_container_width=True,
-            num_rows="dynamic", # Permite adicionar/remover linhas
+            num_rows="dynamic",
             key="editor_dados"
         )
 
-        # Se houver mudanças (alguém editou ou apagou), salvamos automaticamente
         if not df_editado.equals(st.session_state.df_dados):
             st.session_state.df_dados = df_editado
             salvar_dados(df_editado)
-            st.success("Tabela atualizada!")
             st.rerun()
 
     # 4. DOWNLOAD
