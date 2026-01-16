@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import os
 import plotly.express as px
+import plotly.graph_objects as go # Nova biblioteca para o Radar
 from streamlit_option_menu import option_menu
 
 # Configuração da página
@@ -29,6 +30,38 @@ def calcular_revisao(data_base, taxa):
     elif taxa < 90: dias = 7
     else: dias = 21
     return data_base + datetime.timedelta(days=dias)
+
+def calcular_streak(df):
+    if df.empty: return 0
+    try:
+        # Converte para data e remove duplicatas (só importa se estudou no dia, não quantas vezes)
+        datas = pd.to_datetime(df['Data_Estudo'], dayfirst=True).dt.normalize().unique()
+        datas = sorted(datas, reverse=True) # Do mais recente para o antigo
+        
+        hoje = pd.Timestamp.now().normalize()
+        streak = 0
+        
+        # Verifica se estudou hoje ou ontem para manter a chama acesa
+        if hoje in datas:
+            streak = 1
+            check_date = hoje - pd.Timedelta(days=1)
+        elif (hoje - pd.Timedelta(days=1)) in datas:
+            streak = 0 # Ainda não estudou hoje, mas a sequencia ta valendo
+            check_date = hoje - pd.Timedelta(days=1)
+        else:
+            return 0 # Quebrou a sequencia
+            
+        # Conta para trás
+        for d in datas:
+            if d == hoje: continue # Já contado
+            if d == check_date:
+                streak += 1
+                check_date -= pd.Timedelta(days=1)
+            else:
+                break # Buraco na data
+        return streak
+    except:
+        return 0
 
 # Inicializar
 if 'df_dados' not in st.session_state:
@@ -98,6 +131,7 @@ if selected == "Dashboard":
         media_g = (df_calc['Acertos'].sum() / total_q * 100) if total_q > 0 else 0
         hoje = pd.Timestamp.now().normalize()
         pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje].shape[0]
+        streak_atual = calcular_streak(df_calc)
 
         # 1. BARRA DE META
         progresso = min(total_q / META_QUESTOES, 1.0)
@@ -105,68 +139,76 @@ if selected == "Dashboard":
         st.progress(progresso, text=f"{progresso*100:.1f}% Concluído")
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # 2. KPIs
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Questões Feitas", int(total_q), border=True)
-        col2.metric("Precisão Geral", f"{media_g:.1f}%", border=True)
-        col3.metric("Revisões Pendentes", pendentes, delta="Atenção" if pendentes > 0 else "Em dia", delta_color="inverse", border=True)
+        # 2. KPIs (AGORA SÃO 4 COLUNAS COM O STREAK)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Questões", int(total_q), border=True)
+        c2.metric("Precisão", f"{media_g:.1f}%", border=True)
+        c3.metric("Revisões", pendentes, delta="Atenção" if pendentes > 0 else "Em dia", delta_color="inverse", border=True)
+        c4.metric("🔥 Streak", f"{streak_atual} dias", help="Dias seguidos estudando", border=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 3. GRÁFICOS
+        # 3. GRÁFICOS AVANÇADOS (RADAR + BARRAS)
         g1, g2 = st.columns(2)
+        
         with g1:
-            st.subheader("Desempenho por Matéria")
-            df_g = df_calc.groupby("Materia").apply(lambda x: (x['Acertos'].sum()/x['Total'].sum()*100)).reset_index(name="Nota")
-            fig = px.bar(df_g, x="Materia", y="Nota", color="Nota", range_y=[0,100], color_continuous_scale="RdYlGn", text_auto='.0f', labels={"Nota": "% Acerto"})
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
+            st.subheader("🕸️ Radar Tático (Equilíbrio)")
+            # Prepara dados para o Radar
+            df_radar = df_calc.groupby("Materia").apply(lambda x: (x['Acertos'].sum()/x['Total'].sum()*100)).reset_index(name="Nota")
             
+            if not df_radar.empty:
+                fig_radar = go.Figure()
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=df_radar['Nota'],
+                    theta=df_radar['Materia'],
+                    fill='toself',
+                    name='Desempenho',
+                    line_color='#00E676'
+                ))
+                fig_radar.update_layout(
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                    showlegend=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    margin=dict(l=40, r=40, t=20, b=20)
+                )
+                st.plotly_chart(fig_radar, use_container_width=True)
+            else:
+                st.info("Registe mais matérias para gerar o radar.")
+
         with g2:
-            st.subheader("Consistência Diária")
+            st.subheader("📈 Evolução Diária")
             df_calc['Data_Real'] = pd.to_datetime(df_calc['Data_Estudo'], dayfirst=True, errors='coerce')
             df_t = df_calc.groupby("Data_Real")['Total'].sum().reset_index()
             fig2 = px.line(df_t, x="Data_Real", y="Total", markers=True, labels={"Data_Real": "Data", "Total": "Questões"})
+            fig2.update_traces(line_color='#00E676') # Linha verde neon
             fig2.update_xaxes(tickformat="%d/%m", dtick="D1")
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # 4. MAPA DA VERGONHA (COM CONTAGEM DE ERROS)
+        # 4. MAPA DA VERGONHA
         st.markdown("---")
         st.subheader("🗺️ Mapa da Vergonha")
         
         try:
-            # Agrupa e calcula
             df_resumo = df_calc.groupby(["Materia", "Assunto"])[["Acertos", "Total"]].sum().reset_index()
             df_resumo["Aproveitamento"] = (df_resumo["Acertos"] / df_resumo["Total"] * 100)
-            
-            # --- NOVO: CÁLCULO DE ERROS ---
             df_resumo["Erros"] = df_resumo["Total"] - df_resumo["Acertos"]
 
-            # FILTRO: Só mostra quem está abaixo de 80%
             df_piores = df_resumo[df_resumo["Aproveitamento"] < 80].copy()
-            
-            # Ordena do pior para o "menos pior"
             df_piores = df_piores.sort_values(by="Aproveitamento", ascending=True)
             
             if not df_piores.empty:
-                st.error("🚨 ALERTA: Estes assuntos vão te reprovar. TOMA RUMO e estuda isso hoje!")
-                
+                st.error("🚨 ALERTA: Estes assuntos vão te reprovar. TOMA RUMO!")
                 df_piores["Aproveitamento"] = df_piores["Aproveitamento"].apply(lambda x: f"{x:.1f}%")
-                
-                # Exibe a coluna nova "Erros"
                 st.dataframe(
-                    df_piores[["Materia", "Assunto", "Total", "Erros", "Aproveitamento"]].rename(
-                        columns={"Total": "Qtd. Feitas", "Erros": "Qtd. Erros"}
-                    ),
-                    use_container_width=True,
-                    hide_index=True
+                    df_piores[["Materia", "Assunto", "Total", "Erros", "Aproveitamento"]].rename(columns={"Total": "Qtd. Feitas", "Erros": "Qtd. Erros"}),
+                    use_container_width=True, hide_index=True
                 )
             else:
-                st.success("🏆 Nada no Mapa da Vergonha! Todos os teus assuntos estão acima de 80%. Mantém o foco!")
-
+                st.success("🏆 Mapa Limpo! Tudo acima de 80%.")
         except Exception as e:
-            st.error(f"Erro ao calcular mapa: {e}")
+            st.error(f"Erro: {e}")
 
     else:
         st.info("Sistema pronto. Comece pelo menu 'Novo Registro'.")
@@ -205,7 +247,7 @@ elif selected == "Novo Registro":
             
             st.session_state.df_dados = pd.concat([df, nova], ignore_index=True)
             salvar_dados(st.session_state.df_dados)
-            st.success(f"Registrado! Próxima missão: {data_rev.strftime('%d/%m/%Y')}")
+            st.success(f"Registrado! Revisão: {data_rev.strftime('%d/%m/%Y')}")
 
 # === HISTÓRICO ===
 elif selected == "Histórico":
@@ -231,6 +273,6 @@ elif selected == "Histórico":
         with col_dl:
             st.markdown("<br>", unsafe_allow_html=True)
             csv = df_view.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Extrair Dados", csv, "backup_estudos.csv", "text/csv", use_container_width=True)
+            st.download_button("📥 Extrair", csv, "backup_estudos.csv", "text/csv", use_container_width=True)
     else:
         st.warning("Nenhum dado encontrado.")
