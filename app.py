@@ -49,9 +49,7 @@ def calcular_revisao(data_base, taxa):
 def calcular_metricas_streak(df):
     if df.empty: return 0, 0
     try:
-        # Garante que Data_Estudo existe antes de processar
         if 'Data_Estudo' not in df.columns: return 0, 0
-        
         dates = pd.to_datetime(df['Data_Estudo'], dayfirst=True, errors='coerce').dt.normalize().dropna().unique()
         dates = sorted(dates)
         if not len(dates): return 0, 0
@@ -77,7 +75,6 @@ def calcular_metricas_streak(df):
             check_date = hoje - pd.Timedelta(days=1)
         else:
             return 0, max_streak
-            
         for d in dates_reverse:
             if d == hoje: continue
             if d == check_date:
@@ -89,19 +86,17 @@ def calcular_metricas_streak(df):
     except:
         return 0, 0
 
-# Inicializar Estado
+# Inicializar
 if 'df_dados' not in st.session_state:
     st.session_state.df_dados = carregar_dados()
 if 'editais' not in st.session_state:
     st.session_state.editais = carregar_editais()
 
-# --- CORREÇÃO DE COMPATIBILIDADE (A VACINA) ---
-# Verifica se a tabela carregada tem a coluna nova. Se não tiver, cria.
+# Vacina (Coluna Concurso)
 if "Concurso" not in st.session_state.df_dados.columns:
     st.session_state.df_dados["Concurso"] = "Geral"
-    # Salva imediatamente para corrigir o arquivo CSV
     salvar_dados(st.session_state.df_dados)
-    st.rerun() # Recarrega a página para aplicar a correção
+    st.rerun()
 
 df = st.session_state.df_dados
 editais = st.session_state.editais
@@ -157,7 +152,6 @@ if selected == "Dashboard":
     st.title("📊 Painel de Performance")
     
     if not df.empty:
-        # Filtro
         lista_concursos = ["Todos"] + sorted(list(df['Concurso'].unique()))
         filtro_concurso = st.selectbox("Visualizar dados de:", lista_concursos)
         
@@ -166,7 +160,7 @@ if selected == "Dashboard":
             df_view = df_view[df_view['Concurso'] == filtro_concurso]
 
         if df_view.empty:
-            st.warning("Sem dados para este concurso.")
+            st.warning("Sem dados.")
         else:
             df_calc = df_view.copy()
             df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
@@ -241,35 +235,46 @@ if selected == "Dashboard":
                     st.success("🏆 Tudo acima de 80%!")
             except: pass
     else:
-        st.info("Comece registando um edital e depois um estudo.")
+        st.info("Registe o seu primeiro edital.")
 
-# === NOVO REGISTRO ===
+# === NOVO REGISTRO (AGORA VERTICALIZADO) ===
 elif selected == "Novo Registro":
     st.title("📝 Lançamento Inteligente")
     
     if not editais:
         st.warning("⚠️ Nenhum Edital cadastrado. Vá em 'Gestão de Editais' primeiro.")
-        opcoes_concurso = ["Avulso"]
+        concurso_sel = "Avulso"
+        materias_possiveis = []
+        topicos_possiveis = []
     else:
-        opcoes_concurso = list(editais.keys())
+        # Seleção em Cascata
+        concurso_sel = st.selectbox("Selecione o Concurso:", list(editais.keys()))
+        
+        # Pega as matérias desse concurso
+        dados_concurso = editais[concurso_sel] # dict com 'cargo', 'data', 'materias'
+        materias_dict = dados_concurso.get("materias", {})
+        materias_possiveis = list(materias_dict.keys())
+        
+        materia_sel = st.selectbox("Disciplina:", materias_possiveis) if materias_possiveis else None
+        
+        # Pega os tópicos dessa matéria
+        topicos_possiveis = []
+        if materia_sel:
+            topicos_possiveis = materias_dict[materia_sel]
 
+    st.markdown("---")
+    
     with st.container(border=True):
+        st.subheader("Relatório de Estudo")
         with st.form("form_estudo", clear_on_submit=True):
-            c_data, c_conc = st.columns([1, 2])
+            c_data, c_vazio = st.columns([1, 2])
             data_input = c_data.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
             
-            concurso_sel = c_conc.selectbox("Concurso / Edital", options=opcoes_concurso)
-            
-            lista_materias = []
-            if concurso_sel in editais:
-                lista_materias = list(editais[concurso_sel].keys())
-            
-            if lista_materias:
-                materia_sel = st.selectbox("Disciplina", options=lista_materias)
+            # Se tiver tópicos cadastrados, mostra Selectbox. Se não, deixa digitar (flexibilidade)
+            if topicos_possiveis:
+                assunto = st.selectbox("Assunto do Edital (Verticalizado):", topicos_possiveis)
             else:
-                materia_sel = st.text_input("Disciplina (Cadastre no Edital para aparecer na lista)")
-
-            assunto = st.text_input("Assunto Específico")
+                assunto = st.text_input("Assunto (Digite, pois não há tópicos cadastrados)")
             
             c1, c2 = st.columns(2)
             ac = c1.number_input("Acertos", min_value=0, step=1)
@@ -278,16 +283,17 @@ elif selected == "Novo Registro":
             btn = st.form_submit_button("✅ Salvar Estudo", use_container_width=True)
 
         if btn:
-            if not materia_sel:
-                st.error("Preencha a matéria.")
+            if not materia_sel and concurso_sel != "Avulso":
+                st.error("Cadastre matérias no edital antes de estudar.")
             else:
+                mat_final = materia_sel if materia_sel else "Geral"
                 taxa_calc = (ac/tot)*100
                 data_rev = calcular_revisao(data_input, taxa_calc)
                 
                 nova = pd.DataFrame([{
                     "Data_Estudo": data_input.strftime('%d/%m/%Y'),
                     "Concurso": concurso_sel, 
-                    "Materia": materia_sel,
+                    "Materia": mat_final,
                     "Assunto": assunto,
                     "Acertos": str(ac),
                     "Total": str(tot),
@@ -297,54 +303,109 @@ elif selected == "Novo Registro":
                 
                 st.session_state.df_dados = pd.concat([df, nova], ignore_index=True)
                 salvar_dados(st.session_state.df_dados)
-                st.success(f"Registrado para {concurso_sel}! Revisão: {data_rev.strftime('%d/%m/%Y')}")
+                st.success(f"Registrado! Revisão: {data_rev.strftime('%d/%m/%Y')}")
 
-# === GESTÃO DE EDITAIS ===
+# === GESTÃO DE EDITAIS (NOVO FLUXO) ===
 elif selected == "Gestão de Editais":
-    st.title("📑 Cadastro de Editais")
-    col_add, col_view = st.columns([1, 1])
-
-    with col_add:
-        with st.container(border=True):
-            st.subheader("Adicionar Novo")
-            novo_concurso = st.text_input("Nome do Concurso (ex: PF 2026)")
-            nova_materia = st.text_input("Matéria (ex: Raciocínio Lógico)")
-            
-            if st.button("💾 Adicionar ao Sistema"):
-                if novo_concurso and nova_materia:
-                    editais_atuais = st.session_state.editais
-                    if novo_concurso not in editais_atuais:
-                        editais_atuais[novo_concurso] = {}
-                    if nova_materia not in editais_atuais[novo_concurso]:
-                        editais_atuais[novo_concurso][nova_materia] = []
-                        st.session_state.editais = editais_atuais
-                        salvar_editais(editais_atuais)
-                        st.success(f"Adicionado: {nova_materia} em {novo_concurso}")
+    st.title("📑 Edital Verticalizado")
+    
+    # 1. CRIAR CONCURSO
+    with st.expander("➕ Criar Novo Concurso", expanded=not bool(editais)):
+        with st.form("form_novo_concurso"):
+            c1, c2, c3 = st.columns(3)
+            novo_nome = c1.text_input("Nome (ex: PF 2026)")
+            novo_cargo = c2.text_input("Cargo (ex: Agente)")
+            nova_data = c3.date_input("Data da Prova")
+            if st.form_submit_button("Criar Concurso"):
+                if novo_nome:
+                    if novo_nome not in editais:
+                        # Estrutura nova do JSON
+                        editais[novo_nome] = {
+                            "cargo": novo_cargo,
+                            "data_prova": nova_data.strftime('%Y-%m-%d'),
+                            "materias": {} # Dicionário de matérias
+                        }
+                        salvar_editais(editais)
+                        st.success(f"Concurso {novo_nome} criado!")
                         st.rerun()
                     else:
-                        st.warning("Matéria já existe.")
-                else:
-                    st.error("Preencha o nome e a matéria.")
+                        st.error("Já existe.")
 
-    with col_view:
-        st.subheader("Editais Cadastrados")
-        if not editais:
-            st.info("Nenhum edital cadastrado.")
-        else:
-            for conc, mats in editais.items():
-                with st.expander(f"📁 {conc}"):
-                    st.write("**Matérias:**")
-                    for m in mats.keys():
-                        st.text(f"- {m}")
-                    if st.button(f"Excluir {conc}", key=f"del_{conc}"):
-                        del st.session_state.editais[conc]
-                        salvar_editais(st.session_state.editais)
+    st.markdown("---")
+
+    # 2. SELECIONAR E EDITAR CONCURSO
+    if editais:
+        concurso_ativo = st.selectbox("📂 Selecione o Concurso para Editar:", list(editais.keys()))
+        
+        # Dados do concurso selecionado
+        dados = editais[concurso_ativo]
+        st.info(f"**Cargo:** {dados.get('cargo', '-')} | **Prova:** {dados.get('data_prova', '-')}")
+
+        col_add_mat, col_view_mat = st.columns([1, 2])
+
+        # COLUNA ESQUERDA: ADICIONAR MATÉRIA
+        with col_add_mat:
+            with st.container(border=True):
+                st.markdown("#### 1. Adicionar Matéria")
+                nova_mat_input = st.text_input("Nome da Disciplina (ex: Português)")
+                if st.button("Salvar Matéria"):
+                    if nova_mat_input:
+                        if nova_mat_input not in dados["materias"]:
+                            dados["materias"][nova_mat_input] = [] # Lista de tópicos vazia
+                            salvar_editais(editais)
+                            st.success("Adicionada!")
+                            st.rerun()
+                        else:
+                            st.warning("Já existe.")
+
+        # COLUNA DIREITA: EDITAR TÓPICOS (VERTICALIZADO)
+        with col_view_mat:
+            st.markdown("#### 2. Estrutura Verticalizada")
+            
+            materias = dados.get("materias", {})
+            if not materias:
+                st.warning("Nenhuma matéria cadastrada. Adicione ao lado.")
+            
+            for mat, topicos in materias.items():
+                with st.expander(f"📚 {mat} ({len(topicos)} tópicos)"):
+                    # Adicionar Tópico
+                    c_input, c_btn = st.columns([3, 1])
+                    novo_topico = c_input.text_input(f"Novo tópico em {mat}", placeholder="Ex: 1. Crase", key=f"input_{concurso_ativo}_{mat}")
+                    if c_btn.button("Add", key=f"btn_{concurso_ativo}_{mat}"):
+                        if novo_topico:
+                            topicos.append(novo_topico)
+                            salvar_editais(editais)
+                            st.rerun()
+                    
+                    # Listar Tópicos
+                    if topicos:
+                        # Criar dataframe visual para listar bonito
+                        df_topicos = pd.DataFrame(topicos, columns=["Assuntos do Edital"])
+                        st.dataframe(df_topicos, use_container_width=True, hide_index=True)
+                        
+                        # Botão para limpar tópicos (opcional, para não poluir muito)
+                        if st.button("Limpar todos os tópicos desta matéria", key=f"clean_{concurso_ativo}_{mat}"):
+                            dados["materias"][mat] = []
+                            salvar_editais(editais)
+                            st.rerun()
+                    else:
+                        st.caption("Sem tópicos ainda.")
+                    
+                    st.markdown("---")
+                    if st.button(f"🗑️ Excluir Matéria {mat}", key=f"del_mat_{concurso_ativo}_{mat}"):
+                        del dados["materias"][mat]
+                        salvar_editais(editais)
                         st.rerun()
+
+        st.markdown("---")
+        if st.button(f"❌ Apagar Concurso {concurso_ativo} Inteiro", type="primary"):
+            del editais[concurso_ativo]
+            salvar_editais(editais)
+            st.rerun()
 
 # === HISTÓRICO ===
 elif selected == "Histórico":
-    st.title("🗂️ Base de Dados Completa")
-    
+    st.title("🗂️ Base de Dados")
     if not df.empty:
         col_filtro, col_dl = st.columns([4, 1])
         with col_filtro:
@@ -365,6 +426,6 @@ elif selected == "Histórico":
         with col_dl:
             st.markdown("<br>", unsafe_allow_html=True)
             csv = df_view.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Excel", csv, "backup_full.csv", "text/csv", use_container_width=True)
+            st.download_button("📥 Excel", csv, "backup.csv", "text/csv", use_container_width=True)
     else:
-        st.warning("Nenhum dado encontrado.")
+        st.warning("Vazio.")
