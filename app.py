@@ -22,12 +22,12 @@ supabase: Client = init_connection()
 
 # --- FUNÇÕES COM CACHE (VELOCIDADE MÁXIMA) ---
 
-@st.cache_data(ttl=600) # Cache de 10 min para usuários
+@st.cache_data(ttl=600)
 def db_get_usuarios():
     res = supabase.table("perfil_usuarios").select("*").execute()
     return {row['nome']: row for row in res.data}
 
-@st.cache_data(ttl=300) # Cache de 5 min para estudos
+@st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
     if usuario:
@@ -35,7 +35,7 @@ def db_get_estudos(usuario=None):
     res = query.execute()
     return pd.DataFrame(res.data)
 
-@st.cache_data(ttl=3600) # Cache de 1 hora para editais
+@st.cache_data(ttl=3600)
 def db_get_editais():
     res = supabase.table("editais_materias").select("*").execute()
     editais = {}
@@ -47,7 +47,6 @@ def db_get_editais():
     return editais
 
 def db_get_tokens():
-    # Sem cache para convites (precisa ser em tempo real)
     res = supabase.table("tokens_convite").select("*").eq("usado", False).execute()
     return [t['codigo'] for t in res.data]
 
@@ -86,11 +85,11 @@ if 'usuario_logado' not in st.session_state:
         
         with t1:
             if not users:
-                st.info("Nenhum usuário. Gere um token inicial.")
-                if st.button("Gerar Token Inicial"):
+                st.info("Nenhum usuário cadastrado.")
+                if st.button("Gerar Token de Primeiro Acesso"):
                     tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
                     supabase.table("tokens_convite").insert({"codigo": tk}).execute()
-                    st.success(f"Token: {tk}")
+                    st.success(f"Token Gerado: {tk}")
             else:
                 with st.form("login_form"):
                     u = st.selectbox("Quem está acessando?", list(users.keys()))
@@ -112,17 +111,119 @@ if 'usuario_logado' not in st.session_state:
                     if tk_in in ativos:
                         supabase.table("perfil_usuarios").insert({"nome": n_in, "pin": p_in, "chave_recuperacao": ch_in}).execute()
                         supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk_in).execute()
-                        st.cache_data.clear() # Limpa cache para o novo usuário aparecer
+                        st.cache_data.clear()
                         st.success("Conta criada! Vá em 'Acessar Base'.")
                     else: st.error("Token inválido.")
-
     st.stop()
 
-# --- APP LOGADO ---
+# --- ÁREA LOGADA ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 df_meu = db_get_estudos(usuario_atual)
 
 with st.sidebar:
     st.markdown(f"### 🥷 {usuario_atual}")
-    if st
+    if st.button("🚪 SAIR"):
+        del st.session_state.usuario_logado
+        st.rerun()
+    
+    menus = ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"]
+    icons = ["bar-chart", "plus-circle", "trophy", "book-half", "table"]
+    if usuario_atual == "Fernando Pinheiro":
+        menus.append("Gerar Convites")
+        icons.append("ticket-perforated")
+    
+    selected = option_menu("Menu Tático", menus, icons=icons, default_index=0)
+
+# --- PÁGINAS ---
+
+if selected == "Dashboard":
+    st.title(f"📊 Painel: {usuario_atual}")
+    if not df_meu.empty:
+        df_meu['total'] = pd.to_numeric(df_meu['total'])
+        df_meu['acertos'] = pd.to_numeric(df_meu['acertos'])
+        total_q = df_meu['total'].sum()
+        prec = (df_meu['acertos'].sum() / total_q * 100) if total_q > 0 else 0
+        sa, mx = get_streak_metrics(df_meu)
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Questões", int(total_q), border=True)
+        c2.metric("Precisão", f"{prec:.1f}%", border=True)
+        c3.metric("🔥 Streak", f"{sa}d", border=True)
+        c4.metric("🏆 Recorde", f"{mx}d", border=True)
+        
+        st.markdown("---")
+        df_meu['data_real'] = pd.to_datetime(df_meu['data_estudo'])
+        df_evol = df_meu.groupby('data_real')['total'].sum().reset_index()
+        fig = px.line(df_evol, x='data_real', y='total', title="Evolução Diária", markers=True)
+        fig.update_traces(line_color='#00E676')
+        st.plotly_chart(fig, use_container_width=True)
+    else: st.info("Bora estudar para gerar dados! 💀")
+
+elif selected == "Novo Registro":
+    st.title("📝 Novo Registro")
+    if not editais: st.warning("Cadastre um edital primeiro em 'Gestão Editais'.")
+    else:
+        conc = st.selectbox("Edital", list(editais.keys()))
+        mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
+        topicos = editais[conc]["materias"][mat]
+        with st.form("reg_form", clear_on_submit=True):
+            dt = st.date_input("Data", datetime.date.today())
+            ass = st.selectbox("Tópico", topicos)
+            a, t = st.columns(2)
+            ac_v = a.number_input("Acertos", 0)
+            tot_v = t.number_input("Total", 1)
+            # AQUI ESTAVA O ERRO (LINHA 128) - CORRIGIDO:
+            if st.form_submit_button("SALVAR ESTUDO", use_container_width=True):
+                tx = (ac_v/tot_v*100)
+                supabase.table("registros_estudos").insert({
+                    "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
+                    "concurso": conc, "materia": mat, "assunto": ass,
+                    "acertos": ac_v, "total": tot_v, "taxa": tx
+                }).execute()
+                st.cache_data.clear()
+                st.success("Salvo com sucesso!")
+
+elif selected == "Ranking Squad":
+    st.title("🏆 Ranking do Squad")
+    df_g = db_get_estudos()
+    if not df_g.empty:
+        df_g['total'] = pd.to_numeric(df_g['total'])
+        rank = df_g.groupby("usuario")['total'].sum().reset_index().sort_values("total", ascending=False)
+        st.plotly_chart(px.bar(rank, x="total", y="usuario", orientation='h', color="usuario"), use_container_width=True)
+
+elif selected == "Gestão Editais":
+    st.title("📑 Gestão de Editais")
+    with st.expander("➕ Criar Novo Concurso"):
+        nome_c = st.text_input("Nome do Concurso")
+        if st.button("Criar"):
+            supabase.table("editais_materias").insert({"concurso": nome_c, "materia": "Geral", "topicos": []}).execute()
+            st.cache_data.clear()
+            st.rerun()
+    
+    if editais:
+        ed_sel = st.selectbox("Selecione o Edital", list(editais.keys()))
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            nova_m = st.text_input("Nova Matéria")
+            if st.button("Adicionar Matéria") and nova_m:
+                supabase.table("editais_materias").insert({"concurso": ed_sel, "materia": nova_m, "topicos": []}).execute()
+                st.cache_data.clear()
+                st.rerun()
+        with col2:
+            for m, t in editais[ed_sel]["materias"].items():
+                with st.expander(f"📚 {m}"):
+                    txt = st.text_area(f"Importar Tópicos (;) para {m}", key=f"t_{m}")
+                    if st.button("Importar Lista", key=f"b_{m}"):
+                        novos = [x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()]
+                        supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", ed_sel).eq("materia", m).execute()
+                        st.cache_data.clear()
+                        st.rerun()
+
+elif selected == "Gerar Convites":
+    st.title("🎟️ Central de Convites")
+    if st.button("Gerar Novo Token"):
+        tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        supabase.table("tokens_convite").insert({"codigo": tk}).execute()
+        st.code(tk)
+        st.success("Mande este token para seu amigo.")
