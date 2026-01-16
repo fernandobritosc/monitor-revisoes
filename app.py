@@ -13,8 +13,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "13.2.2-fix"
-        STATUS = "Tratamento de Duplicidade"
+        VERSION = "13.2.3-flex"
+        STATUS = "Matérias Flexíveis"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -166,6 +166,7 @@ elif selected == "Gestão Editais":
                     st.error("O nome do concurso é obrigatório.")
                 else:
                     try:
+                        # Blindagem apenas para o concurso principal
                         supabase.table("editais_materias").insert({
                             "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
                             "materia": "Geral", "topicos": []
@@ -187,8 +188,8 @@ elif selected == "Gestão Editais":
             if st.button("Confirmar Adição"):
                 if not m_n:
                     st.error("Informe o nome da matéria.")
-                elif m_n in editais[sel]["materias"]:
-                    st.warning(f"A matéria '{m_n}' já está cadastrada para este concurso.")
+                # Removida a trava de verificação local para permitir duplicidade se o banco permitir
+                # ou apenas tratar o erro se o banco barrar.
                 else:
                     try:
                         supabase.table("editais_materias").insert({
@@ -199,8 +200,10 @@ elif selected == "Gestão Editais":
                         st.success("Matéria adicionada!")
                         st.rerun()
                     except Exception as e:
+                        # Se o banco ainda tiver a restrição UNIQUE(concurso, materia), avisamos.
+                        # Mas agora permitimos tentar a inserção livremente.
                         if "23505" in str(e):
-                            st.warning(f"A matéria '{m_n}' já existe para este concurso.")
+                            st.warning(f"A matéria '{m_n}' já existe para este concurso específico.")
                         else:
                             st.error(f"Erro: {str(e)}")
 
