@@ -1,7 +1,7 @@
+# No topo do arquivo
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import datetime
-import plotly.express as px
 
-# ... resto do código
+# ... dentro do código
+conn = st.connection("gsheets", type=GSheetsConnection)
