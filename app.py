@@ -35,26 +35,40 @@ if 'df_dados' not in st.session_state:
 
 df = st.session_state.df_dados
 
-# --- MENU LATERAL (Estilo "Estudei") ---
+# --- MENU LATERAL (Versão Vibrante) ---
 with st.sidebar:
-    # Título ou Logo
-    st.image("https://cdn-icons-png.flaticon.com/512/2232/2232688.png", width=50)
-    st.title("Estudei Pro")
+    # Um logo opcional no topo (podes trocar o link se quiseres)
+    st.image("https://cdn-icons-png.flaticon.com/512/2232/2232688.png", width=60)
+    st.markdown("## **Estudei Pro**") # Título em negrito para destacar
     
     selected = option_menu(
-        menu_title=None,  # Esconde o título do menu
+        menu_title=None,
         options=["Dashboard", "Novo Registro", "Histórico"], 
         icons=["graph-up-arrow", "plus-circle-fill", "table"], 
         menu_icon="cast", 
         default_index=0,
         styles={
-            "container": {"padding": "0!important", "background-color": "#fafafa"},
-            "icon": {"color": "black", "font-size": "18px"}, 
-            "nav-link": {"font-size": "16px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
-            "nav-link-selected": {"background-color": "#009688"}, # Aquele VERDE bonito
+            # Fundo do menu (branco/cinza claro para destacar os botões)
+            "container": {"padding": "5!important", "background-color": "#f8f9fa"},
+            
+            # Ícones (Verde escuro para contraste forte)
+            "icon": {"color": "#1b5e20", "font-size": "20px"}, 
+            
+            # O texto dos botões não selecionados
+            "nav-link": {
+                "font-size": "18px", 
+                "text-align": "left", 
+                "margin": "5px", 
+                "--hover-color": "#e8f5e9" # Um verde bem clarinho ao passar o rato
+            },
+            
+            # A COR VIBRANTE (Botão Selecionado)
+            "nav-link-selected": {"background-color": "#00C853"}, 
         }
     )
-    st.caption("v. 2.0 - Foco Total 🚀")
+    
+    st.markdown("---")
+    st.caption("v. 2.1 - Foco Total 🚀")
 
 # --- LÓGICA DAS PÁGINAS ---
 
