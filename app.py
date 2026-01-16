@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd
+import pd
 import datetime
 import json
 from supabase import create_client, Client
@@ -16,8 +16,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "25.0.0-RESGATE"
-        STATUS = "Estável - Gestão de Usuários"
+        VERSION = "26.0.0-FIX"
+        STATUS = "Debug de Usuários Ativado"
 
 # 3. Conexão Supabase
 @st.cache_resource
@@ -57,7 +57,7 @@ def db_get_editais():
         if materia: editais[conc]["materias"][materia] = row.get('topicos') or []
     return editais
 
-# --- LOGIN E CADASTRO (CORREÇÃO DA IMAGEM 3CD3B0) ---
+# --- LOGIN E CADASTRO ---
 res_u_global = supabase.table("perfil_usuarios").select("*").execute()
 users_global = {row['nome']: row for row in res_u_global.data}
 
@@ -77,23 +77,26 @@ if 'usuario_logado' not in st.session_state:
                     else: st.error("PIN Incorreto.")
         with t_cad:
             with st.form("cad"):
+                st.info("O João deve preencher isto para aparecer na lista.")
                 tk = st.text_input("Token de Convite")
-                n_cad = st.text_input("Nome")
+                n_cad = st.text_input("Nome (Ex: João)")
                 pi = st.text_input("PIN (4 dígitos)", max_chars=4, type="password")
                 if st.form_submit_button("CRIAR CONTA"):
                     res_tk = supabase.table("tokens_convite").select("*").eq("codigo", tk).eq("usado", False).execute()
                     if res_tk.data:
                         try:
-                            # CORREÇÃO: Garante o envio correto para evitar APIError
+                            # CORREÇÃO LINHA 84: Inserção direta
                             supabase.table("perfil_usuarios").insert({"nome": n_cad, "pin": pi}).execute()
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
                             st.cache_data.clear()
-                            st.success("Guerreiro Cadastrado! Faça o Login.")
-                        except: st.error("Erro: Nome já existe ou falha no banco.")
-                    else: st.error("Token Inválido.")
+                            st.success(f"Guerreiro {n_cad} Cadastrado! Vá em Acessar.")
+                        except Exception as e:
+                            # REVELA O ERRO REAL (Fundamental para resolver o problema do João)
+                            st.error(f"Erro no Banco: {str(e)}")
+                    else: st.error("Token Inválido ou já utilizado.")
     st.stop()
 
-# --- CENTRAL DE MISSÕES (NOVO CONCURSO NA TELA INICIAL) ---
+# --- CENTRAL DE MISSÕES (CONCURSO NA TELA INICIAL) ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 
@@ -115,14 +118,16 @@ if 'concurso_ativo' not in st.session_state:
             cg = st.text_input("Cargo")
             dt = st.date_input("Data da Prova", format="DD/MM/YYYY")
             if st.form_submit_button("CRIAR E INICIAR", use_container_width=True):
-                # CORREÇÃO DA IMAGEM 31894E: Injetando campos obrigatórios
-                supabase.table("editais_materias").insert({
-                    "concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), 
-                    "materia": "Geral", "topicos": []
-                }).execute()
-                st.cache_data.clear()
-                st.session_state.concurso_ativo = nm
-                st.rerun()
+                try:
+                    # CORREÇÃO LINHA 146: Injetando campos obrigatórios
+                    supabase.table("editais_materias").insert({
+                        "concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), 
+                        "materia": "Geral", "topicos": []
+                    }).execute()
+                    st.cache_data.clear()
+                    st.session_state.concurso_ativo = nm
+                    st.rerun()
+                except Exception as e: st.error(f"Erro ao criar edital: {str(e)}")
     st.stop()
 
 # --- AMBIENTE OPERACIONAL ---
@@ -166,45 +171,33 @@ elif selected == "Novo Registro":
             asnt = st.selectbox("Assunto", a_list)
             ac = st.number_input("Acertos", 0); tt = st.number_input("Total", 1)
             if st.form_submit_button("SALVAR"):
-                supabase.table("registros_estudos").insert({
-                    "data_estudo": d.strftime('%Y-%m-%d'), "usuario": usuario_atual, 
-                    "concurso": concurso_ativo, "materia": mat, "assunto": asnt, 
-                    "acertos": int(ac), "total": int(tt), "taxa": (ac/tt*100)
-                }).execute()
+                supabase.table("registros_estudos").insert({"data_estudo": d.strftime('%Y-%m-%d'), "usuario": usuario_atual, "concurso": concurso_ativo, "materia": mat, "assunto": asnt, "acertos": int(ac), "total": int(tt), "taxa": (ac/tt*100)}).execute()
                 st.cache_data.clear(); st.success("Salvo!")
 
 elif selected == "Gestão do Edital":
     st.title(f"📑 Gestão: {concurso_ativo}")
     m_n = st.text_input("Nova Matéria")
     if st.button("Adicionar"):
-        # CORREÇÃO DA IMAGEM 318284: Injetando cargo e data
-        supabase.table("editais_materias").insert({
-            "concurso": concurso_ativo, "materia": m_n, "topicos": [], 
-            "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']
-        }).execute()
-        st.cache_data.clear(); st.rerun()
-    for m, t in editais[concurso_ativo]["materias"].items():
-        with st.expander(f"📚 {m}"):
-            tx = st.text_area("Tópicos (separe por ;)", value="; ".join(t), key=f"t_{m}")
-            if st.button("Salvar Tópicos", key=f"b_{m}"):
-                novos = [x.strip() for x in tx.split(";") if x.strip()]
-                supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
-                st.cache_data.clear(); st.rerun()
+        try:
+            # CORREÇÃO LINHA 161: Injetando cargo e data
+            supabase.table("editais_materias").insert({
+                "concurso": concurso_ativo, "materia": m_n, "topicos": [], 
+                "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']
+            }).execute()
+            st.cache_data.clear(); st.rerun()
+        except Exception as e: st.error(f"Erro ao adicionar matéria: {str(e)}")
 
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Painel Administrador")
-    
-    # --- RESGATE DO JOÃO (CORREÇÃO PARA AS IMAGENS 3CD809 E 3D48C7) ---
     st.subheader("👥 Gestão de Guerreiros (Squad)")
-    st.write("Verifica se o João aparece na lista abaixo. Se o cadastro dele deu erro, apaga-o aqui para ele tentar de novo.")
+    # Tabela com nomes reais vindo do banco
     df_u = pd.DataFrame(list(users_global.values()))
     if not df_u.empty:
         st.dataframe(df_u[['nome', 'pin']], use_container_width=True, hide_index=True)
-        
-        u_del = st.selectbox("Remover Guerreiro para refazer cadastro:", [""] + list(users_global.keys()))
+        u_del = st.selectbox("Apagar registo fantasma:", [""] + list(users_global.keys()))
         if u_del and st.button(f"🗑️ Excluir {u_del}"):
             supabase.table("perfil_usuarios").delete().eq("nome", u_del).execute()
-            st.success(f"{u_del} removido. Ele já pode tentar cadastrar-se novamente.")
+            st.success(f"{u_del} removido. Peça ao João para tentar de novo.")
             st.rerun()
     
     st.markdown("---")
