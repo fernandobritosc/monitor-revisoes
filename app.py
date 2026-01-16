@@ -8,25 +8,26 @@ import plotly.express as px
 import secrets
 import string
 
-# 1. Proteção de Versão (Garante que o app abra mesmo sem o version.py)
+# Proteção para o import de versão
 try:
     import version
 except ImportError:
     class version:
-        VERSION = "13.1.0"
-        STATUS = "Correção de API e Datas"
+        VERSION = "13.2.0-temp"
+        STATUS = "Ajuste de Banco"
 
-# 2. Configurações de Página
+# 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
 
-# 3. Conexão Supabase
+# 2. Conexão Supabase
 @st.cache_resource
 def init_connection():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS (BLINDAGEM BR) ---
+# --- FUNÇÕES DE DADOS ---
+
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
@@ -57,7 +58,7 @@ def db_get_editais():
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
-# --- SISTEMA DE ACESSO ---
+# --- ACESSO ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
@@ -88,7 +89,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.caption(f"🚀 Versão: {version.VERSION}")
-    if st.button("🔄 Sincronizar Tudo"):
+    if st.button("🔄 Sincronizar"):
         st.cache_data.clear()
         st.rerun()
     if st.button("Sair"):
@@ -97,7 +98,7 @@ with st.sidebar:
 
 # 4. DASHBOARD
 if selected == "Dashboard":
-    st.title("📊 Desempenho")
+    st.title("📊 Painel Analytics")
     if not df_meu.empty:
         c1, c2 = st.columns(2)
         tot = int(df_meu['total'].sum())
@@ -130,7 +131,7 @@ elif selected == "Novo Registro":
                 st.cache_data.clear()
                 st.success("Salvo!")
 
-# 6. GESTÃO DE EDITAIS (ONDE O ERRO FOI CORRIGIDO)
+# 6. GESTÃO DE EDITAIS (CORREÇÃO DOS ERROS DE API)
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
@@ -140,9 +141,10 @@ elif selected == "Gestão Editais":
             c = st.text_input("Cargo")
             d = st.date_input("Data Prova", format="DD/MM/YYYY")
             if st.form_submit_button("Criar"):
+                # CORREÇÃO LINHA 146: Adicionado "topicos": [] (Obrigatório no Supabase)
                 supabase.table("editais_materias").insert({
                     "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
-                    "materia": "Geral", "topicos": [] # Inicializa vazio para evitar erro
+                    "materia": "Geral", "topicos": []
                 }).execute()
                 st.cache_data.clear()
                 st.rerun()
@@ -152,16 +154,13 @@ elif selected == "Gestão Editais":
             st.success(f"Cargo: {editais[sel]['cargo']} | Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Confirmar Adição"):
-                # SOLUÇÃO PARA O APIError: Enviando todos os campos obrigatórios
+                # CORREÇÃO LINHA 161: Adicionado campos obrigatórios para evitar APIError
                 supabase.table("editais_materias").insert({
-                    "concurso": sel, 
-                    "materia": m_n, 
-                    "topicos": [], 
-                    "cargo": editais[sel]['cargo'], 
-                    "data_prova": editais[sel]['data_iso']
+                    "concurso": sel, "materia": m_n, "topicos": [], 
+                    "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
                 }).execute()
                 st.cache_data.clear()
-                st.success("Matéria adicionada!")
+                st.success("Adicionado!")
                 st.rerun()
 
 # 7. HISTÓRICO
