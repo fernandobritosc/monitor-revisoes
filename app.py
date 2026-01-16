@@ -227,4 +227,195 @@ else:
             total = int(df['total'].sum())
             acertos = int(df['acertos'].sum())
             erros = total - acertos
-            precisao = (acertos /
+            # AQUI ESTAVA O ERRO, AGORA CORRIGIDO:
+            precisao = (acertos / total * 100) if total > 0 else 0
+            
+            # Cálculo de Horas (Se a coluna 'tempo' existir)
+            if 'tempo' in df.columns:
+                total_minutos = df['tempo'].fillna(0).sum()
+                horas_liquidas = int(total_minutos // 60)
+                min_restantes = int(total_minutos % 60)
+                txt_tempo = f"{horas_liquidas}h {min_restantes}m"
+            else:
+                txt_tempo = "0h 0m"
+            
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Questões", total)
+            c2.metric("Acertos", acertos)
+            c3.metric("Precisão", f"{precisao:.1f}%")
+            c4.metric("Horas Líquidas", txt_tempo)
+            
+            st.markdown("---")
+            g1, g2 = st.columns([2, 1], gap="medium")
+            with g1:
+                st.markdown("#### 📈 Evolução")
+                df['Data'] = pd.to_datetime(df['data_estudo']).dt.strftime('%d/%m')
+                df_chart = df.groupby('Data')[['total', 'acertos']].sum().reset_index()
+                fig_area = px.area(df_chart, x='Data', y=['total', 'acertos'], 
+                              color_discrete_sequence=['#333333', '#FF4B4B'])
+                fig_area.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=20,r=20,t=20,b=20))
+                st.plotly_chart(fig_area, use_container_width=True)
+            with g2:
+                st.markdown("#### 🎯 Alvo")
+                fig_pie = go.Figure(data=[go.Pie(labels=['Acertos', 'Erros'], values=[acertos, erros], hole=.6, marker=dict(colors=['#FF4B4B', '#333333']), textinfo='percent')])
+                fig_pie.update_layout(showlegend=True, height=350, paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=20,r=20,t=20,b=20), legend=dict(orientation="h", y=-0.1))
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+    elif menu == "Revisões":
+        st.title("🔄 Radar de Revisão")
+        df_rev = calcular_revisoes(df)
+        if df_rev.empty:
+            st.success("✅ Tudo em dia!")
+        else:
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("### 🔥 24 Horas")
+                rev_24 = df_rev[df_rev['Tipo'] == "🔥 24 Horas"]
+                if not rev_24.empty: st.dataframe(rev_24[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
+            with c2:
+                st.markdown("### 📅 7 Dias")
+                rev_7 = df_rev[df_rev['Tipo'] == "📅 7 Dias"]
+                if not rev_7.empty: st.dataframe(rev_7[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
+            with c3:
+                st.markdown("### 🧠 30 Dias")
+                rev_30 = df_rev[df_rev['Tipo'] == "🧠 30 Dias"]
+                if not rev_30.empty: st.dataframe(rev_30[['Matéria', 'Assunto']], hide_index=True, use_container_width=True)
+                else: st.caption("Nada aqui.")
+
+    elif menu == "Registrar":
+        st.title("📝 Novo Registro")
+        materias = list(dados.get('materias', {}).keys())
+        if not materias: st.warning("⚠️ Adicione matérias em 'Configurar'.")
+        else:
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([1.5, 1, 1])
+                with c1:
+                    mat = st.selectbox("Matéria", materias)
+                    topicos = dados['materias'].get(mat, []) or ["Geral"]
+                    assunto = st.selectbox("Assunto", topicos)
+                with c2:
+                    dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
+                with c3:
+                    st.write("⏱️ **Tempo Líquido**")
+                    t_h, t_m = st.columns(2)
+                    horas = t_h.number_input("Hs", 0, 24, 0, label_visibility="collapsed")
+                    minutos = t_m.number_input("Min", 0, 59, 0, label_visibility="collapsed")
+                
+                st.divider()
+                c_a, c_t = st.columns(2)
+                acertos = c_a.number_input("Acertos", 0, step=1)
+                total = c_t.number_input("Total", 1, step=1)
+                
+                if st.button("SALVAR REGISTRO", type="primary", use_container_width=True):
+                    # Calcula total em minutos para salvar no banco
+                    tempo_total_min = (horas * 60) + minutos
+                    
+                    try:
+                        supabase.table("registros_estudos").insert({
+                            "concurso": missao, "materia": mat, "assunto": assunto,
+                            "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos,
+                            "total": total, "taxa": (acertos/total)*100,
+                            "tempo": tempo_total_min # Salva em minutos
+                        }).execute()
+                        st.toast(f"Salvo! {horas}h {minutos}m registrados.", icon="🔥")
+                        time.sleep(0.5)
+                    except Exception as e:
+                        if "column \"tempo\"" in str(e) or "does not exist" in str(e):
+                            st.error("ERRO CRÍTICO: Você precisa criar a coluna 'tempo' no Supabase! (Tipo: int8)")
+                        else:
+                            st.error(f"Erro: {e}")
+
+    elif menu == "Configurar":
+        st.title("⚙️ Configuração")
+        c1, c2 = st.columns([1, 2], gap="medium")
+        with c1:
+            st.markdown("#### Nova Matéria")
+            with st.form("add_mat"):
+                nm = st.text_input("Nome")
+                if st.form_submit_button("ADICIONAR"):
+                    try: supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": [], "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso'), "usuario": "Commander"}).execute()
+                    except: supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": [], "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso')}).execute()
+                    st.rerun()
+        with c2:
+            st.markdown("#### Matérias")
+            for m, t in dados.get('materias', {}).items():
+                with st.expander(f"📚 {m}"):
+                    new_tops = st.text_area(f"Tópicos", value="; ".join(t), key=f"t_{m}")
+                    c_s, c_d = st.columns([4, 1])
+                    if c_s.button("Salvar", key=f"s_{m}"):
+                        l = [x.strip() for x in new_tops.split(";") if x.strip()]
+                        supabase.table("editais_materias").update({"topicos": l}).eq("concurso", missao).eq("materia", m).execute()
+                        st.rerun()
+                    if c_d.button("🗑️", key=f"d_{m}"):
+                        supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
+                        st.rerun()
+
+    elif menu == "Histórico":
+        st.title("📜 Histórico Interativo")
+        st.info("💡 Edição liberada. Lembre de SALVAR no final.")
+        
+        if not df.empty:
+            df_edit = df.copy()
+            df_edit['data_estudo'] = pd.to_datetime(df_edit['data_estudo']).dt.date
+            df_edit['Excluir'] = False
+            
+            # Se a coluna tempo não existir no dataframe (registros antigos), cria como 0
+            if 'tempo' not in df_edit.columns: df_edit['tempo'] = 0
+            
+            df_edit = df_edit[['id', 'Excluir', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo']]
+            
+            edited_df = st.data_editor(
+                df_edit,
+                column_config={
+                    "id": None,
+                    "Excluir": st.column_config.CheckboxColumn(help="Apagar?"),
+                    "data_estudo": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                    "materia": st.column_config.TextColumn("Matéria"),
+                    "assunto": st.column_config.TextColumn("Assunto"),
+                    "acertos": st.column_config.NumberColumn("Acertos"),
+                    "total": st.column_config.NumberColumn("Total"),
+                    "taxa": st.column_config.ProgressColumn("Precisão", format="%.1f%%"),
+                    "tempo": st.column_config.NumberColumn("Minutos", help="Tempo em minutos")
+                },
+                disabled=["taxa"],
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            st.write("")
+            if st.button("💾 SALVAR ALTERAÇÕES", type="primary"):
+                to_delete = edited_df[edited_df['Excluir'] == True]['id'].tolist()
+                if to_delete:
+                    supabase.table("registros_estudos").delete().in_("id", to_delete).execute()
+                
+                rows_to_update = edited_df[edited_df['Excluir'] == False]
+                for index, row in rows_to_update.iterrows():
+                    nova_taxa = (row['acertos'] / row['total'] * 100) if row['total'] > 0 else 0
+                    
+                    try:
+                        supabase.table("registros_estudos").update({
+                            "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
+                            "materia": row['materia'],
+                            "assunto": row['assunto'],
+                            "acertos": row['acertos'],
+                            "total": row['total'],
+                            "taxa": nova_taxa,
+                            "tempo": row['tempo']
+                        }).eq("id", row['id']).execute()
+                    except:
+                        # Fallback se não tiver a coluna tempo ainda
+                        supabase.table("registros_estudos").update({
+                            "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
+                            "materia": row['materia'],
+                            "assunto": row['assunto'],
+                            "acertos": row['acertos'],
+                            "total": row['total'],
+                            "taxa": nova_taxa
+                        }).eq("id", row['id']).execute()
+                
+                st.success("Histórico atualizado!"); time.sleep(1); st.rerun()
+                
+        else:
+            st.info("Sem dados para exibir.")
