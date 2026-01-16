@@ -7,7 +7,14 @@ from streamlit_option_menu import option_menu
 import plotly.express as px
 import secrets
 import string
-import version
+
+# Tenta importar a versão, se falhar (arquivo não existe), usa valores padrão
+try:
+    import version
+except ImportError:
+    class version:
+        VERSION = "13.0.1-temp"
+        STATUS = "Aguardando version.py"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -19,7 +26,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÕES DE DADOS (DATA BLINDADA) ---
 
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
@@ -58,14 +65,14 @@ if 'usuario_logado' not in st.session_state:
     c1, c2, c3 = st.columns([1, 1.8, 1])
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD PRIVADO</h1>", unsafe_allow_html=True)
-        with st.form("login_f"):
-            u = st.selectbox("Guerreiro", list(users.keys()))
+        with st.form("login"):
+            u = st.selectbox("Usuário", list(users.keys()))
             p = st.text_input("PIN", type="password")
             if st.form_submit_button("ENTRAR", use_container_width=True):
                 if p == users[u]['pin']:
                     st.session_state.usuario_logado = u
                     st.rerun()
-                else: st.error("Acesso Negado.")
+                else: st.error("Erro!")
     st.stop()
 
 # --- AMBIENTE OPERACIONAL ---
@@ -78,70 +85,94 @@ with st.sidebar:
     menus = ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"]
     if usuario_atual == "Fernando Pinheiro":
         menus.append("⚙️ Gestão de Sistema")
+    
     selected = option_menu("Menu Tático", menus, default_index=0)
     
     st.markdown("---")
     st.caption(f"🚀 Versão: {version.VERSION}")
-    if st.button("🔄 Sincronizar"):
+    if st.button("🔄 Sincronizar Tudo"):
         st.cache_data.clear()
         st.rerun()
     if st.button("🚪 Sair"):
         del st.session_state.usuario_logado
         st.rerun()
 
-# 1. DASHBOARD COM ANALYTICS
+# 1. DASHBOARD
 if selected == "Dashboard":
-    st.title("📊 Termômetro de Desempenho")
+    st.title("📊 Desempenho")
     if not df_meu.empty:
-        # Métricas Gerais
-        total_q = int(df_meu['total'].sum())
-        total_a = int(df_meu['acertos'].sum())
-        precisao_geral = (total_a / total_q * 100) if total_q > 0 else 0
+        c1, c2 = st.columns(2)
+        tot = int(df_meu['total'].sum())
+        c1.metric("Questões", tot, border=True)
+        c2.metric("Precisão", f"{(df_meu['acertos'].sum()/tot*100):.1f}%", border=True)
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Questões Totais", total_q, border=True)
-        c2.metric("Precisão Geral", f"{precisao_geral:.1f}%", border=True)
-        
-        status_geral = "🟢 ELITE" if precisao_geral >= 80 else "🟡 ALERTA" if precisao_geral >= 50 else "🔴 CRÍTICO"
-        c3.metric("Status do Squad", status_geral, border=True)
+        df_p = df_meu.sort_values('dt_ordenacao').groupby('Data')['total'].sum().reset_index()
+        fig = px.line(df_p, x='Data', y='total', markers=True)
+        fig.update_xaxes(type='category', title="Data") 
+        st.plotly_chart(fig, use_container_width=True)
+    else: st.info("Sem dados.")
 
-        st.markdown("---")
-        
-        # --- LÓGICA DO TERMÔMETRO POR MATÉRIA ---
-        st.subheader("🔥 Performance por Matéria")
-        
-        # Agrupar dados por matéria
-        df_mat = df_meu.groupby('materia').agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
-        df_mat['Precisão'] = (df_mat['acertos'] / df_mat['total'] * 100).round(1)
-        
-        # Definir cores
-        def get_color(p):
-            if p >= 80: return '#00E676' # Verde
-            if p >= 50: return '#FFD600' # Amarelo
-            return '#FF5252'             # Vermelho
+# 2. NOVO REGISTRO
+elif selected == "Novo Registro":
+    st.title("📝 Registro")
+    if not editais: st.warning("Cadastre um edital.")
+    else:
+        conc = st.selectbox("Concurso", list(editais.keys()))
+        mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
+        with st.form("reg"):
+            dt = st.date_input("Data do Estudo", datetime.date.today(), format="DD/MM/YYYY")
+            ass = st.selectbox("Tópico", editais[conc]["materias"][mat] or ["Geral"])
+            a = st.number_input("Acertos", 0)
+            t = st.number_input("Total", 1)
+            if st.form_submit_button("SALVAR"):
+                supabase.table("registros_estudos").insert({
+                    "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
+                    "concurso": conc, "materia": mat, "assunto": ass, "acertos": a, "total": t, "taxa": (a/t*100)
+                }).execute()
+                st.cache_data.clear()
+                st.success("Salvo!")
 
-        df_mat['Cor'] = df_mat['Precisão'].apply(get_color)
-        df_mat = df_mat.sort_values('Precisão', ascending=False)
+# 4. GESTÃO DE EDITAIS
+elif selected == "Gestão Editais":
+    st.title("📑 Gestão de Editais")
+    t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
+    with t1:
+        with st.form("n_ed"):
+            n = st.text_input("Nome do Concurso")
+            c = st.text_input("Cargo")
+            d = st.date_input("Data da Prova", datetime.date.today(), format="DD/MM/YYYY")
+            if st.form_submit_button("CRIAR"):
+                supabase.table("editais_materias").insert({
+                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []
+                }).execute()
+                st.cache_data.clear()
+                st.success("Criado!")
+                st.rerun()
+    with t2:
+        if editais:
+            sel = st.selectbox("Selecionar Concurso", list(editais.keys()))
+            st.success(f"📍 Cargo: {editais[sel]['cargo']} | 📅 Prova: {editais[sel]['data_br']}")
+            m_n = st.text_input("Nova Matéria")
+            if st.button("Adicionar"):
+                # CORREÇÃO DA LINHA 156: Enviando Cargo e Data para evitar APIError
+                supabase.table("editais_materias").insert({
+                    "concurso": sel, "materia": m_n, "topicos": [],
+                    "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
+                }).execute()
+                st.cache_data.clear()
+                st.success("Matéria adicionada!")
+                st.rerun()
 
-        # Gráfico de Barras Horizontal
-        fig_mat = px.bar(df_mat, x='Precisão', y='materia', orientation='h',
-                         text='Precisão',
-                         color='Precisão',
-                         color_continuous_scale=['#FF5252', '#FFD600', '#00E676'],
-                         range_color=[0, 100])
-        
-        fig_mat.update_layout(showlegend=False, height=400)
-        st.plotly_chart(fig_mat, use_container_width=True)
+# 5. HISTÓRICO
+elif selected == "Histórico":
+    st.title("📜 Histórico")
+    if not df_meu.empty:
+        st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], use_container_width=True, hide_index=True)
 
-        # Tabela Detalhada com Ícones
-        st.markdown("### 📋 Raio-X das Matérias")
-        for index, row in df_mat.iterrows():
-            p = row['Precisão']
-            icone = "🟢" if p >= 80 else "🟡" if p >= 50 else "🔴"
-            st.write(f"{icone} **{row['materia']}**: {p}% ({int(row['acertos'])}/{int(row['total'])} questões)")
-            st.progress(p/100)
-
-    else: st.info("Registre o seu primeiro estudo para ativar o termômetro.")
-
-# (Manter os outros menus Novo Registro, Gestão Editais, Ranking, Histórico e Gestão de Sistema iguais à v12.0.1)
-# ... [O restante do código permanece idêntico ao anterior para manter a estabilidade] ...
+# 6. GESTÃO DE SISTEMA (Backup e Tokens)
+elif selected == "⚙️ Gestão de Sistema":
+    st.title("⚙️ Sistema")
+    if st.button("🎟️ Gerar Token de Convite"):
+        tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        supabase.table("tokens_convite").insert({"codigo": tk}).execute()
+        st.code(tk)
