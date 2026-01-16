@@ -9,7 +9,7 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Faca na Caveira - Concursos", page_icon="💀", layout="wide")
 
 DB_FILE = "estudos_data.csv"
-META_QUESTOES = 2000  # <--- TUA META
+META_QUESTOES = 2000 
 
 # --- FUNÇÕES ---
 def carregar_dados():
@@ -38,7 +38,6 @@ df = st.session_state.df_dados
 
 # --- BARRA LATERAL ---
 with st.sidebar:
-    # Topo Alinhado
     c_logo, c_text = st.columns([1, 2])
     
     with c_logo:
@@ -91,7 +90,6 @@ if selected == "Dashboard":
     
     if not df.empty:
         df_calc = df.copy()
-        # Conversão de tipos blindada
         df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
         df_calc['Total'] = pd.to_numeric(df_calc['Total'], errors='coerce').fillna(1)
         df_calc['Data_Ordenacao'] = pd.to_datetime(df_calc['Proxima_Revisao'], dayfirst=True, errors='coerce')
@@ -133,35 +131,39 @@ if selected == "Dashboard":
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # 4. TABELA DE PONTOS FRACOS (CORRIGIDA)
+        # 4. MAPA DA VERGONHA (FILTRADO < 80%)
         st.markdown("---")
-        st.subheader("☠️ Mural da Vergonha (Onde precisamos melhorar)")
+        st.subheader("🗺️ Mapa da Vergonha")
         
-        # Agrupamento Simplificado e Robusto
         try:
-            # Agrupa por Matéria e Assunto somando os valores
+            # Agrupa e calcula
             df_resumo = df_calc.groupby(["Materia", "Assunto"])[["Acertos", "Total"]].sum().reset_index()
-            
-            # Calcula a média
             df_resumo["Aproveitamento"] = (df_resumo["Acertos"] / df_resumo["Total"] * 100)
             
-            # Ordena: Menor nota primeiro (True)
-            df_piores = df_resumo.sort_values(by="Aproveitamento", ascending=True).head(5)
+            # FILTRO: Só mostra quem está abaixo de 80%
+            df_piores = df_resumo[df_resumo["Aproveitamento"] < 80].copy()
+            
+            # Ordena do pior para o "menos pior"
+            df_piores = df_piores.sort_values(by="Aproveitamento", ascending=True)
             
             if not df_piores.empty:
-                # Formatação visual
+                # Mensagem de "Puxão de Orelha"
+                st.error("🚨 ALERTA: Estes assuntos vão te reprovar. TOMA RUMO e estuda isso hoje!")
+                
+                # Formatação
                 df_piores["Aproveitamento"] = df_piores["Aproveitamento"].apply(lambda x: f"{x:.1f}%")
                 
-                # Exibir tabela limpa
                 st.dataframe(
-                    df_piores[["Materia", "Assunto", "Total", "Aproveitamento"]].rename(columns={"Total": "Qtd. Questões"}),
+                    df_piores[["Materia", "Assunto", "Total", "Aproveitamento"]].rename(columns={"Total": "Qtd. Feitas"}),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                st.info("Ainda não tens registos suficientes para gerar o Mural da Vergonha.")
+                # Se tudo estiver > 80%
+                st.success("🏆 Nada no Mapa da Vergonha! Todos os teus assuntos estão acima de 80%. Mantém o foco!")
+
         except Exception as e:
-            st.error(f"Erro ao calcular mural: {e}")
+            st.error(f"Erro ao calcular mapa: {e}")
 
     else:
         st.info("Sistema pronto. Comece pelo menu 'Novo Registro'.")
