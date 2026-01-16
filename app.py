@@ -2,12 +2,21 @@ import streamlit as st
 import pandas as pd
 import datetime
 import time
+import os
 import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
-from docling.document_converter import DocumentConverter
 
-# --- 1. CONFIGURAÇÃO VISUAL PROFISSIONAL ---
+# Importação do Docling com tratamento de erro
+try:
+    from docling.document_converter import DocumentConverter
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.base_models import InputFormat
+    DOCLING_READY = True
+except ImportError:
+    DOCLING_READY = False
+
+# --- 1. CONFIGURAÇÃO VISUAL ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -16,24 +25,15 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #0A0A0B; color: #E2E8F0; }
     header { visibility: hidden; }
     .block-container { padding-top: 1rem !important; }
-
     .rev-card {
         background: #17171B; border: 1px solid #2D2D35; border-radius: 8px;
         padding: 12px; margin-bottom: 10px; border-left: 4px solid #333;
     }
-    .perf-bad { border-left-color: #EF4444; }   /* < 60% */
-    .perf-med { border-left-color: #F59E0B; }   /* 60-80% */
-    .perf-good { border-left-color: #10B981; }  /* > 80% */
-    
-    .card-subject { font-weight: 800; font-size: 0.85rem; color: #FFF; margin-bottom: 2px; }
-    .card-topic { font-size: 0.75rem; color: #94A3B8; margin-bottom: 6px; line-height: 1.2; }
-    .card-footer { display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748B; align-items: center; }
+    .perf-bad { border-left-color: #EF4444; }
+    .perf-med { border-left-color: #F59E0B; }
+    .perf-good { border-left-color: #10B981; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-
-    .stButton button {
-        background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px;
-        font-weight: 600; transition: 0.2s; width: 100%;
-    }
+    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -78,13 +78,14 @@ def calcular_pendencias(df):
         css = "perf-bad" if taxa < 60 else "perf-med" if taxa < 80 else "perf-good"
         base = {"id": row['id'], "Mat": row['materia'], "Ass": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css}
         
+        # Lógica de Camada Única (A mais urgente aparece primeiro)
         if delta >= 30 and not row['rev_30d']: pendencias.append({**base, "Fase": "30d", "Label": "💎 D30"})
         elif delta >= 15 and not row['rev_15d']: pendencias.append({**base, "Fase": "15d", "Label": "🧠 D15"})
         elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
 
-# --- 4. FLUXO APP ---
+# --- 4. FLUXO PRINCIPAL ---
 if 'missao_ativa' not in st.session_state: st.session_state.missao_ativa = None
 
 if st.session_state.missao_ativa is None:
@@ -117,7 +118,7 @@ else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
             mins = df['tempo'].sum() if 'tempo' in df.columns else 0
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100):.1f}%"); c3.metric("Tempo Líquido", f"{int(mins//60)}h {int(mins%60)}m")
+            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo", f"{int(mins//60)}h")
             st.divider()
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
@@ -133,7 +134,7 @@ else:
                     st.markdown(f"#### {flabel}")
                     itens = df_p[df_p['Fase'] == fid] if not df_p.empty else []
                     for _, row in itens.iterrows():
-                        st.markdown(f'<div class="rev-card {row["CSS"]}"><div class="card-subject">{row["Mat"]}</div><div class="card-topic">{row["Ass"]}</div><div class="card-footer"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rev-card {row["CSS"]}"><div style="font-weight:800;font-size:0.85rem;color:#FFF;">{row["Mat"]}</div><div style="font-size:0.75rem;color:#94A3B8;">{row["Ass"]}</div><div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-top:5px;"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
                         if st.button("Ok", key=f"f_{row['id']}_{fid}"):
                             supabase.table("registros_estudos").update({f"rev_{fid}": True}).eq("id", row['id']).execute(); st.rerun()
 
@@ -150,21 +151,42 @@ else:
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
     elif menu == "IA: Novo Edital":
-        st.subheader("🤖 Importador Inteligente (Docling)")
-        st.info("Suba o PDF do edital para extrair o conteúdo programático automaticamente.")
-        with st.container(border=True):
-            nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
-            cargo_nome = st.text_input("Cargo")
-            pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
-            if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
-                with st.spinner("🤖 Docling analisando PDF... isso demora cerca de 1 min."):
-                    with open("temp.pdf", "wb") as f: f.write(pdf_file.getbuffer())
-                    converter = DocumentConverter()
-                    result = converter.convert("temp.pdf")
-                    texto_md = result.document.export_to_markdown()
-                    st.success("Leitura concluída!")
-                    st.text_area("Conteúdo Extraído:", value=texto_md, height=400)
-                    st.warning("⚠️ Próximo passo: No futuro, a IA irá dividir isto em matérias automáticas.")
+        st.subheader("🤖 IA: Importador de Edital")
+        if not DOCLING_READY:
+            st.error("Erro: Bibliotecas Docling não encontradas no requirements.txt")
+        else:
+            st.info("Suba o PDF do edital para extrair o conteúdo programático automaticamente.")
+            with st.container(border=True):
+                nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
+                pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
+                
+                if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
+                    with st.spinner("🤖 Analisando PDF..."):
+                        try:
+                            temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
+                            with open(temp_path, "wb") as f:
+                                f.write(pdf_file.getbuffer())
+                            
+                            # Configuração LITE para evitar erro de permissão do RapidOCR
+                            pipeline_opts = PdfPipelineOptions()
+                            pipeline_opts.do_ocr = False
+                            pipeline_opts.do_table_structure = True
+                            
+                            converter = DocumentConverter(
+                                allowed_formats=[InputFormat.PDF],
+                                pipeline_options=pipeline_opts
+                            )
+                            
+                            result = converter.convert(temp_path)
+                            texto_md = result.document.export_to_markdown()
+                            
+                            st.success("Leitura concluída!")
+                            st.text_area("Conteúdo Extraído:", value=texto_md, height=400)
+                            
+                            if os.path.exists(temp_path):
+                                os.remove(temp_path)
+                        except Exception as e:
+                            st.error(f"Erro técnico: {e}")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
@@ -189,7 +211,7 @@ else:
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
                 st.rerun()
             st.divider()
-            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
-            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
+            alvo = st.selectbox("Apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
+            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
