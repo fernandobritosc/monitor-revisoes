@@ -42,15 +42,10 @@ def db_get_editais():
     for row in res.data:
         conc = row['concurso']
         if conc not in editais:
-            # Formatando a data para exibição brasileira
-            dt_exibicao = row['data_prova']
-            if dt_exibicao:
-                try: dt_exibicao = datetime.datetime.strptime(dt_exibicao, '%Y-%m-%d').strftime('%d/%m/%Y')
-                except: pass
-            
+            dt_raw = row['data_prova']
             editais[conc] = {
                 "cargo": row['cargo'] or "Não informado", 
-                "data": dt_exibicao or "A definir", 
+                "data_raw": dt_raw, # Mantemos o formato ISO para o input
                 "materias": {}
             }
         editais[conc]["materias"][row['materia']] = row['topicos']
@@ -203,7 +198,9 @@ elif selected == "Ranking Squad":
 
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
-    with st.expander("➕ Criar Novo Concurso"):
+    tab_novo, tab_edit = st.tabs(["➕ Novo Edital", "✏️ Editar Existente"])
+
+    with tab_novo:
         with st.form("novo_conc_form"):
             c1, c2, c3 = st.columns([2, 2, 1])
             nome_c = c1.text_input("Nome do Concurso")
@@ -212,42 +209,66 @@ elif selected == "Gestão Editais":
             if st.form_submit_button("Criar Edital"):
                 if nome_c:
                     supabase.table("editais_materias").insert({
-                        "concurso": nome_c, 
-                        "materia": "Geral", 
-                        "topicos": [],
-                        "cargo": cargo_c,
-                        "data_prova": data_c.strftime('%Y-%m-%d')
+                        "concurso": nome_c, "materia": "Geral", "topicos": [],
+                        "cargo": cargo_c, "data_prova": data_c.strftime('%Y-%m-%d')
                     }).execute()
                     st.cache_data.clear()
                     st.success(f"Edital {nome_c} criado!")
                     st.rerun()
 
-    if editais:
-        ed_sel = st.selectbox("Selecione o Edital para Editar", list(editais.keys()))
-        st.info(f"📍 **Cargo:** {editais[ed_sel]['cargo']} | 📅 **Prova:** {editais[ed_sel]['data']}")
-        
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            nova_m = st.text_input("Nova Matéria")
-            if st.button("Adicionar Matéria") and nova_m:
-                supabase.table("editais_materias").insert({
-                    "concurso": ed_sel, 
-                    "materia": nova_m, 
-                    "topicos": [],
-                    "cargo": editais[ed_sel]['cargo'],
-                    "data_prova": datetime.datetime.strptime(editais[ed_sel]['data'], '%d/%m/%Y').strftime('%Y-%m-%d') if editais[ed_sel]['data'] != "A definir" else None
-                }).execute()
-                st.cache_data.clear()
-                st.rerun()
-        with col2:
-            for m, t in editais[ed_sel]["materias"].items():
-                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
-                    txt = st.text_area(f"Importar Tópicos para {m}", value="; ".join(t), key=f"t_{m}")
-                    if st.button("Atualizar Lista", key=f"b_{m}"):
-                        novos = [x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()]
-                        supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", ed_sel).eq("materia", m).execute()
-                        st.cache_data.clear()
-                        st.rerun()
+    with tab_edit:
+        if editais:
+            ed_sel = st.selectbox("Selecione para Editar", list(editais.keys()), key="sel_edit")
+            
+            # Formulário de edição dos dados gerais
+            with st.form("edit_geral_form"):
+                st.markdown("##### Alterar Informações Gerais")
+                c1, c2, c3 = st.columns([2, 2, 1])
+                # Nota: Mudar o nome do concurso é complexo pois ele é usado como chave. 
+                # Por agora, permitimos mudar Cargo e Data.
+                novo_cargo = c1.text_input("Novo Cargo", value=editais[ed_sel]['cargo'])
+                
+                # Tratamento da data atual para o input
+                data_atual_dt = datetime.date.today()
+                if editais[ed_sel]['data_raw']:
+                    try: data_atual_dt = datetime.datetime.strptime(editais[ed_sel]['data_raw'], '%Y-%m-%d').date()
+                    except: pass
+                
+                nova_data = c3.date_input("Nova Data da Prova", value=data_atual_dt)
+                
+                if st.form_submit_button("Salvar Alterações Gerais"):
+                    supabase.table("editais_materias").update({
+                        "cargo": novo_cargo,
+                        "data_prova": nova_data.strftime('%Y-%m-%d')
+                    }).eq("concurso", ed_sel).execute()
+                    st.cache_data.clear()
+                    st.success("Informações atualizadas!")
+                    st.rerun()
+            
+            st.markdown("---")
+            st.markdown("##### Gerir Matérias e Tópicos")
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                nova_m = st.text_input("Nova Matéria")
+                if st.button("Adicionar Matéria") and nova_m:
+                    supabase.table("editais_materias").insert({
+                        "concurso": ed_sel, "materia": nova_m, "topicos": [],
+                        "cargo": editais[ed_sel]['cargo'],
+                        "data_prova": editais[ed_sel]['data_raw']
+                    }).execute()
+                    st.cache_data.clear()
+                    st.rerun()
+            with col2:
+                for m, t in editais[ed_sel]["materias"].items():
+                    with st.expander(f"📚 {m} ({len(t)} tópicos)"):
+                        txt = st.text_area(f"Importar Tópicos para {m}", value="; ".join(t), key=f"t_{m}")
+                        if st.button("Atualizar Lista", key=f"b_{m}"):
+                            novos = [x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()]
+                            supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", ed_sel).eq("materia", m).execute()
+                            st.cache_data.clear()
+                            st.rerun()
+        else:
+            st.info("Nenhum edital cadastrado para editar.")
 
 elif selected == "Gerar Convites":
     st.title("🎟️ Central de Convites")
