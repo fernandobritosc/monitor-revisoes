@@ -11,13 +11,14 @@ DB_FILE = "estudos_data.csv"
 # --- FUNÇÕES DE DADOS ---
 def carregar_dados():
     if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        # Garante que as datas são lidas como texto para não haver confusão de formato
+        # Lemos com o separador ';' para garantir compatibilidade com Excel
+        df = pd.read_csv(DB_FILE, sep=';')
         return df
     return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
 
 def salvar_dados(dataframe):
-    dataframe.to_csv(DB_FILE, index=False)
+    # Salvamos com ';' para o Excel abrir direto em colunas
+    dataframe.to_csv(DB_FILE, index=False, sep=';')
 
 def calcular_revisao(data_base, taxa):
     if taxa < 70: dias = 1
@@ -34,11 +35,11 @@ df = carregar_dados()
 with st.sidebar:
     st.header("📥 Novo Registro")
     with st.form("form_estudo", clear_on_submit=True):
-        # Novo campo de Data de Estudo
-        data_estudo = st.date_input("Data do Estudo", datetime.date.today())
+        # Seletor de data (Calendário)
+        data_input = st.date_input("Data do Estudo", datetime.date.today())
         
-        materia = st.text_input("Matéria (Ex: Direito Constitucional)")
-        assunto = st.text_input("Assunto (Ex: Direitos Fundamentais)")
+        materia = st.text_input("Matéria")
+        assunto = st.text_input("Assunto")
         
         col1, col2 = st.columns(2)
         ac = col1.number_input("Acertos", min_value=0, step=1)
@@ -46,14 +47,13 @@ with st.sidebar:
         
         btn = st.form_submit_button("Salvar Estudo")
 
-    if btn and materia and assunto:
+    if btn and materia:
         taxa_calc = (ac/tot)*100
-        # Calcula a revisão com base na data que escolheste no seletor
-        data_rev = calcular_revisao(data_estudo, taxa_calc)
+        data_rev = calcular_revisao(data_input, taxa_calc)
         
-        # Formatação das datas para o padrão 15/01/2026
+        # Guardamos as datas no formato DD/MM/YYYY para exibição e Excel
         nova_linha = pd.DataFrame([{
-            "Data_Estudo": data_estudo.strftime('%d/%m/%Y'),
+            "Data_Estudo": data_input.strftime('%d/%m/%Y'),
             "Materia": materia,
             "Assunto": assunto,
             "Acertos": ac,
@@ -64,25 +64,26 @@ with st.sidebar:
         
         df = pd.concat([df, nova_linha], ignore_index=True)
         salvar_dados(df)
-        st.success(f"Salvo! Próxima revisão em: {data_rev.strftime('%d/%m/%Y')}")
+        st.success(f"Registado! Próxima revisão: {data_rev.strftime('%d/%m/%Y')}")
         st.balloons()
         st.rerun()
 
 # --- PAINEL PRINCIPAL ---
-st.subheader("📋 Histórico e Cronograma")
+st.subheader("📋 Histórico de Estudos")
 
 if not df.empty:
-    # Exibir a tabela com as colunas organizadas
+    # Exibir a tabela organizada
     st.dataframe(df, use_container_width=True, hide_index=True)
     
-    # Botão de Backup
+    # Botão de Backup ajustado para Excel
     st.markdown("---")
-    csv = df.to_csv(index=False).encode('utf-8')
+    # Para o backup, usamos o formato CSV mas com separador de ponto e vírgula
+    csv_excel = df.to_csv(index=False, sep=';').encode('utf-8-sig') # 'utf-8-sig' ajuda o Excel com acentos
     st.download_button(
-        label="📥 Descarregar Backup (Excel/CSV)",
-        data=csv,
-        file_name=f"revisoes_{datetime.date.today()}.csv",
+        label="📥 Baixar para Excel (CSV)",
+        data=csv_excel,
+        file_name=f"meus_estudos_{datetime.date.today()}.csv",
         mime="text/csv",
     )
 else:
-    st.info("Ainda não há dados. Começa a registar os teus estudos!")
+    st.info("Ainda não há registros. Use a barra lateral para começar!")
