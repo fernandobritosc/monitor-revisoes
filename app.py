@@ -127,6 +127,7 @@ def calcular_revisoes(df):
     if df.empty: return pd.DataFrame()
     hoje = datetime.date.today()
     revisoes = []
+    # Conversão Segura
     df['dt_temp'] = pd.to_datetime(df['data_estudo']).dt.date
     
     for _, row in df.iterrows():
@@ -214,7 +215,9 @@ if st.session_state.missao_ativa is None:
                 if st.button("CONFIRMAR EXCLUSÃO", type="primary", use_container_width=True):
                     supabase.table("registros_estudos").delete().eq("concurso", alvo).execute()
                     supabase.table("editais_materias").delete().eq("concurso", alvo).execute()
-                    st.success("Missão eliminada."); time.sleep(1); st.rerun()
+                    st.success("Missão eliminada.")
+                    time.sleep(1)
+                    st.rerun()
 
 # --- TELA 2: MODO OPERACIONAL ---
 else:
@@ -288,7 +291,6 @@ else:
         df_rev = calcular_revisoes(df)
         
         if df_rev.empty:
-            # Estado "Vazio" Bonito
             st.markdown("""
             <div style="text-align: center; padding: 50px; background-color: #171717; border-radius: 12px; border: 1px dashed #333;">
                 <h1 style="font-size: 3em;">✅</h1>
@@ -299,7 +301,6 @@ else:
         else:
             c1, c2, c3 = st.columns(3)
             
-            # Função para criar card HTML
             def render_card(row, color="#DC2626"):
                 st.markdown(f"""
                 <div class="revision-card" style="border-left-color: {color};">
@@ -313,28 +314,27 @@ else:
                 revs = df_rev[df_rev['Tipo'] == "🔥 24h"]
                 if revs.empty: st.info("Nada.")
                 else:
-                    for _, row in revs.iterrows(): render_card(row, "#DC2626") # Vermelho
+                    for _, row in revs.iterrows(): render_card(row, "#DC2626")
 
             with c2:
                 st.markdown("### 📅 7 Dias")
                 revs = df_rev[df_rev['Tipo'] == "📅 7 Dias"]
                 if revs.empty: st.info("Nada.")
                 else:
-                    for _, row in revs.iterrows(): render_card(row, "#F59E0B") # Laranja
+                    for _, row in revs.iterrows(): render_card(row, "#F59E0B")
 
             with c3:
                 st.markdown("### 🧠 30 Dias")
                 revs = df_rev[df_rev['Tipo'] == "🧠 30 Dias"]
                 if revs.empty: st.info("Nada.")
                 else:
-                    for _, row in revs.iterrows(): render_card(row, "#3B82F6") # Azul
+                    for _, row in revs.iterrows(): render_card(row, "#3B82F6")
 
     elif menu == "Registrar":
         st.title("📝 Novo Registro")
         materias = list(dados.get('materias', {}).keys())
         if not materias: st.warning("⚠️ Adicione matérias em 'Configurar'.")
         else:
-            # Container visual para agrupar o formulário
             with st.container(border=True):
                 c1, c2 = st.columns([2, 1])
                 with c1:
@@ -440,7 +440,9 @@ else:
                                 "tempo": row['tempo']
                             }).eq("id", row['id']).execute()
                         except: pass
-                    st.success("Atualizado!"); time.sleep(1); st.rerun()
+                    st.success("Atualizado!")
+                    time.sleep(1)
+                    st.rerun()
 
             # --- ZONA 2: EXCLUSÃO ---
             st.write("")
@@ -453,4 +455,8 @@ else:
                 
                 if escolha != "Selecione..." and c_btn.button("APAGAR", type="primary"):
                     supabase.table("registros_estudos").delete().eq("id", opcoes_del[escolha]).execute()
-                    st.success("Apagado."); time.
+                    st.success("Apagado.")
+                    time.sleep(1)
+                    st.rerun()
+        else:
+            st.info("Sem dados.")
