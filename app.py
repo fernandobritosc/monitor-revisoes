@@ -17,16 +17,14 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- SOLUÇÃO DE ARQUITETURA: QUEBRA DE INFERÊNCIA ---
-def formatar_data_br_blindada(data_string):
-    """Converte ISO para BR e injeta caractere invisível para impedir inversão do UI engine"""
-    if not data_string: return "A definir"
+# --- MOTOR DE DATA BLINDADA (PADRÃO BRASIL) ---
+def formatar_br(data_iso):
+    if not data_iso: return "A definir"
     try:
-        dt = datetime.datetime.strptime(data_string, '%Y-%m-%d')
-        # Injetamos o caractere \u200b (Zero Width Space)
-        return dt.strftime('%d/%m/%Y') + "\u200b"
+        # Forçamos a saída como um texto que o Streamlit não consegue "re-interpretar"
+        return datetime.datetime.strptime(str(data_iso), '%Y-%m-%d').strftime('%d/%m/%Y')
     except:
-        return data_string
+        return data_iso
 
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
@@ -35,10 +33,11 @@ def db_get_estudos(usuario=None):
     res = query.execute()
     df = pd.DataFrame(res.data)
     if not df.empty:
-        # Criamos a coluna de ordenação oculta
-        df['ordenacao_temporal'] = pd.to_datetime(df['data_estudo'])
-        # Criamos a coluna visual BLINDADA
-        df['Data'] = df['ordenacao_temporal'].dt.strftime('%d/%m/%Y').apply(lambda x: x + "\u200b")
+        # Criamos a data real apenas para ordenar o gráfico
+        df['dt_ordem'] = pd.to_datetime(df['data_estudo'])
+        # AQUI ESTÁ A TRAVA: Criamos a exibição como TEXTO PURO
+        df['Data'] = df['dt_ordem'].dt.strftime('%d/%m/%Y')
+        df = df.sort_values('dt_ordem', ascending=False)
     return df
 
 @st.cache_data(ttl=3600)
@@ -50,73 +49,85 @@ def db_get_editais():
         if conc not in editais:
             editais[conc] = {
                 "cargo": row['cargo'] or "Não informado", 
-                "data_br": formatar_data_br_blindada(row['data_prova']), 
+                "data_br": formatar_br(row['data_prova']), 
                 "data_iso": row['data_prova'], 
                 "materias": {}
             }
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
-# --- SISTEMA DE ACESSO ---
+# --- ACESSO ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
     c1, c2, c3 = st.columns([1, 1.8, 1])
     with c2:
         st.markdown("<h1 style='text-align: center;'>💀 SQUAD PRIVADO</h1>", unsafe_allow_html=True)
-        with st.form("login_f"):
-            u = st.selectbox("Guerreiro", list(users.keys()))
-            p = st.text_input("PIN", type="password")
-            if st.form_submit_button("ENTRAR", use_container_width=True):
-                if p == users[u]['pin']:
-                    st.session_state.usuario_logado = u
-                    st.rerun()
-                else: st.error("Acesso Negado.")
+        t1, t2 = st.tabs(["Acessar", "Novo Guerreiro"])
+        with t1:
+            if not users:
+                if st.button("Gerar Token Inicial"):
+                    tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+                    supabase.table("tokens_convite").insert({"codigo": tk}).execute()
+                    st.success(f"TOKEN: {tk}")
+            else:
+                with st.form("login"):
+                    u = st.selectbox("Guerreiro", list(users.keys()))
+                    p = st.text_input("PIN", type="password")
+                    if st.form_submit_button("ENTRAR"):
+                        if p == users[u]['pin']:
+                            st.session_state.usuario_logado = u
+                            st.rerun()
+                        else: st.error("Erro")
     st.stop()
 
-# --- AMBIENTE OPERACIONAL (RESTAURADO) ---
+# --- INTERFACE RESTAURADA ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 df_meu = db_get_estudos(usuario_atual)
 
 with st.sidebar:
     st.markdown(f"### 🥷 {usuario_atual}")
-    # MENU COMPLETO RESTAURADO
-    selected = option_menu("Menu Tático", 
-                           ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"], 
-                           icons=["bar-chart", "plus-circle", "trophy", "book-half", "table"], 
-                           default_index=0)
+    # TODOS OS MENUS ORIGINAIS VOLTARAM
+    menus = ["Dashboard", "Novo Registro", "Ranking Squad", "Gestão Editais", "Histórico"]
+    icons = ["bar-chart", "plus-circle", "trophy", "book-half", "table"]
+    
+    if usuario_atual == "Fernando Pinheiro":
+        menus.append("Gerar Convites")
+        icons.append("ticket-perforated")
+    
+    selected = option_menu("Menu Tático", menus, icons=icons, default_index=0)
     
     st.markdown("---")
-    if st.button("🔄 FORÇAR ATUALIZAÇÃO"):
+    if st.button("🔄 Sincronizar Datas"):
         st.cache_data.clear()
         st.rerun()
-    if st.button("🚪 Sair"):
+    if st.button("Sair"):
         del st.session_state.usuario_logado
         st.rerun()
 
 # 1. DASHBOARD
 if selected == "Dashboard":
-    st.title("📊 Desempenho")
+    st.title("📊 Painel de Performance")
     if not df_meu.empty:
         c1, c2 = st.columns(2)
         tot = int(df_meu['total'].sum())
-        c1.metric("Questões", tot, border=True)
-        c2.metric("Precisão", f"{(df_meu['acertos'].sum()/tot*100):.1f}%", border=True)
+        c1.metric("Questões", tot)
+        c2.metric("Precisão", f"{(df_meu['acertos'].sum()/tot*100):.1f}%")
         
-        # Gráfico ordenado pela data real, mas exibindo a blindada
-        df_plot = df_meu.sort_values('ordenacao_temporal')
-        fig = px.line(df_plot, x='Data', y='total', title="Evolução Diária", markers=True)
-        fig.update_xaxes(type='category') # Trata a data como texto puro
+        # Gráfico forçado como Categoria para não inverter
+        df_p = df_meu.sort_values('dt_ordem').groupby('Data')['total'].sum().reset_index()
+        fig = px.line(df_p, x='Data', y='total', title="Evolução Diária", markers=True)
+        fig.update_xaxes(type='category') # <--- O SEGREDO DO GRÁFICO
         st.plotly_chart(fig, use_container_width=True)
-    else: st.info("Sem registros no momento.")
+    else: st.info("Sem dados.")
 
 # 2. NOVO REGISTRO
 elif selected == "Novo Registro":
     st.title("📝 Registrar Estudo")
-    if not editais: st.warning("Cadastre um edital.")
+    if not editais: st.warning("Crie um edital.")
     else:
-        conc = st.selectbox("Concurso", list(editais.keys()))
+        conc = st.selectbox("Edital", list(editais.keys()))
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
         with st.form("reg"):
             dt = st.date_input("Data", datetime.date.today())
@@ -129,11 +140,11 @@ elif selected == "Novo Registro":
                     "concurso": conc, "materia": mat, "assunto": ass, "acertos": a, "total": t, "taxa": (a/t*100)
                 }).execute()
                 st.cache_data.clear()
-                st.success("Estudo registrado!")
+                st.success("Salvo!")
 
 # 3. RANKING SQUAD
 elif selected == "Ranking Squad":
-    st.title("🏆 Ranking do Squad")
+    st.title("🏆 Ranking")
     res_all = supabase.table("registros_estudos").select("usuario, total").execute()
     df_all = pd.DataFrame(res_all.data)
     if not df_all.empty:
@@ -141,35 +152,32 @@ elif selected == "Ranking Squad":
         rank = df_all.groupby("usuario")['total'].sum().reset_index().sort_values("total", ascending=False)
         st.plotly_chart(px.bar(rank, x="total", y="usuario", orientation='h'), use_container_width=True)
 
-# 4. GESTÃO DE EDITAIS (RESTAURADO COMPLETO)
+# 4. GESTÃO DE EDITAIS (COM CARGO E DATA PROVA)
 elif selected == "Gestão Editais":
-    st.title("📑 Gestão de Editais")
+    st.title("📑 Gestão")
     t1, t2 = st.tabs(["➕ Novo Edital", "📚 Matérias"])
     with t1:
         with st.form("n"):
             n = st.text_input("Concurso")
             c = st.text_input("Cargo")
-            d = st.date_input("Data da Prova")
+            d = st.date_input("Data Prova")
             if st.form_submit_button("Criar"):
-                supabase.table("editais_materias").insert({
-                    "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral", "topicos": []
-                }).execute()
+                supabase.table("editais_materias").insert({"concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), "materia": "Geral"}).execute()
                 st.cache_data.clear()
                 st.rerun()
     with t2:
         if editais:
-            sel = st.selectbox("Edital", list(editais.keys()))
-            st.success(f"📍 Cargo: {editais[sel]['cargo']} | 📅 Prova: {editais[sel]['data_br']}")
+            sel = st.selectbox("Escolha", list(editais.keys()))
+            # EXIBIÇÃO BRASILEIRA FIXA
+            st.success(f"Cargo: {editais[sel]['cargo']} | Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Adicionar"):
-                supabase.table("editais_materias").insert({
-                    "concurso": sel, "materia": m_n, "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso'], "topicos": []
-                }).execute()
+                supabase.table("editais_materias").insert({"concurso": sel, "materia": m_n, "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']}).execute()
                 st.cache_data.clear()
                 st.rerun()
             for m, t in editais[sel]["materias"].items():
                 with st.expander(f"📚 {m}"):
-                    txt = st.text_area(f"Tópicos para {m}", value="; ".join(t), key=f"t_{m}")
+                    txt = st.text_area(f"Tópicos (;)", value="; ".join(t), key=f"t_{m}")
                     if st.button("Atualizar", key=f"b_{m}"):
                         novos = [x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()]
                         supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", sel).eq("materia", m).execute()
@@ -178,16 +186,15 @@ elif selected == "Gestão Editais":
 
 # 5. HISTÓRICO
 elif selected == "Histórico":
-    st.title("📜 Histórico de Atividades")
+    st.title("📜 Histórico")
     if not df_meu.empty:
-        # Exibimos a coluna BLINDADA 'Data'
-        exibir = df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']].copy()
-        exibir.columns = ['Data de Estudo', 'Concurso', 'Matéria', 'Assunto', 'Acertos', 'Total']
-        st.dataframe(exibir.sort_values('Data de Estudo', ascending=False), use_container_width=True, hide_index=True)
+        # EXIBINDO A DATA COMO TEXTO (DD/MM/YYYY)
+        st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], use_container_width=True, hide_index=True)
 
-# 6. GERAR CONVITES (SÓ PARA VOCÊ)
-if usuario_atual == "Fernando Pinheiro":
-    if st.sidebar.button("🎟️ Gerar Convite"):
+# 6. CONVITES
+elif selected == "Gerar Convites":
+    st.title("🎟️ Convites")
+    if st.button("Novo Token"):
         tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         supabase.table("tokens_convite").insert({"codigo": tk}).execute()
-        st.sidebar.code(tk)
+        st.code(tk)
