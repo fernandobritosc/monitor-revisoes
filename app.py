@@ -20,7 +20,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES COM CACHE (VELOCIDADE MÁXIMA) ---
+# --- FUNÇÕES COM CACHE ---
 
 @st.cache_data(ttl=600)
 def db_get_usuarios():
@@ -42,7 +42,17 @@ def db_get_editais():
     for row in res.data:
         conc = row['concurso']
         if conc not in editais:
-            editais[conc] = {"cargo": row['cargo'], "data": str(row['data_prova']), "materias": {}}
+            # Formatando a data para exibição brasileira
+            dt_exibicao = row['data_prova']
+            if dt_exibicao:
+                try: dt_exibicao = datetime.datetime.strptime(dt_exibicao, '%Y-%m-%d').strftime('%d/%m/%Y')
+                except: pass
+            
+            editais[conc] = {
+                "cargo": row['cargo'] or "Não informado", 
+                "data": dt_exibicao or "A definir", 
+                "materias": {}
+            }
         editais[conc]["materias"][row['materia']] = row['topicos']
     return editais
 
@@ -89,7 +99,7 @@ if 'usuario_logado' not in st.session_state:
                 if st.button("Gerar Token de Primeiro Acesso"):
                     tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
                     supabase.table("tokens_convite").insert({"codigo": tk}).execute()
-                    st.success(f"Token Gerado: {tk}")
+                    st.success(f"Token: {tk}")
             else:
                 with st.form("login_form"):
                     u = st.selectbox("Quem está acessando?", list(users.keys()))
@@ -112,7 +122,7 @@ if 'usuario_logado' not in st.session_state:
                         supabase.table("perfil_usuarios").insert({"nome": n_in, "pin": p_in, "chave_recuperacao": ch_in}).execute()
                         supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk_in).execute()
                         st.cache_data.clear()
-                        st.success("Conta criada! Vá em 'Acessar Base'.")
+                        st.success("Criado! Faça login.")
                     else: st.error("Token inválido.")
     st.stop()
 
@@ -155,14 +165,14 @@ if selected == "Dashboard":
         st.markdown("---")
         df_meu['data_real'] = pd.to_datetime(df_meu['data_estudo'])
         df_evol = df_meu.groupby('data_real')['total'].sum().reset_index()
-        fig = px.line(df_evol, x='data_real', y='total', title="Evolução Diária", markers=True)
+        fig = px.line(df_evol, x='data_real', y='total', title="Evolução de Estudos", markers=True)
         fig.update_traces(line_color='#00E676')
         st.plotly_chart(fig, use_container_width=True)
-    else: st.info("Bora estudar para gerar dados! 💀")
+    else: st.info("Registre estudos para ver seus dados.")
 
 elif selected == "Novo Registro":
     st.title("📝 Novo Registro")
-    if not editais: st.warning("Cadastre um edital primeiro em 'Gestão Editais'.")
+    if not editais: st.warning("Cadastre um edital primeiro!")
     else:
         conc = st.selectbox("Edital", list(editais.keys()))
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
@@ -173,7 +183,6 @@ elif selected == "Novo Registro":
             a, t = st.columns(2)
             ac_v = a.number_input("Acertos", 0)
             tot_v = t.number_input("Total", 1)
-            # AQUI ESTAVA O ERRO (LINHA 128) - CORRIGIDO:
             if st.form_submit_button("SALVAR ESTUDO", use_container_width=True):
                 tx = (ac_v/tot_v*100)
                 supabase.table("registros_estudos").insert({
@@ -195,26 +204,46 @@ elif selected == "Ranking Squad":
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     with st.expander("➕ Criar Novo Concurso"):
-        nome_c = st.text_input("Nome do Concurso")
-        if st.button("Criar"):
-            supabase.table("editais_materias").insert({"concurso": nome_c, "materia": "Geral", "topicos": []}).execute()
-            st.cache_data.clear()
-            st.rerun()
-    
+        with st.form("novo_conc_form"):
+            c1, c2, c3 = st.columns([2, 2, 1])
+            nome_c = c1.text_input("Nome do Concurso")
+            cargo_c = c2.text_input("Cargo")
+            data_c = c3.date_input("Data da Prova")
+            if st.form_submit_button("Criar Edital"):
+                if nome_c:
+                    supabase.table("editais_materias").insert({
+                        "concurso": nome_c, 
+                        "materia": "Geral", 
+                        "topicos": [],
+                        "cargo": cargo_c,
+                        "data_prova": data_c.strftime('%Y-%m-%d')
+                    }).execute()
+                    st.cache_data.clear()
+                    st.success(f"Edital {nome_c} criado!")
+                    st.rerun()
+
     if editais:
-        ed_sel = st.selectbox("Selecione o Edital", list(editais.keys()))
+        ed_sel = st.selectbox("Selecione o Edital para Editar", list(editais.keys()))
+        st.info(f"📍 **Cargo:** {editais[ed_sel]['cargo']} | 📅 **Prova:** {editais[ed_sel]['data']}")
+        
         col1, col2 = st.columns([1, 2])
         with col1:
             nova_m = st.text_input("Nova Matéria")
             if st.button("Adicionar Matéria") and nova_m:
-                supabase.table("editais_materias").insert({"concurso": ed_sel, "materia": nova_m, "topicos": []}).execute()
+                supabase.table("editais_materias").insert({
+                    "concurso": ed_sel, 
+                    "materia": nova_m, 
+                    "topicos": [],
+                    "cargo": editais[ed_sel]['cargo'],
+                    "data_prova": datetime.datetime.strptime(editais[ed_sel]['data'], '%d/%m/%Y').strftime('%Y-%m-%d') if editais[ed_sel]['data'] != "A definir" else None
+                }).execute()
                 st.cache_data.clear()
                 st.rerun()
         with col2:
             for m, t in editais[ed_sel]["materias"].items():
-                with st.expander(f"📚 {m}"):
-                    txt = st.text_area(f"Importar Tópicos (;) para {m}", key=f"t_{m}")
-                    if st.button("Importar Lista", key=f"b_{m}"):
+                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
+                    txt = st.text_area(f"Importar Tópicos para {m}", value="; ".join(t), key=f"t_{m}")
+                    if st.button("Atualizar Lista", key=f"b_{m}"):
                         novos = [x.strip() for x in txt.replace("\n", ";").split(";") if x.strip()]
                         supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", ed_sel).eq("materia", m).execute()
                         st.cache_data.clear()
