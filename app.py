@@ -7,96 +7,64 @@ import plotly.graph_objects as go
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL ELITE (CSS) ---
+# --- 1. CONFIGURAÇÃO VISUAL ELITE ---
 st.set_page_config(page_title="SQUAD COMMANDER", page_icon="💀", layout="wide")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    /* RESET GERAL */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
         background-color: #0E0E0E;
     }
-    
-    /* REMOVER ESPAÇOS EM BRANCO DESNECESSÁRIOS */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 1rem !important;
-    }
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
     header {visibility: hidden;}
     
-    /* BOTÕES CUSTOMIZADOS */
     .stButton button {
-        background-color: #262626;
-        color: #E5E5E5;
-        border: 1px solid #404040;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        transition: all 0.2s ease;
-        width: 100%;
+        background-color: #262626; color: #E5E5E5; border: 1px solid #404040;
+        border-radius: 6px; font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease; width: 100%;
     }
     .stButton button:hover {
-        background-color: #DC2626; /* Vermelho Sangue */
-        border-color: #DC2626;
-        color: white;
-        transform: translateY(-1px);
+        background-color: #DC2626; border-color: #DC2626; color: white; transform: translateY(-1px);
     }
     
-    /* CARDS DE MÉTRICAS (KPIs) */
     div[data-testid="stMetric"] {
-        background-color: #1A1A1A;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #333;
+        background-color: #1A1A1A; padding: 15px; border-radius: 8px; border: 1px solid #333;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    div[data-testid="stMetricLabel"] { font-size: 0.8rem; color: #888; }
-    div[data-testid="stMetricValue"] { font-size: 1.5rem; color: #FFF; }
     
-    /* INPUTS MAIS COMPACTOS */
     .stTextInput input, .stSelectbox div[data-baseweb="select"], .stNumberInput input, .stDateInput input {
-        background-color: #171717 !important;
-        border: 1px solid #333 !important;
-        color: #EEE !important;
-        border-radius: 6px !important;
-        font-size: 0.9rem;
+        background-color: #171717 !important; border: 1px solid #333 !important;
+        color: #EEE !important; border-radius: 6px !important; font-size: 0.9rem;
     }
     
-    /* SIDEBAR */
-    [data-testid="stSidebar"] {
-        background-color: #050505;
-        border-right: 1px solid #222;
-    }
+    [data-testid="stSidebar"] { background-color: #050505; border-right: 1px solid #222; }
     
-    /* --- CARDS DO RADAR DE REVISÃO --- */
+    /* --- CARDS INTELIGENTES DE REVISÃO --- */
     .rev-card-container {
         background-color: #171717;
         border: 1px solid #2A2A2A;
         border-radius: 8px;
         padding: 12px;
         margin-bottom: 12px;
-        transition: transform 0.2s;
         position: relative;
-        overflow: hidden;
-    }
-    .rev-card-container:hover {
-        border-color: #444;
-        transform: translateY(-2px);
     }
     
-    /* Faixa colorida lateral indicando urgência */
-    .border-24h { border-left: 4px solid #EF4444; }
-    .border-07d { border-left: 4px solid #F59E0B; }
-    .border-15d { border-left: 4px solid #3B82F6; }
-    .border-30d { border-left: 4px solid #10B981; }
+    /* Cores baseadas no DESEMPENHO (Taxa de Acerto) */
+    .perf-bad { border-left: 4px solid #EF4444; }   /* Ruim < 60% */
+    .perf-med { border-left: 4px solid #F59E0B; }   /* Médio 60-80% */
+    .perf-good { border-left: 4px solid #10B981; }  /* Bom > 80% */
     
-    .rev-header { font-size: 0.95rem; font-weight: 700; color: #FFF; margin-bottom: 4px; }
-    .rev-body { font-size: 0.85rem; color: #A3A3A3; margin-bottom: 8px; line-height: 1.3; }
-    .rev-meta { font-size: 0.75rem; color: #555; display: flex; justify-content: space-between; align-items: center; }
-    .rev-tag { background: #222; padding: 2px 6px; border-radius: 4px; border: 1px solid #333; }
+    .rev-header { font-size: 0.95rem; font-weight: 700; color: #FFF; margin-bottom: 2px; }
+    .rev-body { font-size: 0.85rem; color: #A3A3A3; margin-bottom: 8px; }
+    
+    .rev-stats {
+        display: flex; justify-content: space-between; align-items: center;
+        background-color: #0A0A0A; padding: 4px 8px; border-radius: 4px;
+        font-size: 0.75rem; color: #888;
+    }
+    .badge-score { font-weight: bold; color: #FFF; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -152,15 +120,26 @@ def calcular_revisoes_pendentes(df):
 
     for _, row in df.iterrows():
         dias = (hoje - row['dt_temp']).days
-        # Lógica cumulativa: Se deve e não fez, aparece.
+        taxa = row['taxa'] if 'taxa' in row else 0
+        
+        # Objeto base da revisão
+        rev_item = {
+            "id": row['id'], "Matéria": row['materia'], "Assunto": row['assunto'],
+            "Data": row['dt_temp'].strftime('%d/%m'), "Dias": dias, "Taxa": taxa
+        }
+        
+        # Lógica Cronograma D1, D7, D15, D30
         if dias >= 1 and not row['rev_24h']:
-            pendencias.append({"id": row['id'], "Fase": "24h", "Matéria": row['materia'], "Assunto": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Dias": dias})
+            r = rev_item.copy(); r["Fase"] = "24h"; pendencias.append(r)
+            
         if dias >= 7 and not row['rev_07d']:
-            pendencias.append({"id": row['id'], "Fase": "07d", "Matéria": row['materia'], "Assunto": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Dias": dias})
+            r = rev_item.copy(); r["Fase"] = "07d"; pendencias.append(r)
+            
         if dias >= 15 and not row['rev_15d']:
-            pendencias.append({"id": row['id'], "Fase": "15d", "Matéria": row['materia'], "Assunto": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Dias": dias})
+            r = rev_item.copy(); r["Fase"] = "15d"; pendencias.append(r)
+            
         if dias >= 30 and not row['rev_30d']:
-            pendencias.append({"id": row['id'], "Fase": "30d", "Matéria": row['materia'], "Assunto": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Dias": dias})
+            r = rev_item.copy(); r["Fase"] = "30d"; pendencias.append(r)
             
     return pd.DataFrame(pendencias)
 
@@ -263,9 +242,11 @@ else:
             fig2.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=10,r=10,t=10,b=10), showlegend=False)
             g2.plotly_chart(fig2, use_container_width=True)
 
-    # --- RADAR DE REVISÃO (NOVO VISUAL) ---
+    # --- RADAR DE REVISÃO (COM PERFORMANCE) ---
     elif menu == "Revisões":
-        st.subheader("🔄 Radar de Revisão")
+        st.subheader("🔄 Radar de Performance")
+        st.caption("Critério: 24h (Fixação) ➔ 7d (Consolidação) ➔ 15d (Automação) ➔ 30d (Manutenção)")
+        
         df_rev = calcular_revisoes_pendentes(df)
         
         if len(df_rev) == 0:
@@ -273,7 +254,7 @@ else:
         else:
             cols = st.columns(4)
             fases = ["24h", "07d", "15d", "30d"]
-            labels = ["🔥 24h", "📅 7d", "🧠 15d", "💎 30d"]
+            labels = ["🔥 D1 (Fixação)", "📅 D7 (Consolidar)", "🧠 D15 (Automação)", "💎 D30 (Manter)"]
             
             for i, fase in enumerate(fases):
                 with cols[i]:
@@ -282,28 +263,31 @@ else:
                     if tasks.empty: st.caption("-")
                     else:
                         for _, row in tasks.iterrows():
-                            # Renderiza Visual do Card
-                            border_class = f"border-{fase}"
+                            # Define cor baseada na TAXA de acerto original
+                            score = row['Taxa']
+                            if score < 60: css_class = "perf-bad"     # Vermelho (Prioridade)
+                            elif score < 80: css_class = "perf-med"   # Amarelo
+                            else: css_class = "perf-good"             # Verde
+                            
                             st.markdown(f"""
-                            <div class="rev-card-container {border_class}">
+                            <div class="rev-card-container {css_class}">
                                 <div class="rev-header">{row['Matéria']}</div>
                                 <div class="rev-body">{row['Assunto']}</div>
-                                <div class="rev-meta">
-                                    <span class="rev-tag">{row['Data']}</span>
-                                    <span style="color: #EF4444;">+{row['Dias']}d</span>
+                                <div class="rev-stats">
+                                    <span>{row['Data']}</span>
+                                    <span class="badge-score">{score:.0f}% Acerto</span>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Botão Lógico
                             col_db = f"rev_{fase}"
                             if st.button("Concluir", key=f"done_{row['id']}_{fase}"):
                                 try:
                                     supabase.table("registros_estudos").update({col_db: True}).eq("id", row['id']).execute()
                                     st.toast("Feito!"); time.sleep(0.5); st.rerun()
-                                except: st.error("Erro: Crie as colunas rev_24h, etc no banco.")
+                                except: st.error("Erro no Banco.")
 
-    # --- REGISTRO (COMPACTO) ---
+    # --- REGISTRO ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
@@ -370,7 +354,6 @@ else:
             df['data_estudo'] = pd.to_datetime(df['data_estudo']).dt.date
             if 'tempo' not in df.columns: df['tempo'] = 0
             
-            # Tabela Editável
             edited = st.data_editor(df[['id','data_estudo','materia','assunto','acertos','total','tempo']], 
                            column_config={"id":None, "data_estudo": st.column_config.DateColumn("Data"), "tempo": st.column_config.NumberColumn("Min")},
                            use_container_width=True, hide_index=True, key="h_edit")
@@ -382,7 +365,6 @@ else:
                     except: pass
                 st.toast("Atualizado!"); time.sleep(0.5); st.rerun()
             
-            # Exclusão
             opts = {f"{r['data_estudo'].strftime('%d/%m')} - {r['materia']}": r['id'] for _, r in df.iterrows()}
             sel = c_del.selectbox("Apagar", ["..."]+list(opts.keys()), label_visibility="collapsed")
             if sel != "..." and c_del.button("🗑️ APAGAR"):
