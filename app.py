@@ -151,11 +151,21 @@ if st.session_state.missao_ativa is None:
                 
                 if st.form_submit_button("CRIAR MISSÃO", use_container_width=True):
                     if nm:
-                        supabase.table("editais_materias").insert({
-                            "concurso": nm, "cargo": cg, 
-                            "data_prova": dt.strftime('%Y-%m-%d'),
-                            "materia": "Geral", "topicos": [], "usuario": "Commander"
-                        }).execute()
+                        # CORREÇÃO: Tenta inserir com usuário, se falhar, tenta sem (fallback)
+                        try:
+                            supabase.table("editais_materias").insert({
+                                "concurso": nm, "cargo": cg, 
+                                "data_prova": dt.strftime('%Y-%m-%d'),
+                                "materia": "Geral", "topicos": [], "usuario": "Commander"
+                            }).execute()
+                        except:
+                            # Se der erro (coluna usuario não existe), tenta sem ela
+                             supabase.table("editais_materias").insert({
+                                "concurso": nm, "cargo": cg, 
+                                "data_prova": dt.strftime('%Y-%m-%d'),
+                                "materia": "Geral", "topicos": []
+                            }).execute()
+                            
                         st.toast(f"Missão {nm} criada!")
                         time.sleep(1)
                         st.rerun()
@@ -200,14 +210,12 @@ else:
             styles={"nav-link-selected": {"background-color": "#FF4B4B"}}
         )
 
-    # --- DASHBOARD REORGANIZADO (AQUI ESTÁ A CORREÇÃO) ---
     if menu == "Dashboard":
         st.title("📊 Painel Tático")
         
         if df.empty:
             st.info("Aguardando dados de combate. Inicie os registros.")
         else:
-            # 1. CARDS (LINHA DE CIMA)
             total = int(df['total'].sum())
             acertos = int(df['acertos'].sum())
             erros = total - acertos
@@ -220,7 +228,6 @@ else:
             
             st.markdown("---")
             
-            # 2. GRÁFICOS (GRID 2 COLUNAS)
             g1, g2 = st.columns([2, 1], gap="medium")
             
             with g1:
@@ -232,23 +239,21 @@ else:
                               color_discrete_sequence=['#333333', '#FF4B4B'],
                               labels={'value': 'Qtd', 'variable': 'Métrica'})
                 
-                # Ajuste Fino do Layout
                 fig_area.update_layout(
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
                     margin=dict(l=20, r=20, t=20, b=20),
-                    height=350, # Altura travada
+                    height=350,
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 st.plotly_chart(fig_area, use_container_width=True)
                 
             with g2:
                 st.markdown("#### 🎯 Precisão Visual")
-                # Gráfico de Rosca (Donut)
                 fig_pie = go.Figure(data=[go.Pie(
                     labels=['Acertos', 'Erros'], 
                     values=[acertos, erros],
-                    hole=.6, # Faz o buraco do donut
+                    hole=.6, 
                     marker=dict(colors=['#FF4B4B', '#333333']),
                     textinfo='percent'
                 )])
@@ -256,7 +261,7 @@ else:
                 fig_pie.update_layout(
                     showlegend=True,
                     margin=dict(l=20, r=20, t=20, b=20),
-                    height=350, # Mesma altura do outro para alinhar
+                    height=350, 
                     paper_bgcolor="rgba(0,0,0,0)",
                     legend=dict(orientation="h", yanchor="bottom", y=-0.1)
                 )
@@ -284,13 +289,18 @@ else:
                 total = c4.number_input("Total", min_value=1, step=1)
                 
                 if st.button("SALVAR REGISTRO", type="primary", use_container_width=True):
-                    supabase.table("registros_estudos").insert({
-                        "concurso": missao, "materia": mat, "assunto": assunto,
-                        "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos,
-                        "total": total, "taxa": (acertos/total)*100, "usuario": "Commander"
-                    }).execute()
-                    st.toast("Salvo!", icon="🔥")
-                    time.sleep(0.5)
+                    # CORREÇÃO PRINCIPAL: Removemos o campo 'usuario' daqui
+                    # pois a tabela registros_estudos provavelmente não tem essa coluna.
+                    try:
+                        supabase.table("registros_estudos").insert({
+                            "concurso": missao, "materia": mat, "assunto": assunto,
+                            "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos,
+                            "total": total, "taxa": (acertos/total)*100
+                        }).execute()
+                        st.toast("Salvo!", icon="🔥")
+                        time.sleep(0.5)
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
 
     elif menu == "Configurar":
         st.title("⚙️ Configuração")
@@ -301,11 +311,18 @@ else:
             with st.form("add_mat"):
                 nm = st.text_input("Nome")
                 if st.form_submit_button("ADICIONAR"):
-                    supabase.table("editais_materias").insert({
-                        "concurso": missao, "materia": nm, "topicos": [],
-                        "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso'),
-                        "usuario": "Commander"
-                    }).execute()
+                    # Tenta com usuario, fallback sem
+                    try:
+                        supabase.table("editais_materias").insert({
+                            "concurso": missao, "materia": nm, "topicos": [],
+                            "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso'),
+                            "usuario": "Commander"
+                        }).execute()
+                    except:
+                        supabase.table("editais_materias").insert({
+                            "concurso": missao, "materia": nm, "topicos": [],
+                            "cargo": dados.get('cargo'), "data_prova": dados.get('data_iso')
+                        }).execute()
                     st.rerun()
         
         with c2:
