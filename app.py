@@ -131,7 +131,7 @@ if selected == "Dashboard":
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # 4. MAPA DA VERGONHA (FILTRADO < 80%)
+        # 4. MAPA DA VERGONHA (COM CONTAGEM DE ERROS)
         st.markdown("---")
         st.subheader("🗺️ Mapa da Vergonha")
         
@@ -140,6 +140,9 @@ if selected == "Dashboard":
             df_resumo = df_calc.groupby(["Materia", "Assunto"])[["Acertos", "Total"]].sum().reset_index()
             df_resumo["Aproveitamento"] = (df_resumo["Acertos"] / df_resumo["Total"] * 100)
             
+            # --- NOVO: CÁLCULO DE ERROS ---
+            df_resumo["Erros"] = df_resumo["Total"] - df_resumo["Acertos"]
+
             # FILTRO: Só mostra quem está abaixo de 80%
             df_piores = df_resumo[df_resumo["Aproveitamento"] < 80].copy()
             
@@ -147,19 +150,19 @@ if selected == "Dashboard":
             df_piores = df_piores.sort_values(by="Aproveitamento", ascending=True)
             
             if not df_piores.empty:
-                # Mensagem de "Puxão de Orelha"
                 st.error("🚨 ALERTA: Estes assuntos vão te reprovar. TOMA RUMO e estuda isso hoje!")
                 
-                # Formatação
                 df_piores["Aproveitamento"] = df_piores["Aproveitamento"].apply(lambda x: f"{x:.1f}%")
                 
+                # Exibe a coluna nova "Erros"
                 st.dataframe(
-                    df_piores[["Materia", "Assunto", "Total", "Aproveitamento"]].rename(columns={"Total": "Qtd. Feitas"}),
+                    df_piores[["Materia", "Assunto", "Total", "Erros", "Aproveitamento"]].rename(
+                        columns={"Total": "Qtd. Feitas", "Erros": "Qtd. Erros"}
+                    ),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
-                # Se tudo estiver > 80%
                 st.success("🏆 Nada no Mapa da Vergonha! Todos os teus assuntos estão acima de 80%. Mantém o foco!")
 
         except Exception as e:
