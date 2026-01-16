@@ -13,8 +13,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "13.3.0"
-        STATUS = "Blindagem de Constraints"
+        VERSION = "13.2.1-fix"
+        STATUS = "Correção de API"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -26,7 +26,8 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- FUNÇÕES DE DADOS (BLINDAGEM BR) ---
+# --- FUNÇÕES DE DADOS ---
+
 @st.cache_data(ttl=300)
 def db_get_estudos(usuario=None):
     query = supabase.table("registros_estudos").select("*")
@@ -47,17 +48,28 @@ def db_get_editais():
         conc = row['concurso']
         if conc not in editais:
             dt_raw = row['data_prova']
-            dt_br = datetime.datetime.strptime(dt_raw, '%Y-%m-%d').strftime('%d/%m/%Y') if dt_raw else "A definir"
+            # Tratamento de data nula ou vazia
+            dt_br = "A definir"
+            if dt_raw:
+                try:
+                    dt_br = datetime.datetime.strptime(dt_raw, '%Y-%m-%d').strftime('%d/%m/%Y')
+                except:
+                    dt_br = "Erro na data"
+            
             editais[conc] = {
-                "cargo": row['cargo'] or "Não informado", 
+                "cargo": row.get('cargo') or "Não informado", 
                 "data_br": dt_br, 
                 "data_iso": dt_raw, 
                 "materias": {}
             }
-        editais[conc]["materias"][row['materia']] = row['topicos']
+        
+        materia = row.get('materia')
+        if materia:
+            editais[conc]["materias"][materia] = row.get('topicos') or []
+            
     return editais
 
-# --- LOGIN ---
+# --- ACESSO ---
 if 'usuario_logado' not in st.session_state:
     res_u = supabase.table("perfil_usuarios").select("*").execute()
     users = {row['nome']: row for row in res_u.data}
@@ -71,7 +83,7 @@ if 'usuario_logado' not in st.session_state:
                 if p == users[u]['pin']:
                     st.session_state.usuario_logado = u
                     st.rerun()
-                else: st.error("Acesso Negado")
+                else: st.error("Incorreto")
     st.stop()
 
 # --- AMBIENTE OPERACIONAL ---
@@ -88,7 +100,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.caption(f"🚀 Versão: {version.VERSION}")
-    if st.button("🔄 Sincronizar Tudo"):
+    if st.button("🔄 Sincronizar"):
         st.cache_data.clear()
         st.rerun()
     if st.button("Sair"):
@@ -119,54 +131,78 @@ elif selected == "Novo Registro":
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
         with st.form("reg"):
             dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
-            ass = st.selectbox("Tópico", editais[conc]["materias"][mat] or ["Geral"])
+            # Garante que tópicos seja uma lista
+            topicos_lista = editais[conc]["materias"].get(mat)
+            if not topicos_lista:
+                topicos_lista = ["Geral"]
+            
+            ass = st.selectbox("Tópico", topicos_lista)
             a = st.number_input("Acertos", 0)
             t = st.number_input("Total", 1)
             if st.form_submit_button("SALVAR"):
-                supabase.table("registros_estudos").insert({
-                    "data_estudo": dt.strftime('%Y-%m-%d'), "usuario": usuario_atual,
-                    "concurso": conc, "materia": mat, "assunto": ass, "acertos": a, "total": t, "taxa": (a/t*100)
-                }).execute()
-                st.cache_data.clear()
-                st.success("Salvo!")
+                # Cálculo da taxa para evitar divisão por zero
+                taxa_calc = (a/t*100) if t > 0 else 0
+                
+                # Inserção com tratamento de erro
+                try:
+                    supabase.table("registros_estudos").insert({
+                        "data_estudo": dt.strftime('%Y-%m-%d'), 
+                        "usuario": usuario_atual,
+                        "concurso": conc, 
+                        "materia": mat, 
+                        "assunto": ass, 
+                        "acertos": int(a), 
+                        "total": int(t), 
+                        "taxa": float(taxa_calc)
+                    }).execute()
+                    st.cache_data.clear()
+                    st.success("Salvo!")
+                except Exception as e:
+                    st.error(f"Erro ao salvar no banco: {str(e)}")
 
-# 6. GESTÃO DE EDITAIS (CORREÇÃO CIRÚRGICA)
+# 6. GESTÃO DE EDITAIS
 elif selected == "Gestão Editais":
     st.title("📑 Gestão de Editais")
     t1, t2 = st.tabs(["➕ Novo Concurso", "📚 Adicionar Matéria"])
     with t1:
         with st.form("n"):
-            n = st.text_input("Nome do Concurso")
+            n = st.text_input("Concurso")
             c = st.text_input("Cargo")
             d = st.date_input("Data Prova", format="DD/MM/YYYY")
-            # AQUI ESTAVA O ERRO DA LINHA 148:
             if st.form_submit_button("Criar"):
-                supabase.table("editais_materias").insert({
-                    "concurso": n, 
-                    "cargo": c, 
-                    "data_prova": d.strftime('%Y-%m-%d'), 
-                    "materia": "Geral", # Adicionado (Obrigatório)
-                    "topicos": []       # Adicionado (Obrigatório)
-                }).execute()
-                st.cache_data.clear()
-                st.success("Concurso Criado!")
-                st.rerun()
+                try:
+                    supabase.table("editais_materias").insert({
+                        "concurso": n, 
+                        "cargo": c, 
+                        "data_prova": d.strftime('%Y-%m-%d'), 
+                        "materia": "Geral", 
+                        "topicos": []
+                    }).execute()
+                    st.cache_data.clear()
+                    st.success("Concurso criado!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao criar concurso: {str(e)}")
+                    
     with t2:
         if editais:
             sel = st.selectbox("Edital", list(editais.keys()))
             st.success(f"Cargo: {editais[sel]['cargo']} | Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Confirmar Adição"):
-                supabase.table("editais_materias").insert({
-                    "concurso": sel, 
-                    "materia": m_n, 
-                    "topicos": [], 
-                    "cargo": editais[sel]['cargo'], 
-                    "data_prova": editais[sel]['data_iso']
-                }).execute()
-                st.cache_data.clear()
-                st.success("Matéria adicionada!")
-                st.rerun()
+                try:
+                    supabase.table("editais_materias").insert({
+                        "concurso": sel, 
+                        "materia": m_n, 
+                        "topicos": [], 
+                        "cargo": editais[sel]['cargo'], 
+                        "data_prova": editais[sel]['data_iso']
+                    }).execute()
+                    st.cache_data.clear()
+                    st.success("Matéria adicionada!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao adicionar matéria: {str(e)}")
 
 # 7. HISTÓRICO
 elif selected == "Histórico":
@@ -175,10 +211,14 @@ elif selected == "Histórico":
         st.dataframe(df_meu[['Data', 'concurso', 'materia', 'assunto', 'acertos', 'total']], 
                      use_container_width=True, hide_index=True)
 
-# 8. SISTEMA
+# 8. GESTÃO DE SISTEMA (SÓ FERNANDO)
 elif selected == "⚙️ Gestão de Sistema":
     st.title("⚙️ Sistema")
-    if st.button("📥 Gerar Backup"):
+    if st.button("📥 Gerar Snapshot (Backup)"):
         ed = supabase.table("editais_materias").select("*").execute().data
         reg = supabase.table("registros_estudos").select("*").execute().data
         st.download_button("Baixar JSON", json.dumps({"editais": ed, "registros": reg}), "backup.json")
+    if st.button("🎟️ Novo Token"):
+        tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        supabase.table("tokens_convite").insert({"codigo": tk}).execute()
+        st.code(tk)
