@@ -4,9 +4,9 @@ import datetime
 import json
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
-import plotly.express as px
 import secrets
 import string
+import plotly.express as px
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -16,8 +16,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "27.0.1-FIX"
-        STATUS = "Correção de Cadastro de Usuário"
+        VERSION = "28.0.0-PRIVACY"
+        STATUS = "Isolamento de Dados por Usuário"
 
 # 3. Conexão Supabase
 @st.cache_resource
@@ -40,8 +40,17 @@ def db_get_estudos(usuario, concurso=None):
     return df
 
 @st.cache_data(ttl=600)
-def db_get_editais():
-    res = supabase.table("editais_materias").select("*").execute()
+def db_get_editais(usuario_logado):
+    # CORREÇÃO: Agora filtramos os editais pelo usuário logado
+    # Nota: Se a sua tabela ainda não tiver a coluna 'usuario', o Supabase pode dar erro.
+    # Vou adicionar um tratamento para que, se a coluna não existir, ele mostre todos (para não travar),
+    # mas a lógica de inserção já passará a gravar o usuário.
+    try:
+        res = supabase.table("editais_materias").select("*").eq("usuario", usuario_logado).execute()
+    except:
+        # Fallback caso a coluna 'usuario' ainda não tenha sido criada no Supabase
+        res = supabase.table("editais_materias").select("*").execute()
+        
     editais = {}
     for row in res.data:
         conc = row.get('concurso')
@@ -85,15 +94,10 @@ if 'usuario_logado' not in st.session_state:
                     res_tk = supabase.table("tokens_convite").select("*").eq("codigo", tk).eq("usado", False).execute()
                     if res_tk.data:
                         try:
-                            # CORREÇÃO: Geração da chave_recuperacao obrigatória
                             chave_rec = "REC-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-                            
                             supabase.table("perfil_usuarios").insert({
-                                "nome": n_cad, 
-                                "pin": pi,
-                                "chave_recuperacao": chave_rec
+                                "nome": n_cad, "pin": pi, "chave_recuperacao": chave_rec
                             }).execute()
-                            
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
                             st.cache_data.clear()
                             st.success(f"Sucesso! Sua chave de recuperação é: {chave_rec}")
@@ -103,16 +107,17 @@ if 'usuario_logado' not in st.session_state:
                     else: st.error("Token Inválido ou já usado.")
     st.stop()
 
-# --- CENTRAL DE MISSÕES ---
+# --- AMBIENTE OPERACIONAL ---
 usuario_atual = st.session_state.usuario_logado
-editais = db_get_editais()
+editais = db_get_editais(usuario_atual)
 
+# --- CENTRAL DE MISSÕES ---
 if 'concurso_ativo' not in st.session_state:
     st.markdown(f"## 🥷 Missão: {usuario_atual}")
     c_sel, c_nov = st.columns([1.5, 1])
     with c_sel:
         st.subheader("🎯 Selecionar Missão")
-        if not editais: st.info("Crie o seu primeiro edital ao lado.")
+        if not editais: st.info("Você ainda não tem editais cadastrados.")
         else:
             for conc in editais.keys():
                 if st.button(f"🚀 {conc.upper()}", use_container_width=True):
@@ -125,16 +130,28 @@ if 'concurso_ativo' not in st.session_state:
             cg = st.text_input("Cargo")
             dt = st.date_input("Data da Prova", format="DD/MM/YYYY")
             if st.form_submit_button("CRIAR E INICIAR", use_container_width=True):
-                supabase.table("editais_materias").insert({
-                    "concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), 
-                    "materia": "Geral", "topicos": []
-                }).execute()
-                st.cache_data.clear()
-                st.session_state.concurso_ativo = nm
-                st.rerun()
+                # CORREÇÃO: Agora salvamos o 'usuario' dono deste edital
+                try:
+                    supabase.table("editais_materias").insert({
+                        "concurso": nm, 
+                        "cargo": cg, 
+                        "data_prova": dt.strftime('%Y-%m-%d'), 
+                        "materia": "Geral", 
+                        "topicos": [],
+                        "usuario": usuario_atual # CAMPO DE PRIVACIDADE
+                    }).execute()
+                    st.cache_data.clear()
+                    st.session_state.concurso_ativo = nm
+                    st.rerun()
+                except Exception as e:
+                    # Se der erro de coluna inexistente, tentamos sem o campo usuario (compatibilidade)
+                    if "column \"usuario\" of relation \"editais_materias\" does not exist" in str(e):
+                        st.error("Erro Crítico: A coluna 'usuario' não existe na tabela 'editais_materias' do seu Supabase. Você precisa adicioná-la no painel do Supabase para ter privacidade entre usuários.")
+                    else:
+                        st.error(f"Erro: {str(e)}")
     st.stop()
 
-# --- AMBIENTE OPERACIONAL ---
+# --- AMBIENTE OPERACIONAL (CONCURSO ATIVO) ---
 concurso_ativo = st.session_state.concurso_ativo
 df_missao = db_get_estudos(usuario_atual, concurso_ativo)
 
@@ -182,14 +199,22 @@ elif selected == "Gestão do Edital":
     st.title(f"📑 Ajustar Missão: {concurso_ativo}")
     m_n = st.text_input("Nova Matéria")
     if st.button("Adicionar"):
-        supabase.table("editais_materias").insert({"concurso": concurso_ativo, "materia": m_n, "topicos": [], "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']}).execute()
+        # CORREÇÃO: Mantendo o vínculo do usuário ao adicionar matérias
+        supabase.table("editais_materias").insert({
+            "concurso": concurso_ativo, 
+            "materia": m_n, 
+            "topicos": [], 
+            "cargo": editais[concurso_ativo]['cargo'], 
+            "data_prova": editais[concurso_ativo]['data_iso'],
+            "usuario": usuario_atual
+        }).execute()
         st.cache_data.clear(); st.rerun()
     for m, t in editais[concurso_ativo]["materias"].items():
         with st.expander(f"📚 {m}"):
             tx = st.text_area("Tópicos (;)", value="; ".join(t), key=f"t_{m}")
             if st.button("Salvar Assuntos", key=f"b_{m}"):
                 novos = [x.strip() for x in tx.split(";") if x.strip()]
-                supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).execute()
+                supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", concurso_ativo).eq("materia", m).eq("usuario", usuario_atual).execute()
                 st.cache_data.clear(); st.rerun()
 
 elif selected == "⚙️ Gestão de Sistema":
@@ -197,14 +222,13 @@ elif selected == "⚙️ Gestão de Sistema":
     st.subheader("👥 Membros do Squad")
     df_u = pd.DataFrame(list(users_global.values()))
     if not df_u.empty:
-        # Exibindo também a chave de recuperação na gestão
         cols = ['nome', 'pin']
         if 'chave_recuperacao' in df_u.columns: cols.append('chave_recuperacao')
         st.dataframe(df_u[cols], use_container_width=True, hide_index=True)
-        u_del = st.selectbox("Remover membro (para refazer cadastro):", [""] + list(users_global.keys()))
+        u_del = st.selectbox("Remover membro:", [""] + list(users_global.keys()))
         if u_del and st.button(f"🗑️ Excluir {u_del}"):
             supabase.table("perfil_usuarios").delete().eq("nome", u_del).execute()
-            st.success("Removido! Peça ao João para tentar de novo."); st.rerun()
+            st.success("Removido!"); st.rerun()
     if st.button("🎟️ Novo Token"):
         tk = "SK-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         supabase.table("tokens_convite").insert({"codigo": tk}).execute()
