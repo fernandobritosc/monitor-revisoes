@@ -9,6 +9,7 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Faca na Caveira - Concursos", page_icon="💀", layout="wide")
 
 DB_FILE = "estudos_data.csv"
+META_QUESTOES = 2000  # <--- DEFINE AQUI A TUA META DE QUESTÕES
 
 # --- FUNÇÕES ---
 def carregar_dados():
@@ -35,11 +36,9 @@ if 'df_dados' not in st.session_state:
 
 df = st.session_state.df_dados
 
-# --- BARRA LATERAL (AJUSTE FINO DE VISUAL) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
-    
-    # 1. TOPO: LOGO E TÍTULO
-    # Ajustei as colunas: A primeira fica mais justa para a imagem
+    st.markdown("<br>", unsafe_allow_html=True)
     c_logo, c_text = st.columns([1, 2])
     
     with c_logo:
@@ -50,7 +49,6 @@ with st.sidebar:
             st.image("https://cdn-icons-png.flaticon.com/512/9203/9203029.png", width=70)
 
     with c_text:
-        # AQUI ESTÁ O TRUQUE: Adicionei 'padding-top' para descer o texto e alinhar com o meio da caveira
         st.markdown("""
             <div style="padding-top: 10px;">
                 <h3 style='margin: 0; padding: 0; font-size: 20px;'><b>Faca na Caveira</b></h3>
@@ -58,31 +56,26 @@ with st.sidebar:
             </div>
             """, unsafe_allow_html=True)
     
-    # Removi os <br> gigantes que estavam aqui. O menu vai subir!
-    
-    # 2. MEIO: NAVEGAÇÃO
     selected = option_menu(
-        menu_title="Navegação", # Título menorzinho
+        menu_title="Navegação",
         options=["Dashboard", "Novo Registro", "Histórico"], 
         icons=["bar-chart-line-fill", "plus-circle-fill", "table"], 
         menu_icon="compass", 
         default_index=0,
         styles={
-            "container": {"padding": "0!important", "background-color": "transparent", "margin-top": "20px"}, # margin-top controla a distância do logo
+            "container": {"padding": "0!important", "background-color": "transparent", "margin-top": "20px"},
             "icon": {"color": "#00E676", "font-size": "18px"}, 
             "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#262730"},
             "nav-link-selected": {"background-color": "#00C853"}, 
-            "menu-title": {"color": "#6c757d", "font-size": "12px", "font-weight": "bold", "margin-bottom": "5px", "text-transform": "uppercase"}
+            "menu-title": {"color": "#6c757d", "font-size": "12px", "font-weight": "bold", "margin-bottom": "5px"}
         }
     )
     
-    # 3. RODAPÉ: PERFIL
     st.markdown("---")
     col_avatar, col_user = st.columns([1, 3])
     with col_avatar:
         st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=40)
     with col_user:
-        # Ajuste vertical do nome também
         st.markdown("""
             <div style="padding-top: 5px;">
                 <b style="font-size: 14px;">Fernando</b><br>
@@ -90,7 +83,7 @@ with st.sidebar:
             </div>
         """, unsafe_allow_html=True)
 
-# --- CONTEÚDO DAS PÁGINAS ---
+# --- CONTEÚDO ---
 
 # === DASHBOARD ===
 if selected == "Dashboard":
@@ -107,6 +100,13 @@ if selected == "Dashboard":
         hoje = pd.Timestamp.now().normalize()
         pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje].shape[0]
 
+        # 1. BARRA DE META (NOVIDADE)
+        progresso = min(total_q / META_QUESTOES, 1.0)
+        st.caption(f"🚀 Meta: {int(total_q)} / {META_QUESTOES} Questões")
+        st.progress(progresso, text=f"{progresso*100:.1f}% Concluído")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 2. KPIs
         col1, col2, col3 = st.columns(3)
         col1.metric("Questões Feitas", int(total_q), border=True)
         col2.metric("Precisão Geral", f"{media_g:.1f}%", border=True)
@@ -114,6 +114,7 @@ if selected == "Dashboard":
 
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # 3. GRÁFICOS
         g1, g2 = st.columns(2)
         with g1:
             st.subheader("Desempenho por Matéria")
@@ -130,6 +131,26 @@ if selected == "Dashboard":
             fig2.update_xaxes(tickformat="%d/%m", dtick="D1")
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
+
+        # 4. TABELA DE PONTOS FRACOS (NOVIDADE)
+        st.markdown("---")
+        st.subheader("⚠️ Atenção: Pontos Fracos (Top 5 Piores Assuntos)")
+        
+        # Agrupa por Assunto, calcula média, filtra quem tem pelo menos 5 questões feitas
+        df_assuntos = df_calc.groupby(["Materia", "Assunto"]).apply(
+            lambda x: pd.Series({
+                "Qtd": x['Total'].sum(), 
+                "Media": (x['Acertos'].sum() / x['Total'].sum() * 100)
+            })
+        ).reset_index()
+        
+        # Ordena pelos piores e pega o top 5
+        df_piores = df_assuntos[df_assuntos['Qtd'] > 0].sort_values(by="Media", ascending=True).head(5)
+        
+        # Formata para exibir bonito
+        df_piores['Media'] = df_piores['Media'].apply(lambda x: f"{x:.1f}%")
+        st.table(df_piores.set_index('Assunto')[['Materia', 'Qtd', 'Media']])
+
     else:
         st.info("Sistema pronto. Comece pelo menu 'Novo Registro'.")
 
