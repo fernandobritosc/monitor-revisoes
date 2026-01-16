@@ -12,9 +12,9 @@ DB_FILE = "estudos_data.csv"
 def carregar_dados():
     if os.path.exists(DB_FILE):
         try:
-            # Lemos tudo como string primeiro para evitar que o Python mude as datas
+            # Lemos tudo como string para garantir integridade
             df = pd.read_csv(DB_FILE, sep=';', dtype=str)
-            # Convertemos para data real apenas para ordenar internamente
+            # Criamos coluna oculta apenas para ordenação
             df['Data_Ordenacao'] = pd.to_datetime(df['Proxima_Revisao'], dayfirst=True)
             return df
         except:
@@ -22,7 +22,6 @@ def carregar_dados():
     return pd.DataFrame(columns=["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"])
 
 def salvar_dados(dataframe):
-    # Removemos a coluna de ordenação antes de salvar no CSV/Excel
     if 'Data_Ordenacao' in dataframe.columns:
         df_save = dataframe.drop(columns=['Data_Ordenacao'])
     else:
@@ -44,10 +43,14 @@ df = carregar_dados()
 with st.sidebar:
     st.header("📥 Novo Registro")
     with st.form("form_estudo", clear_on_submit=True):
-        # Calendário
-        data_input = st.date_input("Data do Estudo", datetime.date.today())
-        # Confirmação visual da data para o usuário
-        st.caption(f"Data selecionada: {data_input.strftime('%d/%m/%Y')}")
+        
+        # --- AQUI ESTÁ A CORREÇÃO DA DATA ---
+        # O parâmetro format="DD/MM/YYYY" força o visual brasileiro
+        data_input = st.date_input(
+            "Data do Estudo", 
+            datetime.date.today(), 
+            format="DD/MM/YYYY"
+        )
         
         materia = st.text_input("Matéria")
         assunto = st.text_input("Assunto")
@@ -83,29 +86,28 @@ with st.sidebar:
         if not df.empty:
             df = df.drop(df.index[-1])
             salvar_dados(df)
-            st.warning("Último registro removido!")
+            st.warning("Último registro apagado!")
             st.rerun()
 
 # --- PAINEL PRINCIPAL ---
 st.subheader("📋 Histórico de Estudos")
 
 if not df.empty:
-    # Ordenação pela data de revisão (mais urgente primeiro)
-    # Criamos a coluna de ordenação temporária se ela não existir
+    # Ordenação
     df['Data_Ordenacao'] = pd.to_datetime(df['Proxima_Revisao'], dayfirst=True)
     df_view = df.sort_values(by="Data_Ordenacao", ascending=True)
     
-    # Exibir apenas as colunas certas
+    # Exibir colunas limpas
     cols_display = ["Data_Estudo", "Materia", "Assunto", "Acertos", "Total", "Taxa", "Proxima_Revisao"]
     st.dataframe(df_view[cols_display], use_container_width=True, hide_index=True)
     
-    # Backup
+    # Botão Excel
     csv_excel = df_view[cols_display].to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     st.download_button(
         label="📥 Baixar para Excel",
         data=csv_excel,
-        file_name=f"meus_estudos_{datetime.date.today().strftime('%d_%m_%Y')}.csv",
+        file_name=f"meus_estudos.csv",
         mime="text/csv",
     )
 else:
-    st.info("Ainda não há registros.")
+    st.info("Comece a registrar seus estudos na barra lateral.")
