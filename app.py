@@ -35,44 +35,44 @@ if 'df_dados' not in st.session_state:
 
 df = st.session_state.df_dados
 
-# --- BARRA LATERAL (PERSONALIZADA) ---
+# --- BARRA LATERAL (AJUSTE FINO DE VISUAL) ---
 with st.sidebar:
-    # 1. TOPO: LOGO E TÍTULO NOVO
-    st.markdown("<br>", unsafe_allow_html=True)
     
-    # Ajustei as colunas para a nova imagem
-    c_logo, c_text = st.columns([1.3, 2.7])
+    # 1. TOPO: LOGO E TÍTULO
+    # Ajustei as colunas: A primeira fica mais justa para a imagem
+    c_logo, c_text = st.columns([1, 2])
     
     with c_logo:
-        # AQUI ESTÁ A ATUALIZAÇÃO DO NOME DO ARQUIVO
         try:
-            st.image("2498586-caveira-com-facas-gratis-vetor.jpg", width=85)
+            st.image("2498586-caveira-com-facas-gratis-vetor.jpg", width=80)
         except:
-            st.warning("Imagem não encontrada.")
+            st.warning("Imagem?")
             st.image("https://cdn-icons-png.flaticon.com/512/9203/9203029.png", width=70)
 
     with c_text:
-        # Título Personalizado
+        # AQUI ESTÁ O TRUQUE: Adicionei 'padding-top' para descer o texto e alinhar com o meio da caveira
         st.markdown("""
-            <h3 style='margin-bottom: 0px;'><b>Faca na Caveira</b></h3>
-            <span style='color: #00E676; font-size: 14px; font-weight: bold;'>Concursos</span>
+            <div style="padding-top: 10px;">
+                <h3 style='margin: 0; padding: 0; font-size: 20px;'><b>Faca na Caveira</b></h3>
+                <span style='color: #00E676; font-size: 14px; font-weight: bold; display: block; margin-top: -3px;'>Concursos</span>
+            </div>
             """, unsafe_allow_html=True)
     
-    st.markdown("<br><br>", unsafe_allow_html=True)
-
+    # Removi os <br> gigantes que estavam aqui. O menu vai subir!
+    
     # 2. MEIO: NAVEGAÇÃO
     selected = option_menu(
-        menu_title="Navegação",
+        menu_title="Navegação", # Título menorzinho
         options=["Dashboard", "Novo Registro", "Histórico"], 
         icons=["bar-chart-line-fill", "plus-circle-fill", "table"], 
         menu_icon="compass", 
         default_index=0,
         styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
+            "container": {"padding": "0!important", "background-color": "transparent", "margin-top": "20px"}, # margin-top controla a distância do logo
             "icon": {"color": "#00E676", "font-size": "18px"}, 
             "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#262730"},
             "nav-link-selected": {"background-color": "#00C853"}, 
-            "menu-title": {"color": "#6c757d", "font-size": "14px", "font-weight": "bold", "margin-bottom": "10px"}
+            "menu-title": {"color": "#6c757d", "font-size": "12px", "font-weight": "bold", "margin-bottom": "5px", "text-transform": "uppercase"}
         }
     )
     
@@ -80,10 +80,15 @@ with st.sidebar:
     st.markdown("---")
     col_avatar, col_user = st.columns([1, 3])
     with col_avatar:
-        st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=45)
+        st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=40)
     with col_user:
-        st.markdown("**Fernando**")
-        st.caption("Rumo à Aprovação 🎯")
+        # Ajuste vertical do nome também
+        st.markdown("""
+            <div style="padding-top: 5px;">
+                <b style="font-size: 14px;">Fernando</b><br>
+                <span style="font-size: 11px; color: gray;">Rumo à Aprovação</span>
+            </div>
+        """, unsafe_allow_html=True)
 
 # --- CONTEÚDO DAS PÁGINAS ---
 
