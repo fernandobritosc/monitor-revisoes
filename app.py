@@ -9,7 +9,7 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Faca na Caveira - Concursos", page_icon="💀", layout="wide")
 
 DB_FILE = "estudos_data.csv"
-META_QUESTOES = 2000  # <--- DEFINE AQUI A TUA META DE QUESTÕES
+META_QUESTOES = 2000  # <--- TUA META
 
 # --- FUNÇÕES ---
 def carregar_dados():
@@ -38,7 +38,7 @@ df = st.session_state.df_dados
 
 # --- BARRA LATERAL ---
 with st.sidebar:
-    st.markdown("<br>", unsafe_allow_html=True)
+    # Topo Alinhado
     c_logo, c_text = st.columns([1, 2])
     
     with c_logo:
@@ -91,6 +91,7 @@ if selected == "Dashboard":
     
     if not df.empty:
         df_calc = df.copy()
+        # Conversão de tipos blindada
         df_calc['Acertos'] = pd.to_numeric(df_calc['Acertos'], errors='coerce').fillna(0)
         df_calc['Total'] = pd.to_numeric(df_calc['Total'], errors='coerce').fillna(1)
         df_calc['Data_Ordenacao'] = pd.to_datetime(df_calc['Proxima_Revisao'], dayfirst=True, errors='coerce')
@@ -100,7 +101,7 @@ if selected == "Dashboard":
         hoje = pd.Timestamp.now().normalize()
         pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje].shape[0]
 
-        # 1. BARRA DE META (NOVIDADE)
+        # 1. BARRA DE META
         progresso = min(total_q / META_QUESTOES, 1.0)
         st.caption(f"🚀 Meta: {int(total_q)} / {META_QUESTOES} Questões")
         st.progress(progresso, text=f"{progresso*100:.1f}% Concluído")
@@ -132,24 +133,35 @@ if selected == "Dashboard":
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # 4. TABELA DE PONTOS FRACOS (NOVIDADE)
+        # 4. TABELA DE PONTOS FRACOS (CORRIGIDA)
         st.markdown("---")
-        st.subheader("⚠️ Atenção: Pontos Fracos (Top 5 Piores Assuntos)")
+        st.subheader("☠️ Mural da Vergonha (Onde precisamos melhorar)")
         
-        # Agrupa por Assunto, calcula média, filtra quem tem pelo menos 5 questões feitas
-        df_assuntos = df_calc.groupby(["Materia", "Assunto"]).apply(
-            lambda x: pd.Series({
-                "Qtd": x['Total'].sum(), 
-                "Media": (x['Acertos'].sum() / x['Total'].sum() * 100)
-            })
-        ).reset_index()
-        
-        # Ordena pelos piores e pega o top 5
-        df_piores = df_assuntos[df_assuntos['Qtd'] > 0].sort_values(by="Media", ascending=True).head(5)
-        
-        # Formata para exibir bonito
-        df_piores['Media'] = df_piores['Media'].apply(lambda x: f"{x:.1f}%")
-        st.table(df_piores.set_index('Assunto')[['Materia', 'Qtd', 'Media']])
+        # Agrupamento Simplificado e Robusto
+        try:
+            # Agrupa por Matéria e Assunto somando os valores
+            df_resumo = df_calc.groupby(["Materia", "Assunto"])[["Acertos", "Total"]].sum().reset_index()
+            
+            # Calcula a média
+            df_resumo["Aproveitamento"] = (df_resumo["Acertos"] / df_resumo["Total"] * 100)
+            
+            # Ordena: Menor nota primeiro (True)
+            df_piores = df_resumo.sort_values(by="Aproveitamento", ascending=True).head(5)
+            
+            if not df_piores.empty:
+                # Formatação visual
+                df_piores["Aproveitamento"] = df_piores["Aproveitamento"].apply(lambda x: f"{x:.1f}%")
+                
+                # Exibir tabela limpa
+                st.dataframe(
+                    df_piores[["Materia", "Assunto", "Total", "Aproveitamento"]].rename(columns={"Total": "Qtd. Questões"}),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Ainda não tens registos suficientes para gerar o Mural da Vergonha.")
+        except Exception as e:
+            st.error(f"Erro ao calcular mural: {e}")
 
     else:
         st.info("Sistema pronto. Comece pelo menu 'Novo Registro'.")
