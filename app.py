@@ -13,8 +13,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "13.2.1-fix"
-        STATUS = "Correção de API"
+        VERSION = "13.2.2-fix"
+        STATUS = "Tratamento de Duplicidade"
 
 # 1. Configurações de Página
 st.set_page_config(page_title="Squad Faca na Caveira", page_icon="💀", layout="wide")
@@ -48,7 +48,6 @@ def db_get_editais():
         conc = row['concurso']
         if conc not in editais:
             dt_raw = row['data_prova']
-            # Tratamento de data nula ou vazia
             dt_br = "A definir"
             if dt_raw:
                 try:
@@ -131,19 +130,12 @@ elif selected == "Novo Registro":
         mat = st.selectbox("Matéria", list(editais[conc]["materias"].keys()))
         with st.form("reg"):
             dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
-            # Garante que tópicos seja uma lista
-            topicos_lista = editais[conc]["materias"].get(mat)
-            if not topicos_lista:
-                topicos_lista = ["Geral"]
-            
+            topicos_lista = editais[conc]["materias"].get(mat) or ["Geral"]
             ass = st.selectbox("Tópico", topicos_lista)
             a = st.number_input("Acertos", 0)
             t = st.number_input("Total", 1)
             if st.form_submit_button("SALVAR"):
-                # Cálculo da taxa para evitar divisão por zero
                 taxa_calc = (a/t*100) if t > 0 else 0
-                
-                # Inserção com tratamento de erro
                 try:
                     supabase.table("registros_estudos").insert({
                         "data_estudo": dt.strftime('%Y-%m-%d'), 
@@ -158,7 +150,7 @@ elif selected == "Novo Registro":
                     st.cache_data.clear()
                     st.success("Salvo!")
                 except Exception as e:
-                    st.error(f"Erro ao salvar no banco: {str(e)}")
+                    st.error(f"Erro ao salvar: {str(e)}")
 
 # 6. GESTÃO DE EDITAIS
 elif selected == "Gestão Editais":
@@ -170,19 +162,22 @@ elif selected == "Gestão Editais":
             c = st.text_input("Cargo")
             d = st.date_input("Data Prova", format="DD/MM/YYYY")
             if st.form_submit_button("Criar"):
-                try:
-                    supabase.table("editais_materias").insert({
-                        "concurso": n, 
-                        "cargo": c, 
-                        "data_prova": d.strftime('%Y-%m-%d'), 
-                        "materia": "Geral", 
-                        "topicos": []
-                    }).execute()
-                    st.cache_data.clear()
-                    st.success("Concurso criado!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao criar concurso: {str(e)}")
+                if not n:
+                    st.error("O nome do concurso é obrigatório.")
+                else:
+                    try:
+                        supabase.table("editais_materias").insert({
+                            "concurso": n, "cargo": c, "data_prova": d.strftime('%Y-%m-%d'), 
+                            "materia": "Geral", "topicos": []
+                        }).execute()
+                        st.cache_data.clear()
+                        st.success("Concurso criado!")
+                        st.rerun()
+                    except Exception as e:
+                        if "23505" in str(e):
+                            st.warning(f"O concurso '{n}' já existe.")
+                        else:
+                            st.error(f"Erro: {str(e)}")
                     
     with t2:
         if editais:
@@ -190,19 +185,24 @@ elif selected == "Gestão Editais":
             st.success(f"Cargo: {editais[sel]['cargo']} | Prova: {editais[sel]['data_br']}")
             m_n = st.text_input("Nova Matéria")
             if st.button("Confirmar Adição"):
-                try:
-                    supabase.table("editais_materias").insert({
-                        "concurso": sel, 
-                        "materia": m_n, 
-                        "topicos": [], 
-                        "cargo": editais[sel]['cargo'], 
-                        "data_prova": editais[sel]['data_iso']
-                    }).execute()
-                    st.cache_data.clear()
-                    st.success("Matéria adicionada!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao adicionar matéria: {str(e)}")
+                if not m_n:
+                    st.error("Informe o nome da matéria.")
+                elif m_n in editais[sel]["materias"]:
+                    st.warning(f"A matéria '{m_n}' já está cadastrada para este concurso.")
+                else:
+                    try:
+                        supabase.table("editais_materias").insert({
+                            "concurso": sel, "materia": m_n, "topicos": [], 
+                            "cargo": editais[sel]['cargo'], "data_prova": editais[sel]['data_iso']
+                        }).execute()
+                        st.cache_data.clear()
+                        st.success("Matéria adicionada!")
+                        st.rerun()
+                    except Exception as e:
+                        if "23505" in str(e):
+                            st.warning(f"A matéria '{m_n}' já existe para este concurso.")
+                        else:
+                            st.error(f"Erro: {str(e)}")
 
 # 7. HISTÓRICO
 elif selected == "Histórico":
