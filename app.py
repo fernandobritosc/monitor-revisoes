@@ -170,26 +170,85 @@ if selected == "Dashboard":
             total_q = df_calc['Total'].sum()
             media_g = (df_calc['Acertos'].sum() / total_q * 100) if total_q > 0 else 0
             hoje = pd.Timestamp.now().normalize()
-            pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje].shape[0]
+            # Pendentes: filtra datas <= hoje
+            df_pendentes = df_calc[df_calc['Data_Ordenacao'] <= hoje]
+            qtd_pendentes = df_pendentes.shape[0]
+            
             streak_atual, recorde_hist = calcular_metricas_streak(df)
 
+            # Barra de Meta Global
             meta_local = META_QUESTOES if filtro_concurso == "Todos" else int(META_QUESTOES / 2)
             progresso = min(total_q / meta_local, 1.0)
-            st.caption(f"🚀 Meta ({filtro_concurso}): {int(total_q)} / {meta_local} Questões")
+            st.caption(f"🚀 Meta Geral ({filtro_concurso}): {int(total_q)} / {meta_local} Questões")
             st.progress(progresso, text=f"{progresso*100:.1f}%")
             st.markdown("<br>", unsafe_allow_html=True)
 
+            # KPIs
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Questões", int(total_q), border=True)
             c2.metric("Precisão", f"{media_g:.1f}%", border=True)
-            c3.metric("Revisões", pendentes, delta="Atenção" if pendentes > 0 else "Em dia", delta_color="inverse", border=True)
+            c3.metric("Revisões Hoje", qtd_pendentes, delta="Atenção" if qtd_pendentes > 0 else "Em dia", delta_color="inverse", border=True)
             if streak_atual > 0:
-                c4.metric("🔥 Streak Global", f"{streak_atual} dias", delta="Focado!", delta_color="normal", border=True)
+                c4.metric("🔥 Streak", f"{streak_atual} dias", delta="Focado!", delta_color="normal", border=True)
             else:
-                c4.metric("❄️ Streak Global", "0 dias", delta=f"Recorde: {recorde_hist}", delta_color="off", border=True)
+                c4.metric("❄️ Streak", "0 dias", delta=f"Recorde: {recorde_hist}", delta_color="off", border=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
+            # --- NOVO BLOCO: MISSÕES E COBERTURA ---
+            st.markdown("---")
+            t_missoes, t_cobertura = st.tabs(["📅 Missões (Revisão)", "🛡️ Cobertura do Edital"])
             
+            with t_missoes:
+                if qtd_pendentes > 0:
+                    st.error(f"Você tem {qtd_pendentes} revisões pendentes!")
+                    st.dataframe(
+                        df_pendentes[["Data_Estudo", "Concurso", "Materia", "Assunto", "Proxima_Revisao"]].sort_values("Proxima_Revisao"),
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.success("Nada para revisar hoje. Avance no conteúdo!")
+
+            with t_cobertura:
+                # Lógica de Cobertura de Edital
+                if not editais:
+                    st.info("Cadastre um edital para ver a cobertura.")
+                else:
+                    # Se selecionou um concurso no filtro, mostra só ele. Se "Todos", avisa.
+                    if filtro_concurso == "Todos":
+                        concurso_para_analise = st.selectbox("Selecione um Edital para ver o progresso:", list(editais.keys()))
+                    else:
+                        concurso_para_analise = filtro_concurso
+
+                    if concurso_para_analise in editais:
+                        dados_edital = editais[concurso_para_analise]
+                        materias_edital = dados_edital.get("materias", {})
+                        
+                        if not materias_edital:
+                            st.warning("Este edital não tem matérias cadastradas.")
+                        else:
+                            st.subheader(f"Progresso: {concurso_para_analise}")
+                            for mat, topicos_lista in materias_edital.items():
+                                total_topicos = len(topicos_lista)
+                                if total_topicos == 0:
+                                    continue
+                                
+                                # Conta quantos tópicos únicos desta matéria já foram estudados no registro
+                                # Filtra DF pelo concurso e matéria
+                                df_mat = df[ (df['Concurso'] == concurso_para_analise) & (df['Materia'] == mat) ]
+                                topicos_estudados = df_mat['Assunto'].unique()
+                                # Interseção para garantir que só conta tópicos que estão no edital
+                                estudados_validos = [t for t in topicos_estudados if t in topicos_lista]
+                                qtd_estudados = len(estudados_validos)
+                                
+                                perc = qtd_estudados / total_topicos
+                                
+                                st.write(f"**{mat}** ({qtd_estudados}/{total_topicos})")
+                                st.progress(perc, text=f"{perc*100:.1f}% Concluído")
+                    else:
+                        st.warning("Concurso não encontrado nos editais.")
+
+            st.markdown("---")
+            
+            # Gráficos
             g1, g2 = st.columns(2)
             with g1:
                 st.subheader("🕸️ Radar Tático")
@@ -219,7 +278,7 @@ if selected == "Dashboard":
                 fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig2, use_container_width=True)
 
-            st.markdown("---")
+            # Mapa da Vergonha
             st.subheader("🗺️ Mapa da Vergonha")
             try:
                 df_resumo = df_calc.groupby(["Materia", "Assunto"])[["Acertos", "Total"]].sum().reset_index()
@@ -262,7 +321,6 @@ elif selected == "Novo Registro":
         st.subheader("Relatório de Estudo")
         with st.form("form_estudo", clear_on_submit=True):
             c_data, c_vazio = st.columns([1, 2])
-            # AQUI: Garantindo que o input mostre DD/MM/YYYY
             data_input = c_data.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
             
             if topicos_possiveis:
@@ -303,13 +361,11 @@ elif selected == "Novo Registro":
 elif selected == "Gestão de Editais":
     st.title("📑 Edital Verticalizado")
     
-    # 1. CRIAR CONCURSO
     with st.expander("➕ Criar Novo Concurso", expanded=not bool(editais)):
         with st.form("form_novo_concurso"):
             c1, c2, c3 = st.columns(3)
             novo_nome = c1.text_input("Nome (ex: PF 2026)")
             novo_cargo = c2.text_input("Cargo (ex: Agente)")
-            # AQUI: Garantindo DD/MM/YYYY na criação
             nova_data = c3.date_input("Data da Prova", format="DD/MM/YYYY") 
             
             if st.form_submit_button("Criar Concurso"):
@@ -317,7 +373,7 @@ elif selected == "Gestão de Editais":
                     if novo_nome not in editais:
                         editais[novo_nome] = {
                             "cargo": novo_cargo,
-                            "data_prova": nova_data.strftime('%Y-%m-%d'), # Salva interno como ISO
+                            "data_prova": nova_data.strftime('%Y-%m-%d'), 
                             "materias": {} 
                         }
                         salvar_editais(editais)
@@ -328,26 +384,21 @@ elif selected == "Gestão de Editais":
 
     st.markdown("---")
 
-    # 2. SELECIONAR E EDITAR
     if editais:
         concurso_ativo = st.selectbox("📂 Selecione o Concurso para Editar:", list(editais.keys()))
         dados = editais[concurso_ativo]
         
-        # --- AQUI ESTÁ A CORREÇÃO VISUAL DA DATA ---
         data_banco = dados.get('data_prova', '-')
         try:
-            # Tenta converter do formato ISO para Brasileiro visualmente
             d = datetime.datetime.strptime(data_banco, "%Y-%m-%d")
             data_visual = d.strftime("%d/%m/%Y")
         except:
             data_visual = data_banco
         
         st.info(f"**Cargo:** {dados.get('cargo', '-')} | **Prova:** {data_visual}")
-        # ---------------------------------------------
 
         col_add_mat, col_view_mat = st.columns([1, 2])
 
-        # COLUNA ESQUERDA: ADICIONAR MATÉRIA
         with col_add_mat:
             with st.container(border=True):
                 st.markdown("#### 1. Adicionar Matéria")
@@ -362,7 +413,6 @@ elif selected == "Gestão de Editais":
                         else:
                             st.warning("Já existe.")
 
-        # COLUNA DIREITA: ESTRUTURA VERTICALIZADA EM LOTE
         with col_view_mat:
             st.markdown("#### 2. Estrutura Verticalizada")
             materias = dados.get("materias", {})
@@ -399,42 +449,3 @@ elif selected == "Gestão de Editais":
                             st.rerun()
                     else:
                         st.info("Lista vazia.")
-                    
-                    st.markdown("---")
-                    if st.button(f"❌ Excluir Disciplina {mat}", key=f"del_mat_{concurso_ativo}_{mat}"):
-                        del dados["materias"][mat]
-                        salvar_editais(editais)
-                        st.rerun()
-
-        st.markdown("---")
-        if st.button(f"💀 Apagar Concurso {concurso_ativo}", type="primary"):
-            del editais[concurso_ativo]
-            salvar_editais(editais)
-            st.rerun()
-
-# === HISTÓRICO ===
-elif selected == "Histórico":
-    st.title("🗂️ Base de Dados")
-    if not df.empty:
-        col_filtro, col_dl = st.columns([4, 1])
-        with col_filtro:
-            concursos_un = df['Concurso'].unique()
-            filtro_conc = st.multiselect("Filtrar Concurso:", concursos_un, default=concursos_un)
-        
-        df_view = df.copy()
-        if filtro_conc:
-            df_view = df_view[df_view['Concurso'].isin(filtro_conc)]
-            
-        df_edit = st.data_editor(df_view, use_container_width=True, num_rows="dynamic", key="editor_hist")
-
-        if not df_edit.equals(df_view):
-            st.session_state.df_dados = df_edit
-            salvar_dados(df_edit)
-            st.rerun()
-            
-        with col_dl:
-            st.markdown("<br>", unsafe_allow_html=True)
-            csv = df_view.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Excel", csv, "backup.csv", "text/csv", use_container_width=True)
-    else:
-        st.warning("Vazio.")
