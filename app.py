@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd  # CORREÇÃO DA IMAGEM 3D57AC
+import pandas as pd
 import datetime
 import json
 from supabase import create_client, Client
@@ -16,8 +16,8 @@ try:
     import version
 except ImportError:
     class version:
-        VERSION = "27.0.0-FIX"
-        STATUS = "Blindagem de Cache e API"
+        VERSION = "27.0.1-FIX"
+        STATUS = "Correção de Cadastro de Usuário"
 
 # 3. Conexão Supabase
 @st.cache_resource
@@ -57,7 +57,7 @@ def db_get_editais():
         if materia: editais[conc]["materias"][materia] = row.get('topicos') or []
     return editais
 
-# --- LOGIN E CADASTRO (RESOLVENDO O CASO DO JOÃO) ---
+# --- LOGIN E CADASTRO ---
 res_u_global = supabase.table("perfil_usuarios").select("*").execute()
 users_global = {row['nome']: row for row in res_u_global.data}
 
@@ -85,17 +85,25 @@ if 'usuario_logado' not in st.session_state:
                     res_tk = supabase.table("tokens_convite").select("*").eq("codigo", tk).eq("usado", False).execute()
                     if res_tk.data:
                         try:
-                            # CORREÇÃO IMAGEM 3CD3B0: Envio robusto para evitar registo fantasma
-                            supabase.table("perfil_usuarios").insert({"nome": n_cad, "pin": pi}).execute()
+                            # CORREÇÃO: Geração da chave_recuperacao obrigatória
+                            chave_rec = "REC-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                            
+                            supabase.table("perfil_usuarios").insert({
+                                "nome": n_cad, 
+                                "pin": pi,
+                                "chave_recuperacao": chave_rec
+                            }).execute()
+                            
                             supabase.table("tokens_convite").update({"usado": True}).eq("codigo", tk).execute()
                             st.cache_data.clear()
-                            st.success("Sucesso! Agora vá na aba Acessar.")
+                            st.success(f"Sucesso! Sua chave de recuperação é: {chave_rec}")
+                            st.info("Guarde esta chave! Agora vá na aba Acessar.")
                         except Exception as e:
-                            st.error(f"Erro: {str(e)}")
+                            st.error(f"Erro ao criar conta: {str(e)}")
                     else: st.error("Token Inválido ou já usado.")
     st.stop()
 
-# --- CENTRAL DE MISSÕES (CONCURSO NA TELA INICIAL) ---
+# --- CENTRAL DE MISSÕES ---
 usuario_atual = st.session_state.usuario_logado
 editais = db_get_editais()
 
@@ -117,7 +125,6 @@ if 'concurso_ativo' not in st.session_state:
             cg = st.text_input("Cargo")
             dt = st.date_input("Data da Prova", format="DD/MM/YYYY")
             if st.form_submit_button("CRIAR E INICIAR", use_container_width=True):
-                # CORREÇÃO IMAGEM 31894E: Injeção de campos obrigatórios
                 supabase.table("editais_materias").insert({
                     "concurso": nm, "cargo": cg, "data_prova": dt.strftime('%Y-%m-%d'), 
                     "materia": "Geral", "topicos": []
@@ -175,7 +182,6 @@ elif selected == "Gestão do Edital":
     st.title(f"📑 Ajustar Missão: {concurso_ativo}")
     m_n = st.text_input("Nova Matéria")
     if st.button("Adicionar"):
-        # CORREÇÃO IMAGEM 318284
         supabase.table("editais_materias").insert({"concurso": concurso_ativo, "materia": m_n, "topicos": [], "cargo": editais[concurso_ativo]['cargo'], "data_prova": editais[concurso_ativo]['data_iso']}).execute()
         st.cache_data.clear(); st.rerun()
     for m, t in editais[concurso_ativo]["materias"].items():
@@ -191,7 +197,10 @@ elif selected == "⚙️ Gestão de Sistema":
     st.subheader("👥 Membros do Squad")
     df_u = pd.DataFrame(list(users_global.values()))
     if not df_u.empty:
-        st.dataframe(df_u[['nome', 'pin']], use_container_width=True, hide_index=True)
+        # Exibindo também a chave de recuperação na gestão
+        cols = ['nome', 'pin']
+        if 'chave_recuperacao' in df_u.columns: cols.append('chave_recuperacao')
+        st.dataframe(df_u[cols], use_container_width=True, hide_index=True)
         u_del = st.selectbox("Remover membro (para refazer cadastro):", [""] + list(users_global.keys()))
         if u_del and st.button(f"🗑️ Excluir {u_del}"):
             supabase.table("perfil_usuarios").delete().eq("nome", u_del).execute()
