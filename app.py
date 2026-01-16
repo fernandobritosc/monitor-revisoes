@@ -298,7 +298,6 @@ else:
                 with c3:
                     st.write("⏱️ **Tempo Líquido**")
                     t_h, t_m = st.columns(2)
-                    # CORREÇÃO: LISTA DE HORAS ATÉ 12
                     horas = t_h.selectbox("Hs", list(range(13)), index=0)
                     minutos = t_m.selectbox("Min", list(range(60)), index=0)
                 
@@ -348,65 +347,71 @@ else:
                         supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
                         st.rerun()
 
+    # --- HISTÓRICO COM ZONA DE EXCLUSÃO SEPARADA ---
     elif menu == "Histórico":
-        st.title("📜 Histórico Interativo")
-        st.info("💡 Edição liberada. Lembre de SALVAR no final.")
+        st.title("📜 Gestão de Registros")
         
         if not df.empty:
-            df_edit = df.copy()
-            df_edit['data_estudo'] = pd.to_datetime(df_edit['data_estudo']).dt.date
-            df_edit['Excluir'] = False
-            if 'tempo' not in df_edit.columns: df_edit['tempo'] = 0
+            df['data_estudo'] = pd.to_datetime(df['data_estudo']).dt.date
+            if 'tempo' not in df.columns: df['tempo'] = 0
             
-            df_edit = df_edit[['id', 'Excluir', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo']]
+            # --- ZONA 1: EDIÇÃO RÁPIDA (TABELA) ---
+            st.markdown("### ✏️ Edição Rápida")
+            st.caption("Clique nos números para alterar e depois em 'Salvar Alterações'.")
+            
+            # Removemos a coluna 'Excluir' da tabela para não confundir
+            df_edit = df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo']].copy()
             
             edited_df = st.data_editor(
                 df_edit,
                 column_config={
                     "id": None,
-                    "Excluir": st.column_config.CheckboxColumn(help="Apagar?"),
                     "data_estudo": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
                     "materia": st.column_config.TextColumn("Matéria"),
                     "assunto": st.column_config.TextColumn("Assunto"),
                     "acertos": st.column_config.NumberColumn("Acertos"),
                     "total": st.column_config.NumberColumn("Total"),
                     "taxa": st.column_config.ProgressColumn("Precisão", format="%.1f%%"),
-                    "tempo": st.column_config.NumberColumn("Minutos", help="Tempo em minutos")
+                    "tempo": st.column_config.NumberColumn("Minutos")
                 },
-                disabled=["taxa"],
+                disabled=["taxa", "materia", "assunto"], # Bloqueia textos pra evitar bagunça
                 hide_index=True,
-                use_container_width=True
+                use_container_width=True,
+                key="editor_history"
             )
             
-            st.write("")
-            if st.button("💾 SALVAR ALTERAÇÕES", type="primary"):
-                to_delete = edited_df[edited_df['Excluir'] == True]['id'].tolist()
-                if to_delete:
-                    supabase.table("registros_estudos").delete().in_("id", to_delete).execute()
-                
-                rows_to_update = edited_df[edited_df['Excluir'] == False]
-                for index, row in rows_to_update.iterrows():
+            if st.button("💾 SALVAR ALTERAÇÕES (EDIÇÃO)", type="primary"):
+                for index, row in edited_df.iterrows():
                     nova_taxa = (row['acertos'] / row['total'] * 100) if row['total'] > 0 else 0
                     try:
                         supabase.table("registros_estudos").update({
                             "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
-                            "materia": row['materia'],
-                            "assunto": row['assunto'],
                             "acertos": row['acertos'],
                             "total": row['total'],
                             "taxa": nova_taxa,
                             "tempo": row['tempo']
                         }).eq("id", row['id']).execute()
-                    except:
-                        supabase.table("registros_estudos").update({
-                            "data_estudo": row['data_estudo'].strftime('%Y-%m-%d'),
-                            "materia": row['materia'],
-                            "assunto": row['assunto'],
-                            "acertos": row['acertos'],
-                            "total": row['total'],
-                            "taxa": nova_taxa
-                        }).eq("id", row['id']).execute()
+                    except: pass
+                st.success("Dados atualizados!"); time.sleep(1); st.rerun()
+
+            st.markdown("---")
+
+            # --- ZONA 2: EXCLUSÃO CIRÚRGICA (BOTÃO) ---
+            st.markdown("### 🗑️ Excluir Registro")
+            st.caption("Selecione o registro abaixo para remover definitivamente.")
+            
+            # Cria uma lista legível para o dropdown
+            # Ex: "16/01 | Português - Crase | 5/10"
+            df['label'] = df.apply(lambda x: f"{x['data_estudo'].strftime('%d/%m')} | {x['materia']} - {x['assunto']} | {x['acertos']}/{x['total']} acert.", axis=1)
+            
+            opcoes_del = dict(zip(df['label'], df['id']))
+            escolha = st.selectbox("Selecione para apagar:", ["Selecione..."] + list(opcoes_del.keys()))
+            
+            if escolha != "Selecione...":
+                id_para_apagar = opcoes_del[escolha]
+                if st.button(f"APAGAR REGISTRO SELECIONADO", type="primary"):
+                    supabase.table("registros_estudos").delete().eq("id", id_para_apagar).execute()
+                    st.success("Registro apagado."); time.sleep(1); st.rerun()
                 
-                st.success("Histórico atualizado!"); time.sleep(1); st.rerun()
         else:
             st.info("Sem dados para exibir.")
