@@ -6,7 +6,7 @@ import plotly.express as px
 from streamlit_option_menu import option_menu
 
 # Configuração da página
-st.set_page_config(page_title="Estudei Pro", page_icon="📚", layout="wide")
+st.set_page_config(page_title="Faca na Caveira - Concursos", page_icon="💀", layout="wide")
 
 DB_FILE = "estudos_data.csv"
 
@@ -35,24 +35,37 @@ if 'df_dados' not in st.session_state:
 
 df = st.session_state.df_dados
 
-# --- BARRA LATERAL (ESTRUTURA COMPLETA) ---
+# --- BARRA LATERAL (PERSONALIZADA) ---
 with st.sidebar:
-    # 1. TOPO: LOGO E TÍTULO
-    st.markdown("<br>", unsafe_allow_html=True) # Espaçamento
-    c_logo, c_text = st.columns([1, 2.5])
-    with c_logo:
-        st.image("https://cdn-icons-png.flaticon.com/512/2232/2232688.png", width=60)
-    with c_text:
-        st.markdown("### **Estudei**\n<span style='color: #00E676; font-size: 12px;'>Versão Elite 3.0</span>", unsafe_allow_html=True)
-    
+    # 1. TOPO: LOGO E TÍTULO NOVO
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Ajustei as colunas para a nova imagem
+    c_logo, c_text = st.columns([1.3, 2.7])
+    
+    with c_logo:
+        # AQUI ESTÁ A ATUALIZAÇÃO DO NOME DO ARQUIVO
+        try:
+            st.image("2498586-caveira-com-facas-gratis-vetor.jpg", width=85)
+        except:
+            st.warning("Imagem não encontrada.")
+            st.image("https://cdn-icons-png.flaticon.com/512/9203/9203029.png", width=70)
+
+    with c_text:
+        # Título Personalizado
+        st.markdown("""
+            <h3 style='margin-bottom: 0px;'><b>Faca na Caveira</b></h3>
+            <span style='color: #00E676; font-size: 14px; font-weight: bold;'>Concursos</span>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
     # 2. MEIO: NAVEGAÇÃO
     selected = option_menu(
-        menu_title="Menu Principal", # Título discreto
+        menu_title="Navegação",
         options=["Dashboard", "Novo Registro", "Histórico"], 
         icons=["bar-chart-line-fill", "plus-circle-fill", "table"], 
-        menu_icon="cast", 
+        menu_icon="compass", 
         default_index=0,
         styles={
             "container": {"padding": "0!important", "background-color": "transparent"},
@@ -63,22 +76,20 @@ with st.sidebar:
         }
     )
     
-    # 3. RODAPÉ: PERFIL DO USUÁRIO (O Toque Final)
+    # 3. RODAPÉ: PERFIL
     st.markdown("---")
     col_avatar, col_user = st.columns([1, 3])
     with col_avatar:
-        # Avatar genérico (pode ser o teu!)
         st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=45)
     with col_user:
         st.markdown("**Fernando**")
-        st.caption("Focado na Aprovação 🎯")
+        st.caption("Rumo à Aprovação 🎯")
 
 # --- CONTEÚDO DAS PÁGINAS ---
 
 # === DASHBOARD ===
 if selected == "Dashboard":
-    st.title("📊 Painel de Controle")
-    st.markdown("Acompanhe a sua evolução em tempo real.")
+    st.title("📊 Painel de Performance")
     
     if not df.empty:
         df_calc = df.copy()
@@ -86,7 +97,6 @@ if selected == "Dashboard":
         df_calc['Total'] = pd.to_numeric(df_calc['Total'], errors='coerce').fillna(1)
         df_calc['Data_Ordenacao'] = pd.to_datetime(df_calc['Proxima_Revisao'], dayfirst=True, errors='coerce')
 
-        # KPIs
         total_q = df_calc['Total'].sum()
         media_g = (df_calc['Acertos'].sum() / total_q * 100) if total_q > 0 else 0
         hoje = pd.Timestamp.now().normalize()
@@ -99,7 +109,6 @@ if selected == "Dashboard":
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Gráficos
         g1, g2 = st.columns(2)
         with g1:
             st.subheader("Desempenho por Matéria")
@@ -121,10 +130,10 @@ if selected == "Dashboard":
 
 # === NOVO REGISTRO ===
 elif selected == "Novo Registro":
-    st.title("📝 Lançamento")
+    st.title("📝 Lançamento Operacional")
     
     with st.container(border=True):
-        st.subheader("O que estudou hoje?")
+        st.subheader("Relatório de Estudo")
         with st.form("form_estudo", clear_on_submit=True):
             c_data, c_materia = st.columns([1, 2])
             data_input = c_data.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
@@ -135,7 +144,7 @@ elif selected == "Novo Registro":
             ac = c1.number_input("Qtd. Acertos", min_value=0, step=1)
             tot = c2.number_input("Qtd. Total", min_value=1, step=1)
             
-            btn = st.form_submit_button("✅ Salvar Estudo", use_container_width=True)
+            btn = st.form_submit_button("✅ Confirmar Lançamento", use_container_width=True)
 
         if btn and materia:
             taxa_calc = (ac/tot)*100
@@ -153,11 +162,11 @@ elif selected == "Novo Registro":
             
             st.session_state.df_dados = pd.concat([df, nova], ignore_index=True)
             salvar_dados(st.session_state.df_dados)
-            st.success(f"Registrado! Revisar em: {data_rev.strftime('%d/%m/%Y')}")
+            st.success(f"Registrado! Próxima missão: {data_rev.strftime('%d/%m/%Y')}")
 
 # === HISTÓRICO ===
 elif selected == "Histórico":
-    st.title("🗂️ Minha Base de Dados")
+    st.title("🗂️ Base de Dados Tática")
     
     if not df.empty:
         col_filtro, col_dl = st.columns([4, 1])
@@ -179,6 +188,6 @@ elif selected == "Histórico":
         with col_dl:
             st.markdown("<br>", unsafe_allow_html=True)
             csv = df_view.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Excel", csv, "backup.csv", "text/csv", use_container_width=True)
+            st.download_button("📥 Extrair Dados", csv, "backup_estudos.csv", "text/csv", use_container_width=True)
     else:
         st.warning("Nenhum dado encontrado.")
