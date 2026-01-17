@@ -93,7 +93,8 @@ else:
             c1.metric("Questões Totais", int(tot))
             c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
             
-            df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
+            df_g = df.copy()
+            df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), 
                                     x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626']), use_container_width=True)
 
@@ -123,7 +124,7 @@ else:
                     data_sel = st.radio("Data do Estudo", ["HOJE", "ONTEM", "OUTRO"], horizontal=True)
                     if data_sel == "HOJE": dt = datetime.date.today()
                     elif data_sel == "ONTEM": dt = datetime.date.today() - datetime.timedelta(days=1)
-                    else: dt = st.date_input("Data", datetime.date.today())
+                    else: dt = st.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
                 
                 with c_tempo:
                     tempo_estudo = st.text_input("Tempo (HH:MM:SS)", value="01:00:00")
@@ -135,20 +136,11 @@ else:
                 ass = c2.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
 
                 st.divider()
-                # PERFORMANCE: QUESTÕES, PÁGINAS E VÍDEOS
-                col_q, col_p, col_v = st.columns(3)
-                with col_q:
-                    st.markdown("#### 🎯 Questões")
-                    acertos = st.number_input("Acertos", min_value=0, value=0)
-                    total_q = st.number_input("Total", min_value=0, value=0)
-                with col_p:
-                    st.markdown("#### 📖 Páginas")
-                    p_ini = st.number_input("Início", min_value=0, value=0)
-                    p_fim = st.number_input("Fim", min_value=0, value=0)
-                with col_v:
-                    st.markdown("#### 🎬 Videoaula")
-                    v_tit = st.text_input("Título/ID", value="Aula 01")
-                    v_dur = st.text_input("Duração", value="00:30:00")
+                # PERFORMANCE: QUESTÕES
+                st.markdown("#### 🎯 Questões")
+                col_ac, col_tot = st.columns(2)
+                acertos = col_ac.number_input("Acertos", min_value=0, value=0)
+                total_q = col_tot.number_input("Total", min_value=0, value=0)
 
                 st.divider()
                 coment = st.text_area("Comentários / Anotações")
@@ -158,8 +150,7 @@ else:
                     supabase.table("registros_estudos").insert({
                         "concurso": missao, "materia": mat, "assunto": ass, 
                         "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos, "total": total_q, 
-                        "taxa": taxa, "comentarios": coment, "paginas": f"{p_ini}-{p_fim}",
-                        "videoaula": v_tit, "tempo": tempo_estudo,
+                        "taxa": taxa, "comentarios": coment, "tempo": tempo_estudo,
                         "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
                     }).execute()
                     st.success("Registrado!")
@@ -181,8 +172,19 @@ else:
         st.subheader("📜 Histórico")
         if df.empty: st.info("Vazio.")
         else:
-            ed = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa']], hide_index=True)
+            # Formatando a data no editor para visualização DD/MM/AAAA
+            df_hist = df.copy()
+            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
+            
+            ed = st.data_editor(df_hist[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa']], hide_index=True)
             if st.button("💾 ATUALIZAR"):
                 for _, r in ed.iterrows():
-                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total']>0 else 0}).eq("id", r['id']).execute()
+                    # Ao salvar, voltamos para o formato ISO YYYY-MM-DD
+                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
+                    supabase.table("registros_estudos").update({
+                        "acertos": r['acertos'], 
+                        "total": r['total'], 
+                        "taxa": (r['acertos']/r['total']*100) if r['total']>0 else 0,
+                        "data_estudo": dt_iso
+                    }).eq("id", r['id']).execute()
                 st.rerun()
