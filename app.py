@@ -6,7 +6,7 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- 1. DESIGN SYSTEM ---
+# --- 1. DESIGN SYSTEM (ESTILO PREMIUM REFORÇADO) ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -17,15 +17,22 @@ apply_styles()
 
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 1.4rem !important; font-weight: 700 !important; }
-    .stMetric, .card-dashboard, div[data-testid="stExpander"] {
+    /* Trava o layout para não desconfigurar */
+    .block-container { padding-top: 2rem !important; }
+    
+    /* Metrics em linha no esquadro */
+    [data-testid="stMetricValue"] { font-size: 1.6rem !important; font-weight: 700 !important; }
+    .stMetric {
         background-color: #1A1C23 !important;
         border: 1px solid #2D303E !important;
         border-radius: 8px !important;
-        padding: 12px !important;
+        padding: 15px !important;
     }
+    
+    /* Barras Bicolores (Verde/Vermelho) */
     .progress-container { width: 100%; background-color: #FF4B4B; border-radius: 4px; height: 6px; margin: 8px 0; overflow: hidden; }
     .progress-bar-fill { background-color: #00FF00; height: 100%; }
+    
     .small-text { font-size: 13px; color: #adb5bd; }
     </style>
 """, unsafe_allow_html=True)
@@ -37,7 +44,7 @@ def formatar_tempo_para_bigint(valor_bruto):
     numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
     return (int(numeros[:-2]) * 60) + int(numeros[-2:])
 
-# --- 2. NAVEGAÇÃO CENTRAL ---
+# --- 2. NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
     st.title("🎯 Central de Comando")
     ed = get_editais(supabase)
@@ -62,27 +69,24 @@ else:
         if st.button("← Voltar à Central", use_container_width=True): st.session_state.missao_ativa = None; st.rerun()
         st.write("---")
         menu = option_menu(None, ["Revisões", "Registrar", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil-square", "grid-3x3-gap", "list-ul", "gear"], 
+                           icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0)
 
-    # --- ABA: REGISTRAR (CORREÇÃO DE TÓPICOS TRAVADOS) ---
+    # --- ABA: REGISTRAR (TÓPICOS DINÂMICOS E ALINHADOS) ---
     if menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
         if not mats: st.warning("Cadastre matérias no menu Configurar.")
         else:
-            # Container de formulário para garantir esquadro
             with st.container(border=True):
                 c_data, c_tempo = st.columns([2, 1])
                 data_est = c_data.date_input("Data", format="DD/MM/YYYY")
                 tempo_raw = c_tempo.text_input("Tempo (HHMM)", value="0100")
                 
-                # 1. Seleção da Disciplina
                 mat_sel = st.selectbox("Disciplina", mats)
-                
-                # 2. Seleção do Tópico (KEY DINÂMICA PARA NÃO TRAVAR)
+                # Key dinâmica garante que o assunto mude com a disciplina
                 lista_topicos = dados['materias'].get(mat_sel, ["Geral"])
-                top_sel = st.selectbox("Tópico/Assunto", lista_topicos, key=f"topico_{mat_sel}") #
+                top_sel = st.selectbox("Tópico/Assunto", lista_topicos, key=f"top_{mat_sel}") 
                 
                 c_ac, c_to = st.columns(2)
                 acr = c_ac.number_input("Acertos", min_value=0, value=20)
@@ -100,11 +104,33 @@ else:
                             "tempo": t_big, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
                         }
                         supabase.table("registros_estudos").insert(payload).execute()
-                        st.success("Salvo!") #
+                        st.success("Salvo!")
                         time.sleep(0.5); st.rerun()
                     except: st.error("Erro ao salvar.")
 
-    # --- ABA: REVISÕES (COM SINCRONIZAÇÃO E ANOTAÇÕES) ---
+    # --- ABA: DASHBOARD (MÉTRICAS NO ESQUADRO) ---
+    elif menu == "Dashboard":
+        if df.empty: st.info("Sem dados.")
+        else:
+            # Cards de Performance Alinhados
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Questões", int(df['total'].sum()))
+            k2.metric("Precisão", f"{(df['acertos'].sum()/df['total'].sum()*100 if df['total'].sum()>0 else 0):.1f}%")
+            k3.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
+            
+            st.divider()
+            st.markdown("### Detalhamento por Matéria")
+            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
+            for _, m in df_mat.iterrows():
+                with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
+                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                    for _, a in df_ass.iterrows():
+                        c_a1, c_a2 = st.columns([3, 1])
+                        c_a1.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
+                        c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
+                        st.markdown(f'<div class="progress-container" style="margin-left:15px;"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
+
+    # --- ABA: REVISÕES ---
     elif menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -113,7 +139,6 @@ else:
             for _, row in df.iterrows():
                 dt_est = pd.to_datetime(row['data_estudo']).date()
                 dias_desde = (hoje - dt_est).days
-                tx = row.get('taxa', 0)
                 if dias_desde >= 1 and not row.get('rev_24h', False):
                     pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde-1, "coment": row.get('comentarios', '')})
         
@@ -125,40 +150,24 @@ else:
                     with c_t:
                         st.markdown(f"**{p['materia']}**\n\n<span class='small-text'>{p['assunto']}</span>", unsafe_allow_html=True)
                         if p['coment']: 
-                            with st.expander("📝 Ver Anotações"): st.info(p['coment']) #
+                            with st.expander("📝 Ver Anotações"): st.info(p['coment'])
                     with c_v:
                         ca, ct = st.columns(2)
                         r_ac = ca.number_input("Acertos", 0, key=f"ac_{p['id']}")
                         r_to = ct.number_input("Total", 0, key=f"to_{p['id']}")
                     with c_b:
                         st.write("")
-                        if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:12px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True) #
+                        if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:12px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
                         if st.button("CONCLUIR", key=f"btn_{p['id']}", use_container_width=True, type="primary"):
                             try:
                                 res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
                                 n_ac = res_db.data[0]['acertos'] + r_ac
                                 n_to = res_db.data[0]['total'] + r_to
                                 supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['coment']} | Rev: {r_ac}/{r_to}", "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100)}).eq("id", p['id']).execute()
-                                st.success("Sincronizado!"); time.sleep(0.5); st.rerun() #
+                                st.success("Sincronizado!"); time.sleep(0.5); st.rerun()
                             except: st.error("Erro.")
 
-    # --- DEMAIS ABAS (DASHBOARD, HISTÓRICO, CONFIGURAR) ---
-    elif menu == "Dashboard":
-        if df.empty: st.info("Sem dados.")
-        else:
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Questões", int(df['total'].sum()))
-            k2.metric("Precisão", f"{df['taxa'].mean():.1f}%")
-            k3.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
-            st.divider()
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index()
-            for _, m in df_mat.iterrows():
-                with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
-                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
-                    for _, a in df_ass.iterrows():
-                        st.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
-                        st.markdown(f'<div class="progress-container"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True) #
-
+    # --- HISTÓRICO E CONFIGURAR ---
     elif menu == "Configurar":
         st.subheader("⚙️ Configurações")
         with st.form("add_mat"):
