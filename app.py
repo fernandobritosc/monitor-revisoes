@@ -7,7 +7,7 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO DE TEMA (FIXO ESCURO) ---
+# --- 1. CONFIGURAÇÃO DE TEMA E PÁGINA ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -26,11 +26,9 @@ st.markdown("""
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# Função Blindada: Converte HHMM para minutos totais (Exigência do seu campo BIGINT)
 def formatar_tempo_para_bigint(valor_bruto):
     numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
-    horas = int(numeros[:-2])
-    minutos = int(numeros[-2:])
+    horas = int(numeros[:-2]); minutos = int(numeros[-2:])
     return (horas * 60) + minutos
 
 # --- 2. NAVEGAÇÃO CENTRAL ---
@@ -65,52 +63,17 @@ else:
     with st.sidebar:
         st.title(f"🎯 {missao}")
         if st.button("🔙 VOLTAR"): st.session_state.missao_ativa = None; st.rerun()
-        menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
-                           icons=["grid", "arrow-repeat", "pencil", "gear", "list"], default_index=0)
+        st.divider()
+        # ORDEM ATUALIZADA DO MENU
+        menu = option_menu(None, ["Revisões", "Registrar", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["arrow-repeat", "pencil", "grid", "list", "gear"], default_index=0)
 
-    # --- ABA DASHBOARD (RESTORED) ---
-    if menu == "Dashboard":
-        if df.empty: st.info("Sem dados para análise.")
-        else:
-            c_menu, c_conteudo = st.columns([0.15, 2.5])
-            with c_menu:
-                sub_aba = option_menu(None, ["Geral", "Matérias"], icons=["house", "layers"], default_index=0,
-                    styles={"container": {"padding": "0!important", "background-color": "transparent"}, "nav-link": {"font-size": "0px", "margin":"15px 0px"}})
-
-            with c_conteudo:
-                if sub_aba == "Geral":
-                    st.markdown("### 🏠 Resumo Geral")
-                    k1, k2, k3, k4 = st.columns(4)
-                    tot_q = df['total'].sum(); acc_q = df['acertos'].sum()
-                    k1.metric("Questões", int(tot_q)); k2.metric("Acertos", int(acc_q))
-                    k3.metric("Precisão", f"{(acc_q/tot_q*100 if tot_q>0 else 0):.1f}%")
-                    k4.metric("Horas Totais", f"{(df['tempo'].sum()/60 if 'tempo' in df else 0):.1f}h")
-                    st.divider()
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.plotly_chart(px.pie(df, values='total', names='materia', hole=0.5, template="plotly_dark"), use_container_width=True)
-                    with c2:
-                        df_r = df.groupby('materia')['taxa'].mean().reset_index()
-                        fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True, template="plotly_dark")
-                        st.plotly_chart(fig_r, use_container_width=True)
-
-                elif sub_aba == "Matérias":
-                    st.markdown("### 📚 Detalhamento por Assunto")
-                    df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-                    for _, m in df_mat.iterrows():
-                        with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
-                            df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                            for _, a in df_ass.iterrows():
-                                c1, c2 = st.columns([3, 1])
-                                c1.markdown(f"└ {a['assunto']}")
-                                c2.markdown(f"**{a['taxa']:.0f}%** ({int(a['acertos'])}/{int(a['total'])})")
-                                st.progress(a['taxa']/100)
-
-    # --- ABA REVISÕES (RESTORED) ---
-    elif menu == "Revisões":
-        st.subheader("🔄 Radar de Revisões (Modo Pós-Edital)")
+    # --- 1. REVISÕES ---
+    if menu == "Revisões":
+        st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
         pend = []
+        cores = {"Revisão 24h": "blue", "Revisão 7d": "orange", "Revisão 15d": "purple", "Revisão 20d": "green"}
         if not df.empty:
             for _, row in df.iterrows():
                 dt_est = pd.to_datetime(row['data_estudo']).date()
@@ -122,7 +85,6 @@ else:
                     d_alvo, col_alvo, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
                     if dias >= d_alvo and not row.get(col_alvo, False):
                         pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": lbl, "col": col_alvo, "atraso": dias-d_alvo, "c": row.get('comentarios', '')})
-
         if not pend: st.success("✅ Nada pendente!")
         else:
             for p in pend:
@@ -137,7 +99,7 @@ else:
                             supabase.table("registros_estudos").update({p['col']: True}).eq("id", p['id']).execute(); st.rerun()
                         if p['atraso'] > 0: st.error(f"⚠️ {p['atraso']}d de atraso")
 
-    # --- ABA REGISTRAR (CORRECTED) ---
+    # --- 2. REGISTRAR ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
@@ -158,7 +120,54 @@ else:
                         st.success("✅ Salvo!"); time.sleep(0.5); st.rerun()
                     except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA CONFIGURAR (RESTORED) ---
+    # --- 3. DASHBOARD ---
+    elif menu == "Dashboard":
+        if df.empty: st.info("Sem dados para análise.")
+        else:
+            c_menu, c_conteudo = st.columns([0.15, 2.5])
+            with c_menu:
+                sub_aba = option_menu(None, ["Geral", "Matérias"], icons=["house", "layers"], default_index=0,
+                    styles={"container": {"padding": "0!important", "background-color": "transparent"}, "nav-link": {"font-size": "0px", "margin":"15px 0px"}})
+            with c_conteudo:
+                if sub_aba == "Geral":
+                    st.markdown("### 🏠 Resumo Geral")
+                    k1, k2, k3, k4 = st.columns(4)
+                    tot_q = df['total'].sum(); acc_q = df['acertos'].sum()
+                    k1.metric("Questões", int(tot_q)); k2.metric("Acertos", int(acc_q))
+                    k3.metric("Precisão", f"{(acc_q/tot_q*100 if tot_q>0 else 0):.1f}%")
+                    k4.metric("Sessões", len(df))
+                    st.divider()
+                    c1, c2 = st.columns(2)
+                    with c1: st.plotly_chart(px.pie(df, values='total', names='materia', hole=0.5, template="plotly_dark"), use_container_width=True)
+                    with c2:
+                        df_r = df.groupby('materia')['taxa'].mean().reset_index()
+                        fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True, template="plotly_dark")
+                        st.plotly_chart(fig_r, use_container_width=True)
+                elif sub_aba == "Matérias":
+                    st.markdown("### 📚 Detalhamento por Assunto")
+                    df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
+                    for _, m in df_mat.iterrows():
+                        with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
+                            df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                            for _, a in df_ass.iterrows():
+                                c1, c2 = st.columns([3, 1])
+                                c1.markdown(f"└ {a['assunto']}")
+                                c2.markdown(f"**{a['taxa']:.0f}%** ({int(a['acertos'])}/{int(a['total'])})")
+                                st.progress(a['taxa']/100)
+
+    # --- 4. HISTÓRICO ---
+    elif menu == "Histórico":
+        st.subheader("📜 Histórico")
+        if df.empty: st.info("Sem dados.")
+        else:
+            df_h = df.copy(); df_h['data_estudo'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y'); df_h['id'] = df_h['id'].astype(str)
+            st.divider(); k1, k2 = st.columns(2); k1.metric("Questões", int(df_h['total'].sum())); k2.metric("Média", f"{df_h['taxa'].mean():.1f}%"); st.divider()
+            st.data_editor(df_h[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']], use_container_width=True, hide_index=True)
+            with st.popover("🗑️ Apagar"):
+                id_del = st.text_input("ID"); 
+                if st.button("CONFIRMAR"): supabase.table("registros_estudos").delete().eq("id", id_del).execute(); st.rerun()
+
+    # --- 5. CONFIGURAR ---
     elif menu == "Configurar":
         st.subheader("⚙️ Configurar Edital")
         with st.form("add_mat"):
@@ -174,15 +183,3 @@ else:
                         novos = [l.strip() for l in tx.split('\n') if l.strip()]; supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
                     if c2.button("🗑️ EXCLUIR", key=f"d_{m}"):
                         supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute(); st.rerun()
-
-    # --- ABA HISTÓRICO (RESTORED) ---
-    elif menu == "Histórico":
-        st.subheader("📜 Histórico")
-        if df.empty: st.info("Sem dados.")
-        else:
-            df_h = df.copy(); df_h['data_estudo'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y'); df_h['id'] = df_h['id'].astype(str)
-            st.divider(); k1, k2 = st.columns(2); k1.metric("Questões", int(df_h['total'].sum())); k2.metric("Média", f"{df_h['taxa'].mean():.1f}%"); st.divider()
-            st.data_editor(df_h[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']], use_container_width=True, hide_index=True)
-            with st.popover("🗑️ Apagar"):
-                id_del = st.text_input("ID"); 
-                if st.button("CONFIRMAR"): supabase.table("registros_estudos").delete().eq("id", id_del).execute(); st.rerun()
