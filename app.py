@@ -151,25 +151,29 @@ else:
         if not DOCLING_READY:
             st.error("Erro: Bibliotecas Docling não encontradas ou falha no import.")
         else:
-            st.info("Suba o PDF (pág. de conteúdo) para extração automática.")
+            st.info("Suba o PDF do edital para extrair o conteúdo programático automaticamente.")
             with st.container(border=True):
                 nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
                 pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
                 
                 if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
-                    with st.spinner("🤖 Analisando PDF... isso demora cerca de 1 min."):
+                    with st.spinner("🤖 Analisando PDF..."):
                         try:
                             temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            pipeline_opts = PdfPipelineOptions()
-                            pipeline_opts.do_ocr = False
-                            pipeline_opts.do_table_structure = True
+                            # Configuração corrigida para evitar conflitos de backend
+                            pipeline_opts = PdfPipelineOptions(do_ocr=False)
                             
+                            # Passagem de opções conforme versão estável
                             converter = DocumentConverter(
                                 allowed_formats=[InputFormat.PDF],
-                                format_options={InputFormat.PDF: pipeline_opts}
+                                format_options={
+                                    InputFormat.PDF: {
+                                        "pipeline_options": pipeline_opts
+                                    }
+                                }
                             )
                             
                             result = converter.convert(temp_path)
@@ -206,7 +210,7 @@ else:
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
                 st.rerun()
             st.divider()
-            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
+            alvo = st.selectbox("Apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
             if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
