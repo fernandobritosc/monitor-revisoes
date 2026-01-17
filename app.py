@@ -7,7 +7,7 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM REFINADO ---
+# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM PREMIUM ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -16,21 +16,15 @@ from styles import apply_styles
 
 apply_styles()
 
-# CSS Premium v149.0: Foco em alinhamento e barras bicolores
 st.markdown("""
     <style>
-    /* Alinhamento Milimétrico do Sub-menu lateral */
+    /* Alinhamento do Sub-menu lateral */
     [data-testid="column"]:nth-child(1) > div {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: flex-start;
-        padding-top: 20px !important;
+        padding-top: 15px !important;
     }
-    
-    /* Metrics Compactas */
-    [data-testid="stMetricValue"] { font-size: 1.4rem !important; font-weight: 700 !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; color: #9E9E9E !important; }
     
     /* Cards e Containers */
     .stMetric, .card-dashboard, div[data-testid="stExpander"] {
@@ -40,19 +34,18 @@ st.markdown("""
         padding: 12px !important;
     }
 
-    /* Barras de Progresso Bicolores (Verde/Vermelho) */
+    /* Barras Bicolores (Verde/Vermelho) */
     .progress-container {
         width: 100%;
-        background-color: #FF4B4B; /* Vermelho (Erros) */
+        background-color: #FF4B4B; /* Erro */
         border-radius: 4px;
-        height: 8px;
-        margin: 10px 0;
+        height: 6px;
+        margin: 8px 0;
         overflow: hidden;
     }
     .progress-bar-fill {
-        background-color: #00FF00; /* Verde (Acertos) */
+        background-color: #00FF00; /* Acerto */
         height: 100%;
-        border-radius: 4px 0 0 4px;
     }
     
     .small-text { font-size: 13px; color: #adb5bd; }
@@ -78,6 +71,14 @@ if st.session_state.missao_ativa is None:
                 c1.markdown(f"**{nome}** — {d_concurso['cargo']}")
                 if c2.button("Acessar", key=f"ac_{nome}", use_container_width=True):
                     st.session_state.missao_ativa = nome; st.rerun()
+    with tabs[1]:
+        with st.form("f_novo"):
+            n_n, n_c = st.text_input("Nome do Concurso"), st.text_input("Cargo")
+            if st.form_submit_button("CRIAR MISSÃO"):
+                if n_n:
+                    supabase.table("editais_materias").insert({"concurso": n_n, "cargo": n_c, "materia": "Geral", "topicos": []}).execute()
+                    st.rerun()
+
 else:
     missao = st.session_state.missao_ativa
     try:
@@ -91,22 +92,19 @@ else:
         if st.button("← Voltar à Central", use_container_width=True): st.session_state.missao_ativa = None; st.rerun()
         st.write("---")
         menu = option_menu(None, ["Revisões", "Registrar", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil", "grid", "list", "gear"], 
+                           icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0, styles={"nav-link": {"font-size": "14px", "padding": "10px"}})
 
-    # --- ABA: DASHBOARD (ALINHADO COM BARRAS VERDE/VERMELHO) ---
+    # --- ABA: DASHBOARD (v150.0 - LIMPO) ---
     if menu == "Dashboard":
-        if df.empty: st.info("Sem dados.")
+        if df.empty: st.info("Sem dados para análise.")
         else:
-            # Layout com Sub-menu lateral corrigido
             c_side, c_main = st.columns([0.15, 2.5])
             with c_side:
                 sub = option_menu(None, ["Geral", "Matérias"], icons=["house", "layers"], default_index=0, 
-                                styles={
-                                    "container": {"padding": "0!important", "background-color": "transparent"},
-                                    "nav-link": {"font-size": "0px", "margin":"15px 0px", "padding": "10px"},
-                                    "nav-link-selected": {"background-color": "#FF4B4B"}
-                                })
+                                styles={"container": {"padding": "0!important", "background-color": "transparent"},
+                                        "nav-link": {"font-size": "0px", "margin":"15px 0px"},
+                                        "nav-link-selected": {"background-color": "#FF4B4B"}})
             with c_main:
                 if sub == "Geral":
                     k1, k2, k3, k4 = st.columns(4)
@@ -122,31 +120,18 @@ else:
                         fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True, template="plotly_dark")
                         st.plotly_chart(fig_r, use_container_width=True)
                 else:
-                    st.markdown("### Detalhamento por Matéria")
                     df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
                     for _, m in df_mat.iterrows():
-                        m_nome = m['materia']
-                        m_taxa = m['taxa']
-                        with st.expander(f"📁 {m_nome.upper()} — {m_taxa:.1f}%"):
-                            # Barra Bicolor da Matéria
-                            st.markdown(f"""
-                                <div class="progress-container"><div class="progress-bar-fill" style="width: {m_taxa}%;"></div></div>
-                            """, unsafe_allow_html=True)
-                            
-                            df_ass = df[df['materia'] == m_nome].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                        with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
+                            # BARRA MESTRA REMOVIDA AQUI PARA LIMPEZA VISUAL
+                            df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
                             for _, a in df_ass.iterrows():
-                                a_taxa = a['taxa']
                                 c_a1, c_a2 = st.columns([3, 1])
                                 c_a1.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
-                                c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                                # Barra Bicolor do Assunto
-                                st.markdown(f"""
-                                    <div class="progress-container" style="height: 4px; margin-left: 15px;">
-                                        <div class="progress-bar-fill" style="width: {a_taxa}%;"></div>
-                                    </div>
-                                """, unsafe_allow_html=True)
+                                c_a2.markdown(f"<p style='text-align: right; font-size: 11px; color: #adb5bd;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
+                                st.markdown(f'<div class="progress-container" style="margin-left:15px;"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
 
-    # --- ABA: REVISÕES (ALINHADO) ---
+    # --- ABA: REVISÕES (MANTIDO COMPACTO) ---
     elif menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -155,11 +140,10 @@ else:
             for _, row in df.iterrows():
                 dt_est = pd.to_datetime(row['data_estudo']).date()
                 dias = (hoje - dt_est).days
-                tx = row.get('taxa', 0)
                 if dias >= 1 and not row.get('rev_24h', False):
                     pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "c": row.get('comentarios', '')})
         
-        if not pend: st.success("Tudo revisado!")
+        if not pend: st.success("Tudo em dia!")
         else:
             for p in pend:
                 with st.container(border=True):
@@ -174,20 +158,18 @@ else:
                         st.write("")
                         if st.button("CONCLUIR", key=f"btn_{p['id']}", use_container_width=True, type="primary"):
                             supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['c']} | {p['tipo']}: {acr}/{tor}"}).eq("id", p['id']).execute(); st.rerun()
-                        if p['atraso'] > 0: st.error(f"⚠️ {p['atraso']}d de atraso")
 
-    # --- DEMAIS ABAS PRESERVADAS (REGISTRAR, HISTÓRICO, CONFIGURAR) ---
+    # --- ABAS: REGISTRAR, HISTÓRICO, CONFIGURAR (INALTERADAS) ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
-        if not mats: st.warning("Cadastre matérias primeiro.")
+        if not mats: st.warning("Cadastre matérias no menu Configurar.")
         else:
             with st.form("form_reg"):
                 c1, c2, c3 = st.columns([1.5, 0.8, 1.5])
                 dt = c1.date_input("Data", format="DD/MM/YYYY")
                 tb = c2.text_input("Tempo (HHMM)", value="0100")
-                mat = c3.selectbox("Disciplina", mats)
-                ass = st.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
+                mat = c3.selectbox("Disciplina", mats); ass = st.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
                 ca, ct = st.columns(2); ac = ca.number_input("Acertos", 0); to = ct.number_input("Total", 1)
                 com = st.text_area("Comentários")
                 if st.form_submit_button("💾 SALVAR", use_container_width=True):
