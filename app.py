@@ -7,11 +7,9 @@ import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# Importação do Docling com tratamento de erro
+# Importação do Docling com tratamento de erro blindado
 try:
     from docling.document_converter import DocumentConverter
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.datamodel.base_models import InputFormat
     DOCLING_READY = True
 except ImportError:
     DOCLING_READY = False
@@ -149,9 +147,9 @@ else:
     elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador de Edital")
         if not DOCLING_READY:
-            st.error("Erro: Bibliotecas Docling não encontradas ou falha no import.")
+            st.error("Erro: Docling não está carregado corretamente.")
         else:
-            st.info("Suba o PDF do edital para extrair o conteúdo programático automaticamente.")
+            st.info("Suba o PDF (pág. de conteúdo) para extração automática.")
             with st.container(border=True):
                 nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
                 pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
@@ -163,14 +161,9 @@ else:
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            # Configuração corrigida para evitar conflitos de backend
-                            pipeline_opts = PdfPipelineOptions(do_ocr=False)
-                            
-                            # Passagem de opções conforme versão estável
-                            converter = DocumentConverter(
-                                allowed_formats=[InputFormat.PDF],
-                                format_options={InputFormat.PDF: pipeline_opts}  # Correção no formato de passagem de opções
-                            )
+                            # CONFIGURAÇÃO ULTRA-SIMPLIFICADA PARA EVITAR ERRO DE BACKEND/DICT
+                            converter = DocumentConverter() 
+                            # O Docling nas versões novas já tenta o melhor modo sozinho se não passarmos nada
                             
                             result = converter.convert(temp_path)
                             texto_md = result.document.export_to_markdown()
@@ -182,6 +175,7 @@ else:
                                 os.remove(temp_path)
                         except Exception as e:
                             st.error(f"Erro técnico: {e}")
+                            st.info("Dica: Se o erro persistir, pode ser necessário simplificar ainda mais o arquivo PDF.")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
