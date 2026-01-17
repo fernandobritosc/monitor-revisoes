@@ -120,7 +120,7 @@ else:
                                     st.success("Sincronizado!"); time.sleep(0.5); st.rerun()
                             except: st.error("Erro ao sincronizar.")
 
-    # --- ABA: DASHBOARD (TOTALMENTE RESTAURADO) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         if df.empty: st.info("Sem dados.")
         else:
