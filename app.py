@@ -71,31 +71,36 @@ def calcular_pendencias(df):
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
 
-# --- 4. IA: FATIAMENTO INTELIGENTE ---
+# --- 4. IA: FATIAMENTO CIRÚRGICO ---
 def fatiar_edital(texto):
-    """Identifica matérias e tópicos usando padrões de texto de editais."""
-    # Padrão: Matéria em CAIXA ALTA (mínimo 5 letras) que pode começar com número
     linhas = texto.split('\n')
     progresso = {}
     materia_atual = None
     
+    # Blacklist expandida para ignorar cabeçalhos de anexo
+    blacklist = ["ANEXO", "CONTEÚDO", "PROGRAMÁTICO", "INSCRIÇÃO", "REQUISITO", "PROVA", "CARGO", "NÍVEL"]
+
     for linha in linhas:
         linha = linha.strip()
-        if not linha: continue
+        if not linha or len(linha) < 4: continue
         
-        # Detecta Título de Matéria (Ex: 1. LÍNGUA PORTUGUESA ou CONHECIMENTOS GERAIS)
-        if re.match(r'^(\d+\.?)?\s*[A-ZÀ-Ú\s]{5,}$', linha) and len(linha) < 50:
+        # Detecta Títulos (MAIÚSCULAS) - Ex: DIREITO CONSTITUCIONAL
+        if linha.isupper() and len(linha) < 60:
+            if any(word in linha for word in blacklist):
+                continue
             materia_atual = linha
             progresso[materia_atual] = []
+        
         elif materia_atual:
-            # Se já temos uma matéria, as linhas seguintes são tópicos
-            # Divide tópicos por ponto e vírgula ou ponto final se for uma lista
-            sub_topicos = re.split(r'[;.]', linha)
-            for st in sub_topicos:
-                clean_st = st.strip()
-                if clean_st and len(clean_st) > 3:
-                    progresso[materia_atual].append(clean_st)
-    return progresso
+            # Quebra a linha em tópicos (por ; ou , ou .)
+            topicos_linha = re.split(r'[;,]', linha)
+            for t in topicos_linha:
+                t_clean = t.strip()
+                if len(t_clean) > 5: # Evita tópicos curtos demais que são erro de leitura
+                    progresso[materia_atual].append(t_clean)
+    
+    # Limpeza final: remove matérias sem tópicos
+    return {k: v for k, v in progresso.items() if len(v) > 0}
 
 # --- 5. FLUXO APP ---
 if 'missao_ativa' not in st.session_state: st.session_state.missao_ativa = None
@@ -123,7 +128,6 @@ else:
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "robot", "gear", "list-task"], 
                            default_index=1, styles={"nav-link-selected": {"background-color": "#DC2626"}})
 
-    # --- ABAS DO MENU ---
     if menu == "Dashboard":
         st.subheader("📊 Performance Geral")
         if df.empty: st.info("Sem dados.")
@@ -164,48 +168,42 @@ else:
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
     elif menu == "IA: Novo Edital":
-        st.subheader("🤖 Importador de Edital Inteligente")
-        st.info("O sistema tentará separar as matérias e tópicos automaticamente após a extração.")
+        st.subheader("🤖 IA: Importador Programático")
+        st.warning("Dica: Faça o upload apenas das páginas do Anexo de Conteúdo Programático.")
         
-        with st.container(border=True):
-            pdf_file = st.file_uploader("Upload PDF do Edital", type="pdf")
-            if st.button("🚀 PROCESSAR EDITAL") and pdf_file:
-                with st.spinner("Extraindo e fatiando conteúdo..."):
-                    try:
-                        doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-                        texto_completo = ""
-                        for page in doc: texto_completo += page.get_text() + "\n"
-                        doc.close()
-                        
-                        # Executa a lógica de fatiamento
-                        resultado = fatiar_edital(texto_completo)
-                        
-                        if not resultado:
-                            st.warning("O texto foi extraído, mas não detectamos o padrão de matérias (Títulos em CAIXA ALTA). Verifique o texto bruto abaixo.")
-                            st.text_area("Texto Extraído:", value=texto_completo, height=300)
-                        else:
-                            st.success(f"Detectamos {len(resultado)} matérias!")
-                            for mat, tops in resultado.items():
-                                with st.expander(f"📚 {mat} ({len(tops)} tópicos)"):
-                                    st.write("; ".join(tops))
-                                    if st.button(f"Salvar {mat}", key=f"save_{mat}"):
-                                        supabase.table("editais_materias").insert({"concurso": missao, "materia": mat, "topicos": tops}).execute()
-                                        st.toast(f"{mat} adicionada!")
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
+        pdf_file = st.file_uploader("Upload PDF (Anexo)", type="pdf")
+        if st.button("🚀 ANALISAR ANEXO") and pdf_file:
+            with st.spinner("Processando..."):
+                doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+                texto = ""
+                for page in doc: texto += page.get_text() + "\n"
+                doc.close()
+                st.session_state.ia_resultado = fatiar_edital(texto)
+        
+        if "ia_resultado" in st.session_state:
+            res = st.session_state.ia_resultado
+            st.success(f"{len(res)} matérias identificadas.")
+            
+            if st.button("🔥 SALVAR TUDO NO BANCO"):
+                for m, t in res.items():
+                    supabase.table("editais_materias").insert({"concurso": missao, "materia": m, "topicos": t}).execute()
+                st.success("Configuração concluída!"); time.sleep(1); st.rerun()
+
+            for m, t in res.items():
+                with st.expander(f"📚 {m}"):
+                    st.write("; ".join(t))
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
         nm = st.text_input("Nova Matéria")
-        if st.button("Adicionar Matéria"):
+        if st.button("Add"):
             supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos (separados por ;)", "; ".join(t), key=f"t_{m}")
-                cs, cd = st.columns([4, 1])
-                if cs.button("Salvar", key=f"s_{m}"):
+                tx = st.text_area("Tópicos", "; ".join(t), key=f"t_{m}")
+                if st.button("Salvar", key=f"s_{m}"):
                     supabase.table("editais_materias").update({"topicos": [x.strip() for x in tx.split(";") if x.strip()]}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
-                if cd.button("🗑️", key=f"d_{m}"):
+                if st.button("🗑️", key=f"d_{m}"):
                     supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute(); st.rerun()
 
     elif menu == "Histórico":
@@ -213,12 +211,7 @@ else:
         if df.empty: st.info("Vazio.")
         else:
             edited = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']], hide_index=True, use_container_width=True)
-            if st.button("💾 SALVAR ALTERAÇÕES"):
+            if st.button("💾 SALVAR"):
                 for _, r in edited.iterrows():
-                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
+                    supabase.table("registros_estudos").update({"acertos": r['acertos'], \"total\": r['total'], \"taxa\": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq(\"id\", r['id']).execute()
                 st.rerun()
-            st.divider()
-            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
-            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
-                rid = alvo.split('(')[-1].strip(')')
-                supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
