@@ -221,3 +221,17 @@ elif menu == "IA: Novo Edital":
             if alvo != "Selecione..." and st.button("🗑️ EXCLUIR"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
+
+# ... final do bloco do Histórico ...
+    elif menu == "Histórico":
+        st.subheader("📜 Histórico")
+        # (todo o seu código do histórico aqui)
+        if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
+            rid = alvo.split('(')[-1].strip(')')
+            supabase.table("registros_estudos").delete().eq("id", rid).execute()
+            st.rerun()
+
+    # O NOVO BLOCO PRECISA ESTAR ALINHADO COM O 'elif menu == "Histórico"'
+    elif menu == "IA: Novo Edital":
+        st.subheader("🤖 IA: Importador de Edital")
+        # (código do docling aqui)
