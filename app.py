@@ -6,7 +6,7 @@ import plotly.express as px
 import re
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO DE PÁGINA (MUDANÇA PARA LAYOUT AMPLO) ---
+# --- 1. CONFIGURAÇÃO DE PÁGINA ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 # Importações dos Módulos
@@ -63,7 +63,7 @@ if st.session_state.missao_ativa is None:
                     supabase.table("editais_materias").insert({"concurso": n_n, "cargo": n_c, "materia": "Geral", "topicos": []}).execute()
                     st.rerun()
 
-# --- 3. PAINEL INTERNO (EXPANSÍVEL) ---
+# --- 3. PAINEL INTERNO ---
 else:
     missao = st.session_state.missao_ativa
     try:
@@ -81,31 +81,37 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=4)
 
-    # --- HISTÓRICO MELHORADO ---
+    # --- HISTÓRICO CORRIGIDO ---
     if menu == "Histórico":
         st.subheader("📜 Histórico de Estudos")
         if df.empty:
-            st.info("Nenhum dado real ainda.")
+            st.info("Nenhum registro encontrado.")
         else:
             df_hist = df.copy()
+            # 1. Ajuste de Data
             df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
             
-            # Ordenação das colunas para o visual
+            # 2. CONVERSÃO CRÍTICA: ID para String (Evita o erro de APIException)
+            df_hist['id'] = df_hist['id'].astype(str)
+            
             cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'tempo', 'comentarios']
             for col in cols_show:
                 if col not in df_hist.columns: df_hist[col] = ""
 
-            # O use_container_width=True faz a tabela esticar ao fechar o menu lateral
+            # Editor com Tipagem Automática
             ed = st.data_editor(
                 df_hist[cols_show], 
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
-                    "id": st.column_config.TextColumn("ID", width="small"),
-                    "data_estudo": st.column_config.TextColumn("Data", width="medium"),
-                    "materia": st.column_config.TextColumn("Matéria", width="large"),
-                    "assunto": st.column_config.TextColumn("Assunto", width="large"),
-                    "comentarios": st.column_config.TextColumn("Comentários", width="large")
+                    "id": st.column_config.TextColumn("ID", disabled=True),
+                    "data_estudo": "Data",
+                    "materia": "Matéria",
+                    "assunto": "Assunto",
+                    "acertos": "Acertos",
+                    "total": "Total",
+                    "tempo": "Tempo",
+                    "comentarios": "Comentários"
                 }
             )
             
