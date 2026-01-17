@@ -9,7 +9,6 @@ from streamlit_option_menu import option_menu
 # --- 1. CONFIGURAÇÃO DE PÁGINA ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
-# Importações dos Módulos
 from database import supabase
 from logic import get_editais, calcular_pendencias, excluir_concurso_completo
 from styles import apply_styles
@@ -19,7 +18,6 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# FUNÇÃO DE TEMPO: 0130 -> 01:30:00
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -44,14 +42,13 @@ if st.session_state.missao_ativa is None:
                     st.session_state.missao_ativa = nome; st.rerun()
                 if c3.button("🗑️", key=f"del_{nome}"):
                     st.session_state[f"confirm_del_{nome}"] = True
-
                 if st.session_state.get(f"confirm_del_{nome}", False):
                     st.warning(f"Excluir **{nome}**?")
                     cs, cn = st.columns(2)
                     if cs.button("✅ SIM", key=f"y_{nome}"):
                         if excluir_concurso_completo(supabase, nome):
                             st.toast("Removido!"); del st.session_state[f"confirm_del_{nome}"]; st.rerun()
-                    if cn.button("❌ NÃO", key=f"no_{nome}"):
+                    if cn.button("❌ NÃO", key=f"n_{nome}"):
                         del st.session_state[f"confirm_del_{nome}"]; st.rerun()
 
     with tabs[1]:
@@ -81,37 +78,38 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=4)
 
-    # --- HISTÓRICO CORRIGIDO ---
     if menu == "Histórico":
         st.subheader("📜 Histórico de Estudos")
         if df.empty:
             st.info("Nenhum registro encontrado.")
         else:
             df_hist = df.copy()
-            # 1. Ajuste de Data
             df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
-            
-            # 2. CONVERSÃO CRÍTICA: ID para String (Evita o erro de APIException)
             df_hist['id'] = df_hist['id'].astype(str)
             
-            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'tempo', 'comentarios']
-            for col in cols_show:
-                if col not in df_hist.columns: df_hist[col] = ""
+            # --- FILTROS NO TOPO ---
+            c1, c2 = st.columns([2, 2])
+            filtro_mat = c1.multiselect("Filtrar por Disciplina", options=df_hist['materia'].unique())
+            if filtro_mat:
+                df_hist = df_hist[df_hist['materia'].isin(filtro_mat)]
+            
+            # --- RESUMO RÁPIDO ---
+            total_horas = len(df_hist) # Aqui poderíamos somar o tempo real se quiséssemos
+            st.caption(f"Exibindo {len(df_hist)} registros.")
 
-            # Editor com Tipagem Automática
+            # --- EDITOR COM BARRA DE PROGRESSO ---
+            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']
+            
             ed = st.data_editor(
                 df_hist[cols_show], 
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
                     "id": st.column_config.TextColumn("ID", disabled=True),
-                    "data_estudo": "Data",
-                    "materia": "Matéria",
-                    "assunto": "Assunto",
-                    "acertos": "Acertos",
-                    "total": "Total",
-                    "tempo": "Tempo",
-                    "comentarios": "Comentários"
+                    "taxa": st.column_config.ProgressColumn("Precisão (%)", min_value=0, max_value=100, format="%f%%"),
+                    "acertos": st.column_config.NumberColumn("✅", width="small"),
+                    "total": st.column_config.NumberColumn("📊", width="small"),
+                    "tempo": st.column_config.TextColumn("⏱️ Tempo"),
                 }
             )
             
@@ -120,7 +118,8 @@ else:
                     dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
                     supabase.table("registros_estudos").update({
                         "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
-                        "tempo": r['tempo'], "comentarios": r['comentarios']
+                        "tempo": r['tempo'], "comentarios": r['comentarios'],
+                        "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0
                     }).eq("id", r['id']).execute()
                 st.success("Alterações salvas!"); time.sleep(1); st.rerun()
 
