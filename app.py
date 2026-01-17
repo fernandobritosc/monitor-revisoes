@@ -8,7 +8,7 @@ import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL ---
+# --- 1. CONFIGURAÇÃO VISUAL PROFISSIONAL ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -36,7 +36,7 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# --- 3. LÓGICA DE DADOS & REVISÕES ---
+# --- 3. LÓGICA DE DADOS ---
 def get_editais():
     try:
         res = supabase.table("editais_materias").select("*").execute()
@@ -62,21 +62,20 @@ def calcular_pendencias(df):
     pendencias = []
     for col in ['rev_24h', 'rev_07d', 'rev_15d', 'rev_30d']:
         if col not in df.columns: df[col] = False
-
     for _, row in df.iterrows():
         delta = (hoje - row['dt_temp']).days
         taxa = row.get('taxa', 0)
         css = "perf-bad" if taxa < 60 else "perf-med" if taxa < 80 else "perf-good"
         base = {"id": row['id'], "Mat": row['materia'], "Ass": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css}
-        
         if delta >= 30 and not row['rev_30d']: pendencias.append({**base, "Fase": "30d", "Label": "💎 D30"})
         elif delta >= 15 and not row['rev_15d']: pendencias.append({**base, "Fase": "15d", "Label": "🧠 D15"})
         elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
 
-# --- 4. IA: FATIAMENTO POR NUMERAÇÃO (MELHORADO) ---
+# --- 4. IA: FATIAMENTO POR ÂNCORA NUMÉRICA ---
 def fatiar_edital_blindado(texto):
+    """Fatia o texto apenas quando encontra uma nova numeração no início do parágrafo."""
     linhas = texto.split('\n')
     progresso = {}
     materia_atual = None
@@ -86,24 +85,23 @@ def fatiar_edital_blindado(texto):
         linha = linha.strip()
         if not linha or len(linha) < 3: continue
         
-        # Detecta Matéria (Títulos em CAIXA ALTA curtos)
-        if linha.isupper() and len(linha) < 50 and not any(char.isdigit() for char in linha[:3]):
+        # Identifica Matéria (Títulos curtos em CAIXA ALTA)
+        if linha.isupper() and len(linha) < 55 and not re.match(r'^\d', linha):
             if any(word in linha for word in blacklist): continue
             materia_atual = linha
             progresso[materia_atual] = []
             continue
 
         if materia_atual:
-            # Regex que procura por "Número + Espaço + Letra Maiúscula" (Início de tópico)
-            partes = re.split(r'(\d+(?:\.\d+)*\s+[A-ZÀ-Ú])', linha)
-            if len(partes) > 1:
-                for i in range(1, len(partes), 2):
-                    topico = (partes[i] + partes[i+1]).strip()
-                    if len(topico) > 5: progresso[materia_atual].append(topico)
+            # Procura por numeração: "1 ", "2. ", "3.1 ", "10 "
+            if re.match(r'^\d+(\.\d+)*\s+', linha):
+                progresso[materia_atual].append(linha)
             else:
-                if len(linha) > 5:
-                    if progresso[materia_atual]: progresso[materia_atual][-1] += " " + linha
-                    else: progresso[materia_atual].append(linha)
+                # Se não tem número, anexa à última entrada (continuação do assunto)
+                if progresso[materia_atual]:
+                    progresso[materia_atual][-1] += " " + linha
+                else:
+                    progresso[materia_atual].append(linha)
 
     return {k: v for k, v in progresso.items() if len(v) > 0}
 
@@ -122,34 +120,32 @@ if st.session_state.missao_ativa is None:
                 c1, c2 = st.columns([4, 1])
                 c1.markdown(f"### {nome}\n*{dados['cargo']}*")
                 if c2.button("ACESSAR", key=f"ac_{nome}"):
-                    st.session_state.missao_ativa = nome
-                    st.rerun()
+                    st.session_state.missao_ativa = nome; st.rerun()
 
     with tabs[1]:
         st.subheader("🤖 Novo Concurso Inteligente")
         c1, c2 = st.columns(2)
-        novo_n = c1.text_input("Concurso")
-        novo_c = c2.text_input("Cargo")
+        n_nome = c1.text_input("Concurso")
+        n_cargo = c2.text_input("Cargo")
         pdf = st.file_uploader("Upload do Edital", type="pdf")
         
-        if st.button("🚀 ANALISAR PDF") and pdf and novo_n:
-            with st.spinner("Mapeando tópicos..."):
+        if st.button("🚀 ANALISAR PDF") and pdf and n_nome:
+            with st.spinner("Mapeando tópicos por numeração..."):
                 doc = fitz.open(stream=pdf.read(), filetype="pdf")
                 texto = "\n".join([page.get_text() for page in doc])
                 st.session_state.temp_ia = fatiar_edital_blindado(texto)
-                st.session_state.temp_n, st.session_state.temp_c = novo_n, novo_c
+                st.session_state.temp_n, st.session_state.temp_c = n_nome, n_cargo
                 doc.close()
 
         if "temp_ia" in st.session_state:
             res = st.session_state.temp_ia
             for m, t in res.items():
-                with st.expander(f"📚 {m}"):
+                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
                     st.write("\n".join([f"- {item}" for item in t]))
                     if st.button(f"💾 SALVAR {m}", key=f"ia_{m}"):
                         supabase.table("editais_materias").insert({"concurso": st.session_state.temp_n, "cargo": st.session_state.temp_c, "materia": m, "topicos": t}).execute()
                         st.toast(f"{m} salva!")
-            if st.button("✅ FINALIZAR"):
-                del st.session_state.temp_ia; st.rerun()
+            if st.button("✅ FINALIZAR"): del st.session_state.temp_ia; st.rerun()
 
 else:
     missao = st.session_state.missao_ativa
@@ -171,7 +167,7 @@ else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
             hrs = (df['tempo'].sum() / 60) if 'tempo' in df.columns else 0
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo Líquido", f"{int(hrs)}h")
+            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo", f"{int(hrs)}h")
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
 
@@ -198,9 +194,8 @@ else:
             with st.container(border=True):
                 c1, c2 = st.columns([2, 1]); mat = c1.selectbox("Matéria", mats); ass = c1.selectbox("Assunto", dados['materias'].get(mat, ["Geral"])); dt = c2.date_input("Data")
                 st.divider(); ac = st.number_input("Acertos", 0); tot = st.number_input("Total", 1)
-                t1, t2 = st.columns(2); h_val = t1.selectbox("Horas", range(13)); m_val = t2.selectbox("Minutos", range(60))
-                if st.button("💾 REGISTRAR BATALHA", type="primary"):
-                    supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": ass, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.rerun()
+                if st.button("💾 REGISTRAR"):
+                    supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": ass, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.rerun()
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
@@ -209,7 +204,7 @@ else:
             supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos (um por linha)", "\n".join(t), key=f"t_{m}", height=150)
+                tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}", height=150)
                 if st.button("Salvar", key=f"s_{m}"):
                     novos = [l.strip() for l in tx.split('\n') if l.strip()]
                     supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
