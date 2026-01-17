@@ -18,7 +18,11 @@ st.markdown("""
     header { visibility: hidden; }
     .block-container { padding-top: 1.5rem !important; }
     .rev-card { background: #17171B; border: 1px solid #2D2D35; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #333; }
+    .perf-bad { border-left-color: #EF4444; }
+    .perf-med { border-left-color: #F59E0B; }
+    .perf-good { border-left-color: #10B981; }
     .card-subject { font-weight: 800; font-size: 0.85rem; color: #FFF; }
+    .card-topic { font-size: 0.75rem; color: #94A3B8; margin-top: 4px; line-height: 1.2; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
     .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
@@ -45,45 +49,58 @@ def get_editais():
         return editais
     except: return {}
 
-# --- 4. IA: FATIAMENTO POR DIVISOR GLOBAL (RECONSTRUÍDO) ---
-def fatiar_edital_blindado(texto):
-    """Fatia o texto procurando numeração em qualquer lugar da linha."""
-    # Remove quebras de linha excessivas para tratar o texto como um bloco único
-    texto_limpo = re.sub(r'\s+', ' ', texto)
-    
-    # 1. Tenta identificar as Matérias (Geralmente seguidas de dois pontos ou em CAIXA ALTA isolada)
-    # Aqui vamos usar uma lista de palavras-chave para ajudar a IA a não se perder
-    materias_detectadas = {}
-    
-    # Padrão para identificar possíveis títulos de matérias: Palavras em CAIXA ALTA grandes
-    partes_materias = re.split(r'([A-ZÀ-Ú\s]{8,}(?::|\n|$))', texto)
-    
-    materia_atual = "GERAL"
-    blacklist = ["ANEXO", "CONTEÚDO", "PROGRAMÁTICO", "PROVA", "EDITAL", "VAGAS", "CRONOGRAMA"]
+def get_stats(concurso):
+    try:
+        res = supabase.table("registros_estudos").select("*").eq("concurso", concurso).order("data_estudo", desc=True).execute()
+        return pd.DataFrame(res.data)
+    except: return pd.DataFrame()
 
-    for i in range(len(partes_materias)):
-        item = partes_materias[i].strip()
+def calcular_pendencias(df):
+    if df.empty: return pd.DataFrame()
+    hoje = datetime.date.today()
+    df['dt_temp'] = pd.to_datetime(df['data_estudo']).dt.date
+    pendencias = []
+    for col in ['rev_24h', 'rev_07d', 'rev_15d', 'rev_30d']:
+        if col not in df.columns: df[col] = False
+    for _, row in df.iterrows():
+        delta = (hoje - row['dt_temp']).days
+        taxa = row.get('taxa', 0)
+        css = "perf-bad" if taxa < 60 else "perf-med" if taxa < 80 else "perf-good"
+        base = {"id": row['id'], "Mat": row['materia'], "Ass": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css}
+        if delta >= 30 and not row['rev_30d']: pendencias.append({**base, "Fase": "30d", "Label": "💎 D30"})
+        elif delta >= 15 and not row['rev_15d']: pendencias.append({**base, "Fase": "15d", "Label": "🧠 D15"})
+        elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
+        elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
+    return pd.DataFrame(pendencias)
+
+# --- 4. IA: FATIAMENTO REFINADO ---
+def fatiar_edital_blindado(texto):
+    texto_limpo = re.sub(r'\s+', ' ', texto)
+    materia_atual = "GERAL"
+    materias_detectadas = {}
+    blacklist = ["ANEXO", "CONTEÚDO", "PROGRAMÁTICO", "PROVA", "EDITAL", "VAGAS"]
+    
+    # Divide primeiro por possíveis títulos de matérias (CAIXA ALTA)
+    partes = re.split(r'([A-ZÀ-Ú\s]{8,}(?::|\n|$))', texto_limpo)
+    
+    for item in partes:
+        item = item.strip()
         if not item: continue
-        
-        # Se o item parece um título de matéria
         if item.isupper() and len(item) < 50 and not any(word in item for word in blacklist):
             materia_atual = item
             materias_detectadas[materia_atual] = []
         else:
-            # Dentro do texto da matéria, fatiamos pelos números: 1, 2, 2.1, 3...
-            # O padrão procura: (Início ou espaço) + Número + (Ponto ou Espaço) + Letra Maiúscula
+            # Separa por numeração: " 1 ", " 2 ", " 3.1 "
             topicos = re.split(r'(\s\d+(?:\.\d+)*[\.\s]+[A-ZÀ-Ú])', item)
-            
             if len(topicos) > 1:
                 for j in range(1, len(topicos), 2):
-                    texto_topico = (topicos[j] + topicos[j+1]).strip()
+                    txt = (topicos[j] + topicos[j+1]).strip()
                     if materia_atual not in materias_detectadas: materias_detectadas[materia_atual] = []
-                    materias_detectadas[materia_atual].append(texto_topico)
+                    materias_detectadas[materia_atual].append(txt)
             else:
                 if len(item) > 10:
                     if materia_atual not in materias_detectadas: materias_detectadas[materia_atual] = []
                     materias_detectadas[materia_atual].append(item)
-
     return {k: v for k, v in materias_detectadas.items() if len(v) > 0}
 
 # --- 5. FLUXO CENTRAL ---
@@ -104,40 +121,29 @@ if st.session_state.missao_ativa is None:
                     st.session_state.missao_ativa = nome; st.rerun()
 
     with tabs[1]:
-        st.subheader("🤖 Novo Concurso Inteligente")
+        st.subheader("🤖 Novo Concurso via IA")
         c1, c2 = st.columns(2)
-        novo_n = c1.text_input("Concurso")
-        novo_c = c2.text_input("Cargo")
-        pdf = st.file_uploader("Upload do Conteúdo Programático", type="pdf")
-        
-        if st.button("🚀 ANALISAR PDF") and pdf and novo_n:
-            with st.spinner("Desconstruindo PDF e isolando tópicos..."):
+        n_n, n_c = c1.text_input("Concurso"), c2.text_input("Cargo")
+        pdf = st.file_uploader("Edital PDF", type="pdf")
+        if st.button("🚀 ANALISAR") and pdf and n_n:
+            with st.spinner("Processando..."):
                 doc = fitz.open(stream=pdf.read(), filetype="pdf")
-                texto = "\n".join([page.get_text() for page in doc])
-                st.session_state.temp_ia = fatiar_edital_blindado(texto)
-                st.session_state.temp_n, st.session_state.temp_c = novo_n, novo_c
+                st.session_state.temp_ia = fatiar_edital_blindado("\n".join([p.get_text() for p in doc]))
+                st.session_state.temp_n, st.session_state.temp_c = n_n, n_c
                 doc.close()
-
         if "temp_ia" in st.session_state:
-            res = st.session_state.temp_ia
-            for m, t in res.items():
-                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
-                    st.write("\n".join([f"**{item}**" for item in t]))
-                    if st.button(f"💾 SALVAR {m}", key=f"ia_{m}"):
-                        supabase.table("editais_materias").insert({
-                            "concurso": st.session_state.temp_n,
-                            "cargo": st.session_state.temp_c,
-                            "materia": m, "topicos": t
-                        }).execute()
+            for m, t in st.session_state.temp_ia.items():
+                with st.expander(f"📚 {m}"):
+                    st.write("\n".join([f"- {i}" for i in t]))
+                    if st.button(f"Salvar {m}", key=f"ia_{m}"):
+                        supabase.table("editais_materias").insert({"concurso": st.session_state.temp_n, "cargo": st.session_state.temp_c, "materia": m, "topicos": t}).execute()
                         st.toast(f"{m} salva!")
             if st.button("✅ FINALIZAR"): del st.session_state.temp_ia; st.rerun()
 
 else:
-    # O restante do sistema (Dashboard, Revisões, etc)
     missao = st.session_state.missao_ativa
-    res_stats = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
-    df = pd.DataFrame(res_stats.data)
-    dados_edital = get_editais().get(missao, {})
+    df = get_stats(missao)
+    dados = get_editais().get(missao, {})
     
     with st.sidebar:
         st.title(f"🎯 {missao}")
@@ -145,7 +151,7 @@ else:
         st.divider()
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], 
-                           default_index=1, styles={"nav-link-selected": {"background-color": "#DC2626"}})
+                           default_index=2, styles={"nav-link-selected": {"background-color": "#DC2626"}})
 
     if menu == "Dashboard":
         st.subheader("📊 Performance")
@@ -159,17 +165,38 @@ else:
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
 
     elif menu == "Revisões":
-        # (Lógica de revisões mantida igual)
         st.subheader("🔄 Radar D1 - D30")
-        # ... (código de revisões aqui)
-        st.write("Aba de revisões pronta.")
+        df_p = calcular_pendencias(df)
+        if df_p.empty: st.success("✅ Tudo revisado!")
+        else:
+            cols = st.columns(4); fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
+            for i, (fid, flabel) in enumerate(fases):
+                with cols[i]:
+                    st.markdown(f"#### {flabel}")
+                    itens = df_p[df_p['Fase'] == fid]
+                    for _, row in itens.iterrows():
+                        st.markdown(f'<div class="rev-card {row["CSS"]}"><div class="card-subject">{row["Mat"]}</div><div class="card-topic">{row["Ass"]}</div><div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-top:5px;"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
+                        if st.button("Ok", key=f"f_{row['id']}_{fid}"):
+                            supabase.table("registros_estudos").update({f"rev_{fid}": True}).eq("id", row['id']).execute(); st.rerun()
+
+    elif menu == "Registrar":
+        st.subheader("📝 Registrar Questões")
+        mats = list(dados.get('materias', {}).keys())
+        if not mats: st.warning("Cadastre matérias primeiro.")
+        else:
+            with st.container(border=True):
+                c1, c2 = st.columns([2, 1]); mat = c1.selectbox("Matéria", mats); ass = c1.selectbox("Assunto", dados['materias'].get(mat, ["Geral"])); dt = c2.date_input("Data")
+                st.divider(); ac = st.number_input("Acertos", 0); tot = st.number_input("Total", 1)
+                t1, t2 = st.columns(2); h_val = t1.selectbox("Horas", range(13)); m_val = t2.selectbox("Minutos", range(60))
+                if st.button("💾 SALVAR REGISTRO", type="primary"):
+                    supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": ass, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": (h_val*60+m_val), "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.rerun()
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
         nm = st.text_input("Nova Matéria")
         if st.button("Add"):
             supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
-        for m, t in dados_edital.get('materias', {}).items():
+        for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
                 tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}", height=150)
                 if st.button("Salvar", key=f"s_{m}"):
