@@ -3,12 +3,12 @@ import pandas as pd
 import datetime
 import time
 import os
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF - Motor leve de extração
 import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL ---
+# --- 1. CONFIGURAÇÃO VISUAL PROFISSIONAL ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -21,6 +21,9 @@ st.markdown("""
     .perf-bad { border-left-color: #EF4444; }
     .perf-med { border-left-color: #F59E0B; }
     .perf-good { border-left-color: #10B981; }
+    .card-subject { font-weight: 800; font-size: 0.85rem; color: #FFF; margin-bottom: 2px; }
+    .card-topic { font-size: 0.75rem; color: #94A3B8; margin-bottom: 6px; line-height: 1.2; }
+    .card-footer { display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748B; align-items: center; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
     .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
@@ -73,7 +76,7 @@ def calcular_pendencias(df):
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
 
-# --- 4. FLUXO PRINCIPAL ---
+# --- 4. FLUXO APP ---
 if 'missao_ativa' not in st.session_state: st.session_state.missao_ativa = None
 
 if st.session_state.missao_ativa is None:
@@ -106,7 +109,7 @@ else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
             mins = df['tempo'].sum() if 'tempo' in df.columns else 0
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo", f"{int(mins//60)}h")
+            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo Líquido", f"{int(mins//60)}h")
             st.divider()
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
@@ -116,13 +119,14 @@ else:
         df_p = calcular_pendencias(df)
         if df_p.empty: st.success("✅ Tudo revisado!")
         else:
-            cols = st.columns(4); fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
+            cols = st.columns(4)
+            fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
             for i, (fid, flabel) in enumerate(fases):
                 with cols[i]:
                     st.markdown(f"#### {flabel}")
-                    itens = df_p[df_p['Fase'] == fid] if not df_p.empty else []
+                    itens = df_p[df_p['Fase'] == fid]
                     for _, row in itens.iterrows():
-                        st.markdown(f'<div class="rev-card {row["CSS"]}"><div style="font-weight:800;font-size:0.85rem;color:#FFF;">{row["Mat"]}</div><div style="font-size:0.75rem;color:#94A3B8;">{row["Ass"]}</div><div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-top:5px;"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rev-card {row["CSS"]}"><div class="card-subject">{row["Mat"]}</div><div class="card-topic">{row["Ass"]}</div><div class="card-footer"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
                         if st.button("Ok", key=f"f_{row['id']}_{fid}"):
                             supabase.table("registros_estudos").update({f"rev_{fid}": True}).eq("id", row['id']).execute(); st.rerun()
 
@@ -139,29 +143,28 @@ else:
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
     elif menu == "IA: Novo Edital":
-        st.subheader("🤖 Importador de Edital (Extração Direta)")
-        st.info("Extração de texto via motor local (sem dependência de IA externa).")
+        st.subheader("🤖 Importador de Edital")
+        st.info("Suba o PDF e o motor extrairá o texto para organizar as matérias.")
         with st.container(border=True):
-            pdf_file = st.file_uploader("Upload Edital (PDF Digital)", type="pdf")
+            pdf_file = st.file_uploader("Upload PDF (Somente Texto)", type="pdf")
             if st.button("🚀 EXTRAIR TEXTO") and pdf_file:
-                with st.spinner("Lendo PDF..."):
+                with st.spinner("Processando..."):
                     try:
-                        # Abre o PDF diretamente da memória
                         doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
                         texto_completo = ""
                         for page in doc:
                             texto_completo += page.get_text() + "\n"
-                        
                         st.success("Leitura concluída!")
-                        st.text_area("Texto Extraído:", value=texto_completo, height=450)
+                        st.text_area("Texto Bruto Extraído:", value=texto_completo, height=400)
                         doc.close()
                     except Exception as e:
-                        st.error(f"Erro na leitura: {e}")
+                        st.error(f"Erro: {e}")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
         nm = st.text_input("Nova Matéria")
-        if st.button("Add"): supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
+        if st.button("Adicionar"):
+            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
                 tx = st.text_area("Tópicos (;)", "; ".join(t), key=f"t_{m}")
@@ -176,11 +179,12 @@ else:
         if df.empty: st.info("Vazio.")
         else:
             edited = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']], hide_index=True, use_container_width=True)
-            if st.button("💾 SALVAR"):
+            if st.button("💾 SALVAR ALTERAÇÕES"):
                 for _, r in edited.iterrows():
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
                 st.rerun()
-            alvo = st.selectbox("Apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
-            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR"):
+            st.divider()
+            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
+            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
