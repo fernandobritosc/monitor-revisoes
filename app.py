@@ -66,7 +66,7 @@ else:
                            icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0, styles={"nav-link": {"font-size": "14px", "padding": "10px"}})
 
-    # --- ABA: REVISÕES (SISTEMA DE CICLOS E DIAS) ---
+    # --- ABA: REVISÕES (SINCRONIZADA COM O DASHBOARD) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -80,7 +80,7 @@ else:
                 # Regra 24h
                 if dias_desde >= 1 and not row.get('rev_24h', False):
                     pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde-1, "coment": row.get('comentarios', '')})
-                # Ciclos Posteriores
+                # Ciclos Posteriores (7, 15, 20d)
                 elif row.get('rev_24h', True):
                     d_alvo, col_alvo, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
                     if dias_desde >= d_alvo and not row.get(col_alvo, False):
@@ -103,13 +103,23 @@ else:
                         st.write("")
                         if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:12px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
                         if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
-                            supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['coment']} | {p['tipo']}: {acr}/{tor}"}).eq("id", p['id']).execute(); st.rerun()
+                            try:
+                                nova_obs = f"{p['coment']} | {p['tipo']}: {acr}/{tor}"
+                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
+                                if res_db.data:
+                                    n_ac = res_db.data[0]['acertos'] + acr
+                                    n_to = res_db.data[0]['total'] + tor
+                                    n_tx = (n_ac / n_to * 100) if n_to > 0 else 0
+                                    supabase.table("registros_estudos").update({p['col']: True, "comentarios": nova_obs, "acertos": n_ac, "total": n_to, "taxa": n_tx}).eq("id", p['id']).execute()
+                                    st.success("Sincronizado!")
+                                    time.sleep(0.5); st.rerun()
+                            except: st.error("Erro ao atualizar."); time.sleep(1)
 
     # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
-        if not mats: st.warning("Cadastre matérias no menu Configurar.")
+        if not mats: st.warning("Cadastre matérias primeiro.")
         else:
             with st.form("form_reg"):
                 c1, c2, c3 = st.columns([1.5, 0.8, 1.5])
@@ -123,9 +133,9 @@ else:
                         t_b = formatar_tempo_para_bigint(tb)
                         payload = {"concurso": missao, "materia": mat, "assunto": ass, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": to, "taxa": (ac/to*100), "comentarios": com, "tempo": t_b, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}
                         supabase.table("registros_estudos").insert(payload).execute(); st.success("Salvo!"); st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
+                    except: st.error("Erro ao salvar.")
 
-    # --- ABA: DASHBOARD (VISUAL LIMPO) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         if df.empty: st.info("Sem dados.")
         else:
@@ -135,9 +145,9 @@ else:
             with c_main:
                 if sub == "Geral":
                     k1, k2, k3, k4 = st.columns(4)
-                    tot_q = df['total'].sum(); acc_q = df['acertos'].sum()
-                    k1.metric("Questões", int(tot_q)); k2.metric("Acertos", int(acc_q))
-                    k3.metric("Precisão", f"{(acc_q/tot_q*100 if tot_q>0 else 0):.1f}%")
+                    t_q = df['total'].sum(); a_q = df['acertos'].sum()
+                    k1.metric("Questões", int(t_q)); k2.metric("Acertos", int(a_q))
+                    k3.metric("Precisão", f"{(a_q/t_q*100 if t_q>0 else 0):.1f}%")
                     k4.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
                     st.divider()
                     col_g1, col_g2 = st.columns(2)
