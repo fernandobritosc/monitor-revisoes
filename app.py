@@ -19,7 +19,6 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# REGRA HHMM: 0130 -> 01:30:00 (OK)
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -80,14 +79,12 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=0)
 
-    # --- ABA DASHBOARD (v135.0 - LAYOUT PROFISSIONAL) ---
+    # --- ABA DASHBOARD (v136.0 - FOCO EM ASSUNTOS) ---
     if menu == "Dashboard":
         if df.empty:
-            st.info("Aguardando dados para gerar as análises...")
+            st.info("Aguardando dados para análise...")
         else:
-            # Layout com Sub-menu lateral de ícones
             c_menu, c_conteudo = st.columns([0.15, 2.5])
-            
             with c_menu:
                 st.write("") 
                 sub_aba = option_menu(
@@ -111,58 +108,49 @@ else:
                 df['minutos'] = df['tempo'].apply(conv_min)
 
                 if sub_aba == "Geral":
-                    st.markdown("### 📊 Desempenho Geral")
+                    st.markdown("### 🏠 Visão Geral")
                     k1, k2, k3, k4 = st.columns(4)
                     tot_q = df['total'].sum()
                     acc_q = df['acertos'].sum()
-                    err_q = tot_q - acc_q
-                    
-                    k1.metric("Questões resolvidas", f"{int(tot_q)}")
-                    k2.metric("Acertos", f"{int(acc_q)}", delta=f"{int(acc_q)}", delta_color="normal")
+                    k1.metric("Questões", f"{int(tot_q)}")
+                    k2.metric("Acertos", f"{int(acc_q)}")
                     k3.metric("Matérias", len(df['materia'].unique()))
-                    k4.metric("Erros", f"{int(err_q)}", delta=f"-{int(err_q)}", delta_color="inverse")
+                    k4.metric("Horas", f"{(df['minutos'].sum()/60):.1f}h")
                     st.divider()
-                    
                     col_p1, col_p2 = st.columns(2)
                     with col_p1:
-                        # Gráfico de Rosca Central (Precisão)
-                        fig_g = go.Figure(go.Pie(
-                            values=[acc_q, err_q], labels=['Acertos', 'Erros'],
-                            hole=.6, marker_colors=['#00ff00', '#ff4b4b'],
-                            textinfo='percent'
-                        ))
-                        fig_g.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                        fig_g = go.Figure(go.Pie(values=[acc_q, tot_q-acc_q], labels=['Acertos', 'Erros'], hole=.6, marker_colors=['#00ff00', '#ff4b4b']))
                         st.plotly_chart(fig_g, use_container_width=True)
                     with col_p2:
-                        # Radar de Competências
                         df_r = df.groupby('materia')['taxa'].mean().reset_index()
                         fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True)
                         fig_r.update_traces(fill='toself', line_color='#ff4b4b')
                         st.plotly_chart(fig_r, use_container_width=True)
 
                 elif sub_aba == "Evolução":
-                    st.markdown("### 📈 Evolução do Desempenho")
+                    st.markdown("### 📈 Evolução")
                     df_ev = df.groupby('data_estudo').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index().sort_values('data_estudo')
-                    fig_area = px.area(df_ev, x='data_estudo', y=['total', 'acertos'], color_discrete_map={"total": "#31333F", "acertos": "#ff4b4b"})
-                    st.plotly_chart(fig_area, use_container_width=True)
+                    st.plotly_chart(px.area(df_ev, x='data_estudo', y=['total', 'acertos'], color_discrete_map={"total": "#31333F", "acertos": "#ff4b4b"}), use_container_width=True)
 
                 elif sub_aba == "Matérias":
-                    st.markdown("### 📚 Atividades por Matéria")
+                    st.markdown("### 📚 Detalhamento por Matéria e Assunto")
                     df_mat = df.groupby('materia').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
                     
-                    for _, row in df_mat.iterrows():
-                        taxa = row['taxa']
-                        st.markdown(f"**{row['materia']}** ({int(row['total'])} questões)")
-                        # Barra de progresso bicolore customizada via HTML
-                        st.markdown(f"""
-                            <div style="width: 100%; background-color: #ff4b4b; border-radius: 5px; height: 12px; margin-bottom: 15px;">
-                                <div style="width: {taxa}%; background-color: #00ff00; border-radius: 5px; height: 12px; text-align: right;">
-                                    <span style="padding-right: 5px; color: black; font-size: 10px; font-weight: bold;">{taxa:.1f}%</span>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    for _, m_row in df_mat.iterrows():
+                        m_nome = m_row['materia']
+                        m_taxa = m_row['taxa']
+                        with st.expander(f"📁 {m_nome.upper()} — {m_taxa:.1f}% ({int(m_row['total'])} qts)"):
+                            st.markdown(f'<div style="width: 100%; background-color: #ff4b4b; border-radius: 4px; height: 8px; margin-bottom: 20px;"><div style="width: {m_taxa}%; background-color: #00ff00; border-radius: 4px; height: 8px;"></div></div>', unsafe_allow_html=True)
+                            
+                            df_ass = df[df['materia'] == m_nome].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
+                            for _, a_row in df_ass.iterrows():
+                                a_taxa = a_row['taxa']
+                                c1, c2 = st.columns([2, 1])
+                                c1.markdown(f"<span style='font-size: 14px; color: #ced4da;'>└ {a_row['assunto']}</span>", unsafe_allow_html=True)
+                                c2.markdown(f"<p style='text-align: right; font-size: 12px; color: grey;'>{int(a_row['acertos'])} / {int(a_row['total'])}</p>", unsafe_allow_html=True)
+                                st.markdown(f'<div style="width: 100%; background-color: #444; border-radius: 2px; height: 5px; margin-bottom: 15px; margin-left: 20px;"><div style="width: {a_taxa}%; background-color: #00ff00; border-radius: 2px; height: 5px;"></div></div>', unsafe_allow_html=True)
 
-    # --- DEMAIS ABAS PRESERVADAS ---
+    # --- DEMAIS ABAS MANTIDAS ---
     elif menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -180,7 +168,7 @@ else:
                 else: d, col, lbl = 20, "rev_30d", "Revisão 20d"
                 if dias >= d and not row.get(col, False):
                     pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": lbl, "col": col, "atraso": dias - d, "c": row.get('comentarios', '')})
-        if not pend: st.success("✅ Tudo revisado!")
+        if not pend: st.success("✅ Tudo em dia!")
         else:
             for p in pend:
                 with st.container(border=True):
