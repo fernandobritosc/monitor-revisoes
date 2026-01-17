@@ -3,12 +3,12 @@ import pandas as pd
 import datetime
 import time
 import os
-import fitz  # PyMuPDF - Motor leve de extração
+import fitz  # PyMuPDF: Motor estável para GitHub/Streamlit Cloud
 import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL PROFISSIONAL ---
+# --- 1. CONFIGURAÇÃO VISUAL COM ESTILO COMMANDER ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -63,13 +63,11 @@ def calcular_pendencias(df):
     pendencias = []
     for col in ['rev_24h', 'rev_07d', 'rev_15d', 'rev_30d']:
         if col not in df.columns: df[col] = False
-
     for _, row in df.iterrows():
         delta = (hoje - row['dt_temp']).days
         taxa = row.get('taxa', 0)
         css = "perf-bad" if taxa < 60 else "perf-med" if taxa < 80 else "perf-good"
         base = {"id": row['id'], "Mat": row['materia'], "Ass": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css}
-        
         if delta >= 30 and not row['rev_30d']: pendencias.append({**base, "Fase": "30d", "Label": "💎 D30"})
         elif delta >= 15 and not row['rev_15d']: pendencias.append({**base, "Fase": "15d", "Label": "🧠 D15"})
         elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
@@ -107,9 +105,9 @@ else:
         if df.empty: st.info("Sem dados.")
         else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
-            mins = df['tempo'].sum() if 'tempo' in df.columns else 0
+            hrs = (df['tempo'].sum() / 60) if 'tempo' in df.columns else 0
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo Líquido", f"{int(mins//60)}h")
+            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo", f"{int(hrs)}h")
             st.divider()
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
@@ -119,8 +117,7 @@ else:
         df_p = calcular_pendencias(df)
         if df_p.empty: st.success("✅ Tudo revisado!")
         else:
-            cols = st.columns(4)
-            fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
+            cols = st.columns(4); fases = [("24h", "🔥 D1"), ("07d", "📅 D7"), ("15d", "🧠 D15"), ("30d", "💎 D30")]
             for i, (fid, flabel) in enumerate(fases):
                 with cols[i]:
                     st.markdown(f"#### {flabel}")
@@ -146,28 +143,29 @@ else:
         st.subheader("🤖 Importador de Edital")
         st.info("Suba o PDF e o motor extrairá o texto para organizar as matérias.")
         with st.container(border=True):
-            pdf_file = st.file_uploader("Upload PDF (Somente Texto)", type="pdf")
+            pdf_file = st.file_uploader("Upload PDF do Edital", type="pdf")
             if st.button("🚀 EXTRAIR TEXTO") and pdf_file:
                 with st.spinner("Processando..."):
                     try:
+                        # Leitura via PyMuPDF (Direto da memória para evitar erro de permissão)
                         doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
                         texto_completo = ""
                         for page in doc:
                             texto_completo += page.get_text() + "\n"
                         st.success("Leitura concluída!")
-                        st.text_area("Texto Bruto Extraído:", value=texto_completo, height=400)
+                        st.text_area("Texto Bruto Extraído:", value=texto_completo, height=450)
                         doc.close()
                     except Exception as e:
-                        st.error(f"Erro: {e}")
+                        st.error(f"Erro na extração: {e}")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
         nm = st.text_input("Nova Matéria")
-        if st.button("Adicionar"):
+        if st.button("Adicionar Matéria"):
             supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos (;)", "; ".join(t), key=f"t_{m}")
+                tx = st.text_area("Tópicos (separados por ;)", "; ".join(t), key=f"t_{m}")
                 cs, cd = st.columns([4, 1])
                 if cs.button("Salvar", key=f"s_{m}"):
                     supabase.table("editais_materias").update({"topicos": [x.strip() for x in tx.split(";") if x.strip()]}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
