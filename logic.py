@@ -31,3 +31,11 @@ def calcular_pendencias(df):
         elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
+def excluir_concurso_completo(supabase, nome_concurso):
+    try:
+        # Remove todas as matérias vinculadas a este concurso
+        supabase.table("editais_materias").delete().eq("concurso", nome_concurso).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao excluir concurso: {e}")
+        return False
