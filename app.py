@@ -3,19 +3,16 @@ import pandas as pd
 import datetime
 import time
 import os
+from pathlib import Path
 import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- TRATAMENTO DE AMBIENTE PARA DOCLING (ANTES DE TUDO) ---
-# Isso redireciona todos os downloads de modelos para a pasta do seu app
+# --- TRATAMENTO DE AMBIENTE ---
 os.environ["XDG_CACHE_HOME"] = os.path.join(os.getcwd(), ".cache")
-os.environ["HF_HOME"] = os.path.join(os.getcwd(), ".cache")
 
 try:
     from docling.document_converter import DocumentConverter
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.datamodel.base_models import InputFormat
     DOCLING_READY = True
 except ImportError:
     DOCLING_READY = False
@@ -153,50 +150,32 @@ else:
     elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador de Edital")
         if not DOCLING_READY:
-            st.error("Erro: Docling não está carregado corretamente.")
+            st.error("Erro: Docling não carregado.")
         else:
-            st.info("Suba o PDF (pág. de conteúdo) para extração automática.")
             with st.container(border=True):
-                nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
-                pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
+                nome_concurso = st.text_input("Nome do Concurso")
+                pdf_file = st.file_uploader("Upload PDF", type="pdf")
                 
-                if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
-                    with st.spinner("🤖 Analisando PDF..."):
+                if st.button("🚀 EXTRAÇÃO FORÇA BRUTA") and pdf_file:
+                    with st.spinner("🤖 Processando..."):
                         try:
-                            # 1. Garante que as pastas de cache existam no diretório do app
-                            cache_dir = os.path.join(os.getcwd(), ".cache")
-                            if not os.path.exists(cache_dir):
-                                os.makedirs(cache_dir)
+                            # SALVANDO E USANDO PATHLIB (IMPROVÁVEL)
+                            temp_file = Path("temp_edital.pdf")
+                            temp_file.write_bytes(pdf_file.getbuffer())
                             
-                            temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
-                            with open(temp_path, "wb") as f:
-                                f.write(pdf_file.getbuffer())
+                            # INSTANCIAÇÃO PURA (SEM DICIONÁRIOS)
+                            converter = DocumentConverter()
                             
-                            # 2. Configurações para PDF digital (Sem OCR para evitar Permission Denied)
-                            pipeline_options = PdfPipelineOptions()
-                            pipeline_options.do_ocr = False
-                            pipeline_options.do_table_structure = True
-                            
-                            # 3. Inicializa o conversor
-                            converter = DocumentConverter(
-                                allowed_formats=[InputFormat.PDF],
-                                format_options={
-                                    InputFormat.PDF: {
-                                        "pipeline_options": pipeline_options
-                                    }
-                                }
-                            )
-                            
-                            result = converter.convert(temp_path)
+                            # CONVERSÃO DIRETA POR CAMINHO
+                            result = converter.convert(temp_file)
                             texto_md = result.document.export_to_markdown()
                             
-                            st.success("Leitura concluída!")
-                            st.text_area("Conteúdo Extraído:", value=texto_md, height=400)
+                            st.success("Concluído!")
+                            st.text_area("Resultado:", value=texto_md, height=400)
                             
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
+                            if temp_file.exists(): temp_file.unlink()
                         except Exception as e:
-                            st.error(f"Erro técnico: {e}")
+                            st.error(f"Erro: {e}")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
@@ -216,12 +195,11 @@ else:
         if df.empty: st.info("Vazio.")
         else:
             edited = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']], hide_index=True, use_container_width=True)
-            if st.button("💾 SALVAR ALTERAÇÕES"):
+            if st.button("💾 SALVAR"):
                 for _, r in edited.iterrows():
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
                 st.rerun()
-            st.divider()
             alvo = st.selectbox("Apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
-            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
+            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
