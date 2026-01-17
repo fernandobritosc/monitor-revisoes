@@ -140,6 +140,38 @@ if st.session_state.missao_ativa is None:
                     if st.button(f"Acessar Missão", key=f"ac_{nome}", use_container_width=True, type="primary"):
                         st.session_state.missao_ativa = nome
                         st.rerun()
+    
+    with tabs[1]:
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("##### Cadastrar Novo Concurso/Edital")
+        with st.form("form_novo_concurso", clear_on_submit=True):
+            nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
+            cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
+            
+            btn_cadastrar = st.form_submit_button("🚀 INICIAR MISSÃO", use_container_width=True, type="primary")
+            
+            if btn_cadastrar:
+                if nome_concurso and cargo_concurso:
+                    try:
+                        # No seu sistema, o cadastro inicial parece ser feito na tabela editais_materias
+                        # ou em uma tabela de concursos. Baseado no get_editais, ele busca de editais_materias.
+                        # Vamos inserir uma matéria "Geral" para inicializar o concurso.
+                        supabase.table("editais_materias").insert({
+                            "concurso": nome_concurso,
+                            "cargo": cargo_concurso,
+                            "materia": "Geral",
+                            "topicos": ["Introdução"]
+                        }).execute()
+                        st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
+                        time.sleep(1)
+                        st.session_state.missao_ativa = nome_concurso
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao cadastrar: {e}")
+                else:
+                    st.warning("⚠️ Por favor, preencha o nome e o cargo.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
 else:
     missao = st.session_state.missao_ativa
     try:
@@ -264,21 +296,16 @@ else:
             with st.container():
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
-                # Lógica de Reatividade: Disciplina -> Assunto
-                # Usamos st.selectbox fora do form para garantir a atualização imediata da lista de assuntos
                 c1, c2 = st.columns([2, 1])
                 dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
                 tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
                 
                 mat_reg = st.selectbox("Disciplina", mats)
-                
-                # A chave (key) dinâmica força o Streamlit a recriar o selectbox de assunto quando a matéria muda
                 assuntos_disponiveis = dados['materias'].get(mat_reg, ["Geral"])
                 ass_reg = st.selectbox("Assunto", assuntos_disponiveis, key=f"assunto_select_{mat_reg}")
                 
                 st.divider()
                 
-                # O restante pode ficar dentro de um form para o botão de salvar
                 with st.form("form_registro_final", clear_on_submit=True):
                     ca_reg, ct_reg = st.columns(2)
                     ac_reg = ca_reg.number_input("Questões Acertadas", 0)
