@@ -18,7 +18,7 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# REGRA OK: 0130 -> 01:30:00
+# REGRA HHMM: 0130 -> 01:30:00
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -79,70 +79,77 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=1)
 
-    # --- ABA REVISÕES (REGRA PÓS-EDITAL OK) ---
+    # --- ABA REVISÕES (LÓGICA PÓS-EDITAL + CONTADOR DE QUESTÕES) ---
     if menu == "Revisões":
-        st.subheader("🔄 Radar de Revisões")
+        st.subheader("🔄 Radar de Revisões (Modo Pós-Edital)")
         if df.empty:
             st.info("Nenhum registro para gerar revisões.")
         else:
             hoje = datetime.date.today()
             pendencias = []
+            
             for _, row in df.iterrows():
                 dt_estudo = pd.to_datetime(row['data_estudo']).date()
                 dias_desde = (hoje - dt_estudo).days
                 taxa = row.get('taxa', 0)
+                
+                # 1. REGRA 24H (Sempre ocorre para todos)
                 if dias_desde >= 1 and not row.get('rev_24h', False):
-                    pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde - 1})
+                    pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde - 1, "c_antigo": row.get('comentarios', '')})
+                
+                # 2. LÓGICA DE PERFORMANCE (7d, 15d ou 20d)
                 if row.get('rev_24h', False):
                     if taxa <= 75: d, col, label = 7, "rev_07d", "Revisão 7d"
                     elif 76 <= taxa <= 79: d, col, label = 15, "rev_15d", "Revisão 15d"
                     else: d, col, label = 20, "rev_30d", "Revisão 20d"
+                    
                     if dias_desde >= d and not row.get(col, False):
-                        pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": label, "col": col, "atraso": dias_desde - d})
-            if not pendencias: st.success("✅ Tudo revisado!")
+                        pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": label, "col": col, "atraso": dias_desde - d, "c_antigo": row.get('comentarios', '')})
+
+            if not pendencias:
+                st.success("✅ Tudo revisado!")
             else:
+                st.warning(f"Você tem {len(pendencias)} revisões pendentes.")
                 for p in pendencias:
                     with st.container(border=True):
-                        c1, c2, c3 = st.columns([3, 1.5, 1])
+                        c1, c2, c3 = st.columns([3, 1.5, 1.5])
                         c1.markdown(f"**{p['materia']}**\n\n*{p['assunto']}*")
-                        cor = ":red" if p['atraso'] > 0 else ":green"
-                        c2.markdown(f"{cor}[{p['tipo']}]")
-                        if c3.button("CONCLUIR", key=f"rev_{p['id']}_{p['col']}"):
-                            supabase.table("registros_estudos").update({p['col']: True}).eq("id", p['id']).execute(); st.rerun()
+                        
+                        # NOVO: Input de questões na própria aba de revisão
+                        q_rev = c2.number_input(f"Questões ({p['tipo']})", min_value=0, value=0, key=f"q_{p['id']}_{p['col']}")
+                        
+                        if c3.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True):
+                            # Atualiza o comentário preservando o que já existia e adicionando o histórico da revisão
+                            msg_rev = f"{p['tipo']}: {q_rev} qts"
+                            final_c = f"{p['c_antigo']} | {msg_rev}".strip(" | ")
+                            
+                            supabase.table("registros_estudos").update({
+                                p['col']: True,
+                                "comentarios": final_c
+                            }).eq("id", p['id']).execute()
+                            
+                            st.toast(f"✅ {p['materia']} revisada!"); time.sleep(0.5); st.rerun()
 
-    # --- ABA CONFIGURAR (RESTAURADA) ---
+    # --- ABA CONFIGURAR (RESPEITANDO AS REGRAS) ---
     elif menu == "Configurar":
-        st.subheader("⚙️ Gerenciar Disciplinas do Edital")
-        
-        # Inserir Nova Matéria
+        st.subheader("⚙️ Configurar Edital")
         with st.form("add_materia"):
             c1, c2 = st.columns([3, 1])
             nova_m = c1.text_input("Nome da Nova Disciplina")
             if c2.form_submit_button("➕ ADICIONAR"):
                 if nova_m:
                     supabase.table("editais_materias").insert({"concurso": missao, "cargo": dados['cargo'], "materia": nova_m, "topicos": []}).execute()
-                    st.success(f"{nova_m} adicionada!"); time.sleep(0.5); st.rerun()
-
+                    st.rerun()
         st.divider()
-        
-        # Gerenciar Matérias Existentes
-        if not dados.get('materias'):
-            st.info("Nenhuma disciplina cadastrada ainda.")
-        else:
+        if dados.get('materias'):
             for m, t in dados['materias'].items():
                 with st.expander(f"📚 {m}"):
-                    # Campo para editar tópicos
-                    tx = st.text_area("Tópicos (um por linha)", value="\n".join(t), key=f"tx_{m}", height=150)
-                    col_s, col_d = st.columns([1, 4])
-                    
-                    if col_s.button("💾 SALVAR", key=f"save_{m}"):
+                    tx = st.text_area("Tópicos (um por linha)", value="\n".join(t), key=f"tx_{m}")
+                    if st.button("💾 SALVAR", key=f"save_{m}"):
                         novos_t = [l.strip() for l in tx.split('\n') if l.strip()]
-                        supabase.table("editais_materias").update({"topicos": novos_t}).eq("concurso", missao).eq("materia", m).execute()
-                        st.toast("Tópicos atualizados!"); time.sleep(0.5); st.rerun()
-                    
-                    if col_d.button("🗑️ EXCLUIR DISCIPLINA", key=f"del_mat_{m}"):
-                        supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute()
-                        st.error(f"{m} removida!"); time.sleep(0.5); st.rerun()
+                        supabase.table("editais_materias").update({"topicos": novos_t}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
+                    if st.button("🗑️ EXCLUIR", key=f"del_mat_{m}"):
+                        supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute(); st.rerun()
 
     # --- ABA REGISTRAR (REGRA HHMM OK) ---
     elif menu == "Registrar":
