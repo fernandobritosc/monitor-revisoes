@@ -64,7 +64,6 @@ if st.session_state.missao_ativa is None:
 else:
     missao = st.session_state.missao_ativa
     try:
-        # Puxa os dados ordenados para o histórico e revisões
         res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
         df = pd.DataFrame(res.data)
     except:
@@ -79,35 +78,39 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=1)
 
-    # --- ABA REVISÕES (NOVA LÓGICA) ---
+    # --- ABA REVISÕES (LÓGICA PÓS-EDITAL) ---
     if menu == "Revisões":
-        st.subheader("🔄 Radar de Revisões")
+        st.subheader("🔄 Radar de Revisões (Modo Pós-Edital)")
         if df.empty:
-            st.info("Nenhum estudo registado para gerar revisões.")
+            st.info("Nenhum registro para gerar revisões.")
         else:
             hoje = datetime.date.today()
             pendencias = []
-            # Intervalos: 1 dia (24h), 7 dias, 15 dias, 30 dias
-            regras = {1: "rev_24h", 7: "rev_07d", 15: "rev_15d", 30: "rev_30d"}
             
             for _, row in df.iterrows():
                 dt_estudo = pd.to_datetime(row['data_estudo']).date()
-                dias_desde_estudo = (hoje - dt_estudo).days
+                dias_desde = (hoje - dt_estudo).days
+                taxa = row.get('taxa', 0)
                 
-                for dias, col in regras.items():
-                    # Se já passou o prazo e a coluna no banco está como False
-                    if dias_desde_estudo >= dias and not row.get(col, False):
-                        pendencias.append({
-                            "id": row['id'],
-                            "materia": row['materia'],
-                            "assunto": row['assunto'],
-                            "tipo": f"Revisão {dias}d",
-                            "coluna": col,
-                            "atraso": dias_desde_estudo - dias
-                        })
-            
+                # 1. REGRA 24H (Sempre ocorre para todos)
+                if dias_desde >= 1 and not row.get('rev_24h', False):
+                    pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde - 1})
+                
+                # 2. LÓGICA DE PERFORMANCE (7d, 15d ou 20d)
+                # Só entra no radar de longo prazo se a de 24h já foi concluída
+                if row.get('rev_24h', False):
+                    if taxa <= 75:
+                        d, col, label = 7, "rev_07d", "Revisão 7d (Reforço)"
+                    elif 76 <= taxa <= 79:
+                        d, col, label = 15, "rev_15d", "Revisão 15d (Manutenção)"
+                    else: # 80 a 100%
+                        d, col, label = 20, "rev_30d", "Revisão 20d (Excelência)" # Reutilizamos a coluna 30d para os 20d
+                    
+                    if dias_desde >= d and not row.get(col, False):
+                        pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": label, "col": col, "atraso": dias_desde - d})
+
             if not pendencias:
-                st.success("✅ Estás em dia! Nenhuma revisão pendente para hoje.")
+                st.success("✅ Tudo revisado!")
             else:
                 st.warning(f"Tens {len(pendencias)} revisões pendentes.")
                 for p in pendencias:
@@ -116,67 +119,13 @@ else:
                         c1.markdown(f"**{p['materia']}**")
                         c1.caption(f"Tópico: {p['assunto']}")
                         
-                        label_atraso = f"{p['tipo']}"
-                        if p['atraso'] > 0:
-                            c2.markdown(f":red[{label_atraso}]")
-                            c2.caption(f"⚠️ {p['atraso']} dias de atraso")
-                        else:
-                            c2.markdown(f":green[{label_atraso}]")
-                            c2.caption("No prazo")
+                        cor = ":red" if p['atraso'] > 0 else ":green"
+                        c2.markdown(f"{cor}[{p['tipo']}]")
+                        if p['atraso'] > 0: c2.caption(f"⚠️ {p['atraso']} dias de atraso")
                             
-                        if c3.button("CONCLUIR", key=f"rev_{p['id']}_{p['coluna']}"):
-                            supabase.table("registros_estudos").update({p['coluna']: True}).eq("id", p['id']).execute()
-                            st.toast("Revisão concluída!")
-                            time.sleep(0.5)
-                            st.rerun()
-
-    elif menu == "Histórico":
-        st.subheader("📜 Histórico de Estudos")
-        if df.empty:
-            st.info("Nenhum registro encontrado.")
-        else:
-            df_hist = df.copy()
-            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
-            df_hist['id'] = df_hist['id'].astype(str)
-            df_hist['taxa'] = pd.to_numeric(df_hist['taxa'], errors='coerce').fillna(0).astype(float)
-            
-            filtro_mat = st.multiselect("Filtrar por Disciplina", options=df_hist['materia'].unique())
-            if filtro_mat:
-                df_hist = df_hist[df_hist['materia'].isin(filtro_mat)]
-            
-            st.divider()
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Questões", int(df_hist['total'].sum()))
-            k2.metric("Precisão Média", f"{df_hist['taxa'].mean():.1f}%")
-            k3.metric("Lançamentos", len(df_hist))
-            st.divider()
-
-            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']
-            ed = st.data_editor(df_hist[cols_show], hide_index=True, use_container_width=True,
-                column_config={
-                    "id": st.column_config.TextColumn("ID", disabled=True),
-                    "taxa": st.column_config.ProgressColumn("Precisão", min_value=0, max_value=100, format="%.1f%%"),
-                    "acertos": "✅", "total": "📊", "tempo": "⏱️",
-                    "comentarios": st.column_config.TextColumn("Comentários", width="large")
-                }
-            )
-            
-            c_save, c_del = st.columns([4, 1])
-            if c_save.button("💾 CONFIRMAR ALTERAÇÕES", use_container_width=True):
-                for _, r in ed.iterrows():
-                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
-                    supabase.table("registros_estudos").update({
-                        "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
-                        "tempo": r['tempo'], "comentarios": r['comentarios'],
-                        "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0
-                    }).eq("id", r['id']).execute()
-                st.rerun()
-
-            with c_del.popover("🗑️ APAGAR ID"):
-                id_del = st.text_input("ID")
-                if st.button("CONFIRMAR"):
-                    supabase.table("registros_estudos").delete().eq("id", id_del).execute()
-                    st.rerun()
+                        if c3.button("CONCLUIR", key=f"rev_{p['id']}_{p['col']}"):
+                            supabase.table("registros_estudos").update({p['col']: True}).eq("id", p['id']).execute()
+                            st.toast("Concluído!"); time.sleep(0.5); st.rerun()
 
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
@@ -189,8 +138,7 @@ else:
                 t_bruto = c2.text_input("Tempo (ex: 0130)", placeholder="HHMM")
                 t_final = formatar_tempo_estudo(t_bruto)
                 st.info(f"Tempo: **{t_final}**")
-                mat = st.selectbox("Disciplina", mats)
-                ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
+                mat = st.selectbox("Disciplina", mats); ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
                 c_ac, c_tot = st.columns(2)
                 ac, tot = c_ac.number_input("Acertos", 0), c_tot.number_input("Total", 1)
                 coment = st.text_area("Comentários")
@@ -204,25 +152,34 @@ else:
                     }).execute()
                     st.success("✅ SALVO!"); time.sleep(1); st.rerun()
 
-    elif menu == "Dashboard":
-        st.subheader("📊 Performance")
+    elif menu == "Histórico":
+        st.subheader("📜 Histórico")
         if df.empty: st.info("Sem dados.")
         else:
-            tot, ac = df['total'].sum(), df['acertos'].sum()
-            c1, c2 = st.columns(2)
-            c1.metric("Questões Totais", int(tot))
-            c2.metric("Precisão Geral", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
-            df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
-            st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626']), use_container_width=True)
-
-    elif menu == "Configurar":
-        st.subheader("⚙️ Configurar Edital")
-        nm = st.text_input("Nova Matéria")
-        if st.button("Add"):
-            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
-        for m, t in dados.get('materias', {}).items():
-            with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}")
-                if st.button("Salvar", key=f"s_{m}"):
-                    novos = [l.strip() for l in tx.split('\n') if l.strip()]
-                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
+            df_hist = df.copy()
+            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
+            df_hist['id'] = df_hist['id'].astype(str)
+            df_hist['taxa'] = pd.to_numeric(df_hist['taxa'], errors='coerce').fillna(0).astype(float)
+            st.divider()
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Questões", int(df_hist['total'].sum()))
+            k2.metric("Precisão Média", f"{df_hist['taxa'].mean():.1f}%")
+            k3.metric("Lançamentos", len(df_hist))
+            st.divider()
+            cols = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']
+            ed = st.data_editor(df_hist[cols], hide_index=True, use_container_width=True,
+                column_config={"taxa": st.column_config.ProgressColumn("Precisão", min_value=0, max_value=100, format="%.1f%%")})
+            c_save, c_del = st.columns([4, 1])
+            if c_save.button("💾 CONFIRMAR ALTERAÇÕES", use_container_width=True):
+                for _, r in ed.iterrows():
+                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
+                    supabase.table("registros_estudos").update({
+                        "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
+                        "tempo": r['tempo'], "comentarios": r['comentarios'],
+                        "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0
+                    }).eq("id", r['id']).execute()
+                st.rerun()
+            with c_del.popover("🗑️ APAGAR"):
+                id_del = st.text_input("ID")
+                if st.button("CONFIRMAR"):
+                    supabase.table("registros_estudos").delete().eq("id", id_del).execute(); st.rerun()
