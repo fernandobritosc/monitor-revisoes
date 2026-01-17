@@ -263,32 +263,39 @@ else:
         else:
             with st.container():
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                c1, c2 = st.columns([2, 1])
-                dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
-                tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
-                
-                mat_reg = st.selectbox("Disciplina", mats)
-                ass_reg = st.selectbox("Assunto", dados['materias'].get(mat_reg, ["Geral"]), key=f"assunto_{mat_reg}")
-                
-                st.divider()
-                ca_reg, ct_reg = st.columns(2)
-                ac_reg = ca_reg.number_input("Questões Acertadas", 0)
-                to_reg = ct_reg.number_input("Total de Questões", 1)
-                
-                com_reg = st.text_area("Anotações / Comentários", placeholder="O que você aprendeu ou sentiu dificuldade?")
-                
-                if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
-                    t_b = formatar_tempo_para_bigint(tm_reg)
-                    payload = {
-                        "concurso": missao, "materia": mat_reg, "assunto": ass_reg, 
-                        "data_estudo": dt_reg.strftime('%Y-%m-%d'), "acertos": ac_reg, 
-                        "total": to_reg, "taxa": (ac_reg/to_reg*100), "comentarios": com_reg, 
-                        "tempo": t_b, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
-                    }
-                    supabase.table("registros_estudos").insert(payload).execute()
-                    st.toast("Registro salvo com sucesso!", icon="✅")
-                    time.sleep(1)
-                    st.rerun()
+                # Usando formulário para garantir que o botão dispare a ação corretamente
+                with st.form("form_registro", clear_on_submit=True):
+                    c1, c2 = st.columns([2, 1])
+                    dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
+                    tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
+                    
+                    mat_reg = st.selectbox("Disciplina", mats)
+                    ass_reg = st.selectbox("Assunto", dados['materias'].get(mat_reg, ["Geral"]), key=f"assunto_{mat_reg}")
+                    
+                    st.divider()
+                    ca_reg, ct_reg = st.columns(2)
+                    ac_reg = ca_reg.number_input("Questões Acertadas", 0)
+                    to_reg = ct_reg.number_input("Total de Questões", 1)
+                    
+                    com_reg = st.text_area("Anotações / Comentários", placeholder="O que você aprendeu ou sentiu dificuldade?")
+                    
+                    btn_salvar = st.form_submit_button("💾 SALVAR REGISTRO", use_container_width=True, type="primary")
+                    
+                    if btn_salvar:
+                        try:
+                            t_b = formatar_tempo_para_bigint(tm_reg)
+                            payload = {
+                                "concurso": missao, "materia": mat_reg, "assunto": ass_reg, 
+                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), "acertos": ac_reg, 
+                                "total": to_reg, "taxa": (ac_reg/to_reg*100 if to_reg > 0 else 0), "comentarios": com_reg, 
+                                "tempo": t_b, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
+                            }
+                            supabase.table("registros_estudos").insert(payload).execute()
+                            st.success("✅ Registro salvo com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: DASHBOARD ---
