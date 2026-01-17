@@ -6,7 +6,7 @@ import plotly.express as px
 import re
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO DE PÁGINA ---
+# --- 1. CONFIGURAÇÃO DE PÁGINA (LAYOUT AMPLO OK) ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -18,7 +18,7 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# REGRA HHMM: 0130 -> 01:30:00
+# REGRA HHMM: 0130 -> 01:30:00 (OK)
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -79,7 +79,7 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=1)
 
-    # --- ABA REVISÕES (LÓGICA PÓS-EDITAL + CONTADOR DE QUESTÕES) ---
+    # --- ABA REVISÕES (LAYOUT ORGANIZADO + ACERTOS/TOTAL) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões (Modo Pós-Edital)")
         if df.empty:
@@ -87,50 +87,40 @@ else:
         else:
             hoje = datetime.date.today()
             pendencias = []
-            
             for _, row in df.iterrows():
                 dt_estudo = pd.to_datetime(row['data_estudo']).date()
                 dias_desde = (hoje - dt_estudo).days
                 taxa = row.get('taxa', 0)
-                
-                # 1. REGRA 24H (Sempre ocorre para todos)
                 if dias_desde >= 1 and not row.get('rev_24h', False):
                     pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias_desde - 1, "c_antigo": row.get('comentarios', '')})
-                
-                # 2. LÓGICA DE PERFORMANCE (7d, 15d ou 20d)
                 if row.get('rev_24h', False):
                     if taxa <= 75: d, col, label = 7, "rev_07d", "Revisão 7d"
                     elif 76 <= taxa <= 79: d, col, label = 15, "rev_15d", "Revisão 15d"
                     else: d, col, label = 20, "rev_30d", "Revisão 20d"
-                    
                     if dias_desde >= d and not row.get(col, False):
                         pendencias.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": label, "col": col, "atraso": dias_desde - d, "c_antigo": row.get('comentarios', '')})
 
             if not pendencias:
                 st.success("✅ Tudo revisado!")
             else:
-                st.warning(f"Você tem {len(pendencias)} revisões pendentes.")
+                st.warning(f"Tens {len(pendencias)} revisões pendentes.")
                 for p in pendencias:
                     with st.container(border=True):
-                        c1, c2, c3 = st.columns([3, 1.5, 1.5])
+                        c1, c2, c3, c4 = st.columns([2.5, 1, 1, 1])
                         c1.markdown(f"**{p['materia']}**\n\n*{p['assunto']}*")
                         
-                        # NOVO: Input de questões na própria aba de revisão
-                        q_rev = c2.number_input(f"Questões ({p['tipo']})", min_value=0, value=0, key=f"q_{p['id']}_{p['col']}")
+                        # Campos de Performance na Revisão (Novos)
+                        ac_rev = c2.number_input("Acertos", min_value=0, value=0, key=f"ac_{p['id']}_{p['col']}")
+                        tot_rev = c3.number_input("Total", min_value=0, value=0, key=f"tot_{p['id']}_{p['col']}")
                         
-                        if c3.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True):
-                            # Atualiza o comentário preservando o que já existia e adicionando o histórico da revisão
-                            msg_rev = f"{p['tipo']}: {q_rev} qts"
+                        if c4.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True):
+                            taxa_rev = (ac_rev/tot_rev*100) if tot_rev > 0 else 0
+                            msg_rev = f"{p['tipo']}: {ac_rev}/{tot_rev} ({taxa_rev:.1f}%)"
                             final_c = f"{p['c_antigo']} | {msg_rev}".strip(" | ")
-                            
-                            supabase.table("registros_estudos").update({
-                                p['col']: True,
-                                "comentarios": final_c
-                            }).eq("id", p['id']).execute()
-                            
-                            st.toast(f"✅ {p['materia']} revisada!"); time.sleep(0.5); st.rerun()
+                            supabase.table("registros_estudos").update({p['col']: True, "comentarios": final_c}).eq("id", p['id']).execute()
+                            st.toast("✅ Revisão concluída!"); time.sleep(0.5); st.rerun()
 
-    # --- ABA CONFIGURAR (RESPEITANDO AS REGRAS) ---
+    # --- ABA CONFIGURAR (OK) ---
     elif menu == "Configurar":
         st.subheader("⚙️ Configurar Edital")
         with st.form("add_materia"):
@@ -144,14 +134,14 @@ else:
         if dados.get('materias'):
             for m, t in dados['materias'].items():
                 with st.expander(f"📚 {m}"):
-                    tx = st.text_area("Tópicos (um por linha)", value="\n".join(t), key=f"tx_{m}")
+                    tx = st.text_area("Tópicos", value="\n".join(t), key=f"tx_{m}")
                     if st.button("💾 SALVAR", key=f"save_{m}"):
                         novos_t = [l.strip() for l in tx.split('\n') if l.strip()]
                         supabase.table("editais_materias").update({"topicos": novos_t}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
                     if st.button("🗑️ EXCLUIR", key=f"del_mat_{m}"):
                         supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute(); st.rerun()
 
-    # --- ABA REGISTRAR (REGRA HHMM OK) ---
+    # --- ABA REGISTRAR (OK) ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
