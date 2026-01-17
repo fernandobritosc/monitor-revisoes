@@ -27,6 +27,9 @@ st.markdown("""
     
     .small-text { font-size: 13px; color: #adb5bd; }
     
+    /* Estilo específico para a data da revisão */
+    .date-label { font-size: 12px; color: #6c757d; font-weight: normal; margin-left: 5px; }
+    
     /* Alinhamento do Sub-menu lateral */
     [data-testid="column"]:nth-child(1) > div { padding-top: 0px !important; }
     </style>
@@ -68,7 +71,7 @@ else:
                            icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0)
 
-    # --- ABA: REVISÕES (LÓGICA COMPLETA RESTAURADA) ---
+    # --- ABA: REVISÕES (DATA DO ESTUDO ADICIONADA) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -78,14 +81,18 @@ else:
                 dt_est = pd.to_datetime(row['data_estudo']).date()
                 dias = (hoje - dt_est).days
                 tx = row.get('taxa', 0)
+                
+                # Coleta a data formatada para exibição
+                dt_display = dt_est.strftime('%d/%m/%Y')
+                
                 # Regra 24h
                 if dias >= 1 and not row.get('rev_24h', False):
-                    pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "coment": row.get('comentarios', '')})
+                    pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_origem": dt_display, "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "coment": row.get('comentarios', '')})
                 # Regras Ciclos Longos
                 elif row.get('rev_24h', True):
                     d_alvo, col_alv, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
                     if dias >= d_alvo and not row.get(col_alv, False):
-                        pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "tipo": lbl, "col": col_alv, "atraso": dias-d_alvo, "coment": row.get('comentarios', '')})
+                        pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_origem": dt_display, "tipo": lbl, "col": col_alv, "atraso": dias-d_alvo, "coment": row.get('comentarios', '')})
         
         if not pend: st.success("✅ Tudo em dia!")
         else:
@@ -93,7 +100,9 @@ else:
                 with st.container(border=True):
                     c_txt, c_vals, c_btn = st.columns([1.5, 1, 0.8])
                     with c_txt:
-                        st.markdown(f"**{p['materia']}**\n<span class='small-text'>{p['assunto']} • {p['tipo']}</span>", unsafe_allow_html=True)
+                        # INCLUSÃO DA DATA AQUI
+                        st.markdown(f"**{p['materia']}** <span class='date-label'>({p['data_origem']})</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span class='small-text'>{p['assunto']} • {p['tipo']}</span>", unsafe_allow_html=True)
                         if p['coment']: 
                             with st.expander("📝 Ver Anotações"): st.info(p['coment'])
                     with c_vals:
@@ -110,7 +119,7 @@ else:
                             supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100 if n_to > 0 else 0)}).eq("id", p['id']).execute()
                             st.rerun()
 
-    # --- ABA: REGISTRAR (ASSUNTO DINÂMICO SEM TRAVAR) ---
+    # --- ABA: REGISTRAR (ASSUNTO DINÂMICO) ---
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
@@ -133,7 +142,7 @@ else:
                     payload = {"concurso": missao, "materia": mat_reg, "assunto": ass_reg, "data_estudo": dt_reg.strftime('%Y-%m-%d'), "acertos": ac_reg, "total": to_reg, "taxa": (ac_reg/to_reg*100), "comentarios": com_reg, "tempo": t_b, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}
                     supabase.table("registros_estudos").insert(payload).execute(); st.rerun()
 
-    # --- ABA: DASHBOARD (VISUAL COMPLETO COM SUB-MENU) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         if df.empty: st.info("Sem dados.")
         else:
@@ -164,7 +173,7 @@ else:
                                 c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
                                 st.markdown(f'<div class="progress-container"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
 
-    # --- ABAS: HISTÓRICO E CONFIGURAR ---
+    # --- HISTÓRICO E CONFIG ---
     elif menu == "Histórico":
         st.subheader("📜 Histórico")
         if not df.empty:
