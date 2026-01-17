@@ -153,9 +153,6 @@ if st.session_state.missao_ativa is None:
             if btn_cadastrar:
                 if nome_concurso and cargo_concurso:
                     try:
-                        # No seu sistema, o cadastro inicial parece ser feito na tabela editais_materias
-                        # ou em uma tabela de concursos. Baseado no get_editais, ele busca de editais_materias.
-                        # Vamos inserir uma matéria "Geral" para inicializar o concurso.
                         supabase.table("editais_materias").insert({
                             "concurso": nome_concurso,
                             "cargo": cargo_concurso,
@@ -377,22 +374,24 @@ else:
                 st.plotly_chart(fig_line, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            # Detalhamento por Matéria
+            # Detalhamento por Matéria (AJUSTE DE MESTRE APLICADO)
             st.markdown("### 📁 Detalhamento por Disciplina")
             df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
             
             for _, m in df_mat.iterrows():
                 with st.expander(f"{m['materia'].upper()} — {m['taxa']:.1f}% de Precisão"):
-                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                    for _, a in df_ass.iterrows():
-                        ca1, ca2 = st.columns([4, 1])
-                        ca1.markdown(f"<span style='color:#fff; font-size:0.9rem;'>{a['assunto']}</span>", unsafe_allow_html=True)
-                        ca2.markdown(f"<p style='text-align: right; color:#adb5bd; font-size: 0.8rem;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                        st.markdown(f"""
-                            <div class="modern-progress-container">
-                                <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    # AJUSTE DE MESTRE: Container com borda interna para criar o efeito de "fichas"
+                    with st.container(border=True):
+                        df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                        for _, a in df_ass.iterrows():
+                            ca1, ca2 = st.columns([4, 1])
+                            ca1.markdown(f"<span style='color:#fff; font-size:0.9rem; font-weight:600;'>{a['assunto']}</span>", unsafe_allow_html=True)
+                            ca2.markdown(f"<p style='text-align: right; color:#adb5bd; font-size: 0.8rem;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
+                            st.markdown(f"""
+                                <div class="modern-progress-container" style="margin-top: 5px; margin-bottom: 15px;">
+                                    <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
+                                </div>
+                            """, unsafe_allow_html=True)
 
     # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
