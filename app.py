@@ -6,7 +6,7 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- 1. DESIGN SYSTEM (O ESQUADRO) ---
+# --- 1. DESIGN SYSTEM PREMIUM ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -17,17 +17,17 @@ apply_styles()
 
 st.markdown("""
     <style>
-    /* Alinhamento de Metrics e Cards */
+    /* Esquadro de Metrics e Cards */
     .stMetric { background-color: #1A1C23 !important; border: 1px solid #2D303E !important; border-radius: 8px !important; padding: 15px !important; }
     [data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 700 !important; }
     
-    /* Barras Bicolores de Performance */
+    /* Barras Bicolores (Verde e Vermelho) */
     .progress-container { width: 100%; background-color: #FF4B4B; border-radius: 4px; height: 6px; margin: 8px 0; overflow: hidden; }
     .progress-bar-fill { background-color: #00FF00; height: 100%; }
     
-    /* Textos Auxiliares */
+    /* Tipografia de Apoio */
     .small-text { font-size: 13px; color: #adb5bd; }
-    .date-text { font-size: 11px; color: #6c757d; font-weight: bold; margin-left: 5px; }
+    .date-highlight { font-size: 12px; color: #6c757d; font-weight: bold; margin-left: 8px; vertical-align: middle; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -38,7 +38,7 @@ def formatar_tempo_para_bigint(valor_bruto):
     numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
     return (int(numeros[:-2]) * 60) + int(numeros[-2:])
 
-# --- 2. LÓGICA DE NAVEGAÇÃO ---
+# --- 2. NAVEGAÇÃO CENTRAL ---
 if st.session_state.missao_ativa is None:
     st.title("🎯 Central de Comando")
     ed = get_editais(supabase)
@@ -66,7 +66,7 @@ else:
                            icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0)
 
-    # --- ABA: REVISÕES (CICLOS COMPLETOS + DATA) ---
+    # --- ABA: REVISÕES (DATA RESTAURADA COM PERFEIÇÃO) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -76,14 +76,14 @@ else:
                 dt_est = pd.to_datetime(row['data_estudo']).date()
                 dias = (hoje - dt_est).days
                 tx = row.get('taxa', 0)
-                # Lógica 24h
+                
+                # Regras de Ciclos (24h, 7d, 15d, 20d)
                 if dias >= 1 and not row.get('rev_24h', False):
-                    pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_orig": dt_est.strftime('%d/%m/%Y'), "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "coment": row.get('comentarios', '')})
-                # Lógica Ciclos Longos (Só entra se 24h estiver ok)
+                    pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_f": dt_est.strftime('%d/%m/%Y'), "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "coment": row.get('comentarios', '')})
                 elif row.get('rev_24h', True):
-                    d_alvo, col_alvo, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
-                    if dias >= d_alvo and not row.get(col_alvo, False):
-                        pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_orig": dt_est.strftime('%d/%m/%Y'), "tipo": lbl, "col": col_alvo, "atraso": dias-d_alvo, "coment": row.get('comentarios', '')})
+                    d_alv, c_alv, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
+                    if dias >= d_alv and not row.get(c_alv, False):
+                        pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_f": dt_est.strftime('%d/%m/%Y'), "tipo": lbl, "col": c_alv, "atraso": dias-d_alv, "coment": row.get('comentarios', '')})
         
         if not pend: st.success("✅ Tudo revisado!")
         else:
@@ -91,23 +91,24 @@ else:
                 with st.container(border=True):
                     c_txt, c_vals, c_btn = st.columns([1.5, 1, 0.8])
                     with c_txt:
-                        st.markdown(f"**{p['materia']}** <span class='date-text'>({p['data_orig']})</span>", unsafe_allow_html=True)
+                        # DATA EXIBIDA AQUI COM PERFEIÇÃO
+                        st.markdown(f"**{p['materia']}** <span class='date-highlight'>({p['data_f']})</span>", unsafe_allow_html=True)
                         st.markdown(f"<span class='small-text'>{p['assunto']} • {p['tipo']}</span>", unsafe_allow_html=True)
                         if p['coment']: 
                             with st.expander("📝 Ver Anotações"): st.info(p['coment'])
                     with c_vals:
                         ca, ct = st.columns(2)
-                        acr_rev = ca.number_input("Acertos", 0, key=f"ac_r_{p['id']}_{p['col']}")
-                        tor_rev = ct.number_input("Total", 0, key=f"to_r_{p['id']}_{p['col']}")
+                        r_ac = ca.number_input("Acertos", 0, key=f"rev_ac_{p['id']}_{p['col']}")
+                        r_to = ct.number_input("Total", 0, key=f"rev_to_{p['id']}_{p['col']}")
                     with c_btn:
                         st.write("")
                         if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:11px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
                         if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
-                            n_ac = res_db.data[0]['acertos'] + acr_rev
-                            n_to = res_db.data[0]['total'] + tor_rev
-                            supabase.table("registros_estudos").update({p['col']: True, "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100 if n_to > 0 else 0)}).eq("id", p['id']).execute()
-                            st.rerun()
+                            n_ac = res_db.data[0]['acertos'] + r_ac
+                            n_to = res_db.data[0]['total'] + r_to
+                            supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['coment']} | Rev: {r_ac}/{r_to}", "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100 if n_to > 0 else 0)}).eq("id", p['id']).execute()
+                            st.success("Sincronizado!"); time.sleep(0.5); st.rerun()
 
     # --- ABA: REGISTRAR (SINC DINÂMICA) ---
     elif menu == "Registrar":
@@ -134,34 +135,21 @@ else:
     elif menu == "Dashboard":
         if df.empty: st.info("Sem dados.")
         else:
-            c_side, c_main = st.columns([0.15, 2.5])
-            with c_side:
-                sub = option_menu(None, ["Geral", "Matérias"], icons=["house", "layers"], default_index=0, 
-                                styles={"container": {"padding": "0!important", "background-color": "transparent"}, "nav-link": {"font-size": "0px", "margin":"15px 0px"}})
-            with c_main:
-                if sub == "Geral":
-                    k1, k2, k3 = st.columns(3)
-                    t_q = df['total'].sum(); a_q = df['acertos'].sum()
-                    k1.metric("Questões", int(t_q))
-                    k2.metric("Precisão", f"{(a_q/t_q*100 if t_q>0 else 0):.1f}%")
-                    k3.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
-                    st.divider()
-                    col_g1, col_g2 = st.columns(2)
-                    with col_g1: st.plotly_chart(px.pie(df, values='total', names='materia', hole=0.5, template="plotly_dark"), use_container_width=True)
-                    with col_g2:
-                        df_r = df.groupby('materia')['taxa'].mean().reset_index()
-                        fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True, template="plotly_dark")
-                        st.plotly_chart(fig_r, use_container_width=True)
-                else:
-                    df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-                    for _, m in df_mat.iterrows():
-                        with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
-                            df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                            for _, a in df_ass.iterrows():
-                                c_a1, c_a2 = st.columns([3, 1])
-                                c_a1.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
-                                c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                                st.markdown(f'<div class="progress-container"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
+            k1, k2, k3 = st.columns(3)
+            t_q = df['total'].sum(); a_q = df['acertos'].sum()
+            k1.metric("Questões", int(t_q))
+            k2.metric("Precisão", f"{(a_q/t_q*100 if t_q>0 else 0):.1f}%")
+            k3.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
+            st.divider()
+            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
+            for _, m in df_mat.iterrows():
+                with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
+                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                    for _, a in df_ass.iterrows():
+                        c_a1, c_a2 = st.columns([3, 1])
+                        c_a1.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
+                        c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
+                        st.markdown(f'<div class="progress-container"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
 
     # --- HISTÓRICO E CONFIG ---
     elif menu == "Histórico":
