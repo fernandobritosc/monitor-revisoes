@@ -17,6 +17,14 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
+# Inicializar estados do Pomodoro
+if 'pomodoro_seconds' not in st.session_state:
+    st.session_state.pomodoro_seconds = 25 * 60
+if 'pomodoro_active' not in st.session_state:
+    st.session_state.pomodoro_active = False
+if 'pomodoro_mode' not in st.session_state:
+    st.session_state.pomodoro_mode = "Foco" # Foco ou Pausa
+
 # CSS Customizado para Layout Moderno
 st.markdown("""
     <style>
@@ -98,6 +106,17 @@ st.markdown("""
     }
     .stTextInput>div>div>input, .stSelectbox>div>div>div {
         border-radius: 8px !important;
+    }
+
+    /* Pomodoro Timer Display */
+    .timer-display {
+        font-size: 5rem;
+        font-weight: 800;
+        color: #fff;
+        text-align: center;
+        margin: 20px 0;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 20px rgba(255, 75, 75, 0.3);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -186,8 +205,8 @@ else:
             st.rerun()
         
         st.write("")
-        menu = option_menu(None, ["Revisões", "Registrar", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
+        menu = option_menu(None, ["Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
                            default_index=0,
                            styles={
                                "container": {"padding": "0!important", "background-color": "transparent"},
@@ -329,6 +348,78 @@ else:
                             st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- ABA: FOCO (POMODORO) ---
+    elif menu == "Foco":
+        st.markdown('<h2 class="main-title">⏱️ Modo Foco (Pomodoro)</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Mantenha a concentração total nos seus estudos</p>', unsafe_allow_html=True)
+        
+        with st.container():
+            st.markdown('<div class="modern-card" style="max-width: 600px; margin: 0 auto;">', unsafe_allow_html=True)
+            
+            # Seleção de Modo
+            col_m1, col_m2 = st.columns(2)
+            if col_m1.button("🔥 FOCO (25m)", use_container_width=True, type="primary" if st.session_state.pomodoro_mode == "Foco" else "secondary"):
+                st.session_state.pomodoro_mode = "Foco"
+                st.session_state.pomodoro_seconds = 25 * 60
+                st.session_state.pomodoro_active = False
+                st.rerun()
+            if col_m2.button("☕ PAUSA (5m)", use_container_width=True, type="primary" if st.session_state.pomodoro_mode == "Pausa" else "secondary"):
+                st.session_state.pomodoro_mode = "Pausa"
+                st.session_state.pomodoro_seconds = 5 * 60
+                st.session_state.pomodoro_active = False
+                st.rerun()
+            
+            # Display do Timer
+            mins, secs = divmod(st.session_state.pomodoro_seconds, 60)
+            st.markdown(f'<div class="timer-display">{mins:02d}:{secs:02d}</div>', unsafe_allow_html=True)
+            
+            # Barra de Progresso
+            total_sec = (25 * 60) if st.session_state.pomodoro_mode == "Foco" else (5 * 60)
+            progresso = (total_sec - st.session_state.pomodoro_seconds) / total_sec
+            st.markdown(f"""
+                <div class="modern-progress-container">
+                    <div class="modern-progress-fill" style="width: {progresso*100}%;"></div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.write("")
+            
+            # Controles
+            c_ctrl1, c_ctrl2, c_ctrl3 = st.columns([1, 1, 1])
+            
+            if not st.session_state.pomodoro_active:
+                if c_ctrl1.button("▶️ INICIAR", use_container_width=True):
+                    st.session_state.pomodoro_active = True
+                    st.rerun()
+            else:
+                if c_ctrl1.button("⏸️ PAUSAR", use_container_width=True):
+                    st.session_state.pomodoro_active = False
+                    st.rerun()
+            
+            if c_ctrl2.button("🔄 RESETAR", use_container_width=True):
+                st.session_state.pomodoro_seconds = (25 * 60) if st.session_state.pomodoro_mode == "Foco" else (5 * 60)
+                st.session_state.pomodoro_active = False
+                st.rerun()
+                
+            # Lógica do Timer (Loop de atualização)
+            if st.session_state.pomodoro_active and st.session_state.pomodoro_seconds > 0:
+                time.sleep(1)
+                st.session_state.pomodoro_seconds -= 1
+                st.rerun()
+            elif st.session_state.pomodoro_seconds == 0:
+                st.session_state.pomodoro_active = False
+                st.balloons()
+                st.success("🎉 Ciclo finalizado! Hora de descansar ou voltar ao foco.")
+                st.session_state.pomodoro_seconds = (25 * 60) if st.session_state.pomodoro_mode == "Foco" else (5 * 60)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        st.markdown("""
+            <div style="text-align: center; color: #adb5bd; font-size: 0.8rem; margin-top: 20px;">
+                "O segredo do sucesso é a constância no objetivo." — Benjamin Disraeli
+            </div>
+        """, unsafe_allow_html=True)
+
     # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
@@ -374,13 +465,12 @@ else:
                 st.plotly_chart(fig_line, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            # Detalhamento por Matéria (AJUSTE DE MESTRE APLICADO)
+            # Detalhamento por Matéria
             st.markdown("### 📁 Detalhamento por Disciplina")
             df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
             
             for _, m in df_mat.iterrows():
                 with st.expander(f"{m['materia'].upper()} — {m['taxa']:.1f}% de Precisão"):
-                    # AJUSTE DE MESTRE: Container com borda interna para criar o efeito de "fichas"
                     with st.container(border=True):
                         df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
                         for _, a in df_ass.iterrows():
