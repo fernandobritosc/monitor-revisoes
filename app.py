@@ -413,12 +413,6 @@ else:
                 st.session_state.pomodoro_seconds = (25 * 60) if st.session_state.pomodoro_mode == "Foco" else (5 * 60)
             
             st.markdown('</div>', unsafe_allow_html=True)
-            
-        st.markdown("""
-            <div style="text-align: center; color: #adb5bd; font-size: 0.8rem; margin-top: 20px;">
-                "O segredo do sucesso é a constância no objetivo." — Benjamin Disraeli
-            </div>
-        """, unsafe_allow_html=True)
 
     # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
@@ -489,17 +483,27 @@ else:
         if not df.empty:
             df_h = df.copy()
             df_h['data_estudo'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
+            
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.data_editor(
-                df_h[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']], 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "taxa": st.column_config.ProgressColumn("Precisão", format="%.1f%%", min_value=0, max_value=100),
-                    "data_estudo": "Data",
-                    "tempo": "Minutos"
-                }
-            )
+            
+            # Adicionando funcionalidade de exclusão
+            st.markdown("##### Gerenciar Registros")
+            for index, row in df_h.iterrows():
+                with st.container():
+                    c1, c2, c3, c4 = st.columns([1, 3, 1, 0.5])
+                    c1.markdown(f"<span style='color:#adb5bd; font-size:0.85rem;'>{row['data_estudo']}</span>", unsafe_allow_html=True)
+                    c2.markdown(f"**{row['materia']}** — {row['assunto']}")
+                    c3.markdown(f"{int(row['acertos'])}/{int(row['total'])} ({row['taxa']:.1f}%)")
+                    if c4.button("🗑️", key=f"del_{row['id']}", help="Excluir este registro"):
+                        try:
+                            supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                            st.toast("Registro excluído com sucesso!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao excluir: {e}")
+                st.divider()
+            
             st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: CONFIGURAR ---
