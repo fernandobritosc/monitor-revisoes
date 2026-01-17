@@ -24,16 +24,13 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #0A0A0B; color: #E2E8F0; }
     header { visibility: hidden; }
-    .block-container { padding-top: 1rem !important; }
-    .rev-card {
-        background: #17171B; border: 1px solid #2D2D35; border-radius: 8px;
-        padding: 12px; margin-bottom: 10px; border-left: 4px solid #333;
-    }
+    .block-container { padding-top: 1.5rem !important; }
+    .rev-card { background: #17171B; border: 1px solid #2D2D35; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #333; }
     .perf-bad { border-left-color: #EF4444; }
     .perf-med { border-left-color: #F59E0B; }
     .perf-good { border-left-color: #10B981; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; }
+    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -78,7 +75,6 @@ def calcular_pendencias(df):
         css = "perf-bad" if taxa < 60 else "perf-med" if taxa < 80 else "perf-good"
         base = {"id": row['id'], "Mat": row['materia'], "Ass": row['assunto'], "Data": row['dt_temp'].strftime('%d/%m'), "Taxa": taxa, "CSS": css}
         
-        # Lógica de Camada Única (A mais urgente aparece primeiro)
         if delta >= 30 and not row['rev_30d']: pendencias.append({**base, "Fase": "30d", "Label": "💎 D30"})
         elif delta >= 15 and not row['rev_15d']: pendencias.append({**base, "Fase": "15d", "Label": "🧠 D15"})
         elif delta >= 7 and not row['rev_07d']: pendencias.append({**base, "Fase": "07d", "Label": "📅 D7"})
@@ -150,37 +146,30 @@ else:
                 if st.button("💾 REGISTRAR BATALHA", type="primary"):
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
-elif menu == "IA: Novo Edital":
+    elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador de Edital")
         if not DOCLING_READY:
-            st.error("Erro: Bibliotecas Docling não encontradas no requirements.txt")
+            st.error("Erro: Bibliotecas Docling não encontradas ou falha no import.")
         else:
-            st.info("Suba o PDF do edital para extrair o conteúdo programático automaticamente.")
+            st.info("Suba o PDF (pág. de conteúdo) para extração automática.")
             with st.container(border=True):
                 nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
                 pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
                 
                 if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
-                    with st.spinner("🤖 Analisando PDF..."):
+                    with st.spinner("🤖 Analisando PDF... isso demora cerca de 1 min."):
                         try:
                             temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            # --- CONFIGURAÇÃO CORRIGIDA PARA VERSÕES NOVAS ---
-                            from docling.datamodel.pipeline_options import PdfPipelineOptions
-                            from docling.datamodel.base_models import InputFormat
-                            
                             pipeline_opts = PdfPipelineOptions()
-                            pipeline_opts.do_ocr = False # Mantemos False para evitar o PermissionError
+                            pipeline_opts.do_ocr = False
                             pipeline_opts.do_table_structure = True
                             
-                            # A mudança está aqui: usamos format_options
                             converter = DocumentConverter(
                                 allowed_formats=[InputFormat.PDF],
-                                format_options={
-                                    InputFormat.PDF: pipeline_opts
-                                }
+                                format_options={InputFormat.PDF: pipeline_opts}
                             )
                             
                             result = converter.convert(temp_path)
@@ -217,21 +206,7 @@ elif menu == "IA: Novo Edital":
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq("id", r['id']).execute()
                 st.rerun()
             st.divider()
-            alvo = st.selectbox("Apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
-            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR"):
+            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
+            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
                 rid = alvo.split('(')[-1].strip(')')
                 supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
-
-# ... final do bloco do Histórico ...
-    elif menu == "Histórico":
-        st.subheader("📜 Histórico")
-        # (todo o seu código do histórico aqui)
-        if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
-            rid = alvo.split('(')[-1].strip(')')
-            supabase.table("registros_estudos").delete().eq("id", rid).execute()
-            st.rerun()
-
-    # O NOVO BLOCO PRECISA ESTAR ALINHADO COM O 'elif menu == "Histórico"'
-    elif menu == "IA: Novo Edital":
-        st.subheader("🤖 IA: Importador de Edital")
-        # (código do docling aqui)
