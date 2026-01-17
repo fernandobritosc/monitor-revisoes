@@ -17,7 +17,7 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# FUNÇÃO: 0130 -> 01:30:00
+# FUNÇÃO FERNANDO: 0130 -> 01:30:00
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -49,7 +49,7 @@ if st.session_state.missao_ativa is None:
                     if cs.button("✅ SIM", key=f"y_{nome}"):
                         if excluir_concurso_completo(supabase, nome):
                             st.toast("Removido!"); del st.session_state[f"confirm_del_{nome}"]; st.rerun()
-                    if cn.button("❌ NÃO", key=f"n_{nome}"):
+                    if cn.button("❌ NÃO", key=f"no_{nome}"):
                         del st.session_state[f"confirm_del_{nome}"]; st.rerun()
 
     with tabs[1]:
@@ -64,7 +64,6 @@ if st.session_state.missao_ativa is None:
 # --- 3. PAINEL INTERNO ---
 else:
     missao = st.session_state.missao_ativa
-    # Tenta buscar os dados reais
     try:
         res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
         df = pd.DataFrame(res.data)
@@ -77,48 +76,9 @@ else:
         st.title(f"🎯 {missao}")
         if st.button("🔙 VOLTAR"): st.session_state.missao_ativa = None; st.rerun()
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
-                           icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=4)
+                           icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=2)
 
-    # --- ABA HISTÓRICO COM VISUAL PREVENTIVO ---
-    if menu == "Histórico":
-        st.subheader("📜 Histórico de Estudos")
-        
-        if df.empty:
-            st.warning("⚠️ Nenhum dado encontrado para esta missão.")
-            st.info("Abaixo está o modelo de como seus dados serão exibidos após o primeiro registro:")
-            # Criamos um DataFrame fictício (Mock) apenas para visualização
-            mock_data = {
-                "Data": ["16/01/2026", "15/01/2026"],
-                "Matéria": ["DIREITO CONSTITUCIONAL", "PORTUGUÊS"],
-                "Assunto": ["Direitos Fundamentais", "Sintaxe"],
-                "Qtd": [20, 15],
-                "Acertos": [18, 12],
-                "%": ["90%", "80%"],
-                "Tempo": ["01:30:00", "00:45:00"]
-            }
-            st.table(pd.DataFrame(mock_data)) # st.table é estático e cinza, ideal para exemplo
-        else:
-            # Se houver dados reais, exibe o editor interativo
-            df_hist = df.copy()
-            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
-            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo']
-            
-            # Garante que as colunas existem antes de exibir
-            for c in cols_show:
-                if c not in df_hist.columns: df_hist[c] = ""
-                
-            ed = st.data_editor(df_hist[cols_show], hide_index=True, use_container_width=True)
-            
-            if st.button("💾 ATUALIZAR REGISTROS"):
-                for _, r in ed.iterrows():
-                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
-                    supabase.table("registros_estudos").update({
-                        "acertos": r['acertos'], "total": r['total'], 
-                        "data_estudo": dt_iso, "tempo": r['tempo']
-                    }).eq("id", r['id']).execute()
-                st.success("Histórico atualizado!"); st.rerun()
-
-    elif menu == "Registrar":
+    if menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
         if not mats: st.warning("Cadastre matérias no menu Configurar primeiro.")
@@ -126,13 +86,12 @@ else:
             with st.container(border=True):
                 c1, c2 = st.columns([2, 1])
                 dt = c1.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
-                # REGRA FERNANDO: 0130 -> 01:30:00
                 t_bruto = c2.text_input("Tempo (ex: 0130)", placeholder="HHMM")
                 t_final = formatar_tempo_estudo(t_bruto)
-                st.info(f"Tempo que será salvo: **{t_final}**")
+                st.info(f"Tempo: **{t_final}**")
                 
-                mat = st.selectbox("Matéria", mats)
-                ass = st.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
+                mat = st.selectbox("Disciplina", mats)
+                ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
                 
                 st.divider()
                 c_ac, c_tot = st.columns(2)
@@ -140,10 +99,54 @@ else:
                 coment = st.text_area("Comentários")
                 
                 if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
-                    supabase.table("registros_estudos").insert({
+                    # --- BLOCO DE SEGURANÇA MÁXIMA ---
+                    # Tentamos enviar com TUDO. Se o banco rejeitar, enviamos só o básico.
+                    dados_registro = {
                         "concurso": missao, "materia": mat, "assunto": ass, 
                         "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, 
-                        "taxa": (ac/tot*100), "comentarios": coment, "tempo": t_final,
-                        "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
-                    }).execute()
-                    st.success("Salvo!"); time.sleep(1); st.rerun()
+                        "taxa": (ac/tot*100), "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False,
+                        "comentarios": coment, "tempo": t_final
+                    }
+                    
+                    try:
+                        # Tentativa 1: Tudo (Com Tempo e Comentários)
+                        supabase.table("registros_estudos").insert(dados_registro).execute()
+                        st.success("Salvo com sucesso!")
+                    except:
+                        # Tentativa 2: Básico (Se o banco ainda não reconheceu as colunas novas)
+                        dados_basicos = {k: v for k, v in dados_registro.items() if k not in ["comentarios", "tempo"]}
+                        supabase.table("registros_estudos").insert(dados_basicos).execute()
+                        st.warning("Salvo sem Tempo/Comentários (Banco em sincronização).")
+                    
+                    time.sleep(1); st.rerun()
+
+    elif menu == "Histórico":
+        st.subheader("📜 Histórico de Estudos")
+        if df.empty:
+            st.info("Aguardando dados...")
+            mock = {"Data": ["--/--/--"], "Matéria": ["Exemplo"], "Assunto": ["Exemplo"], "Qtd": [0], "Acertos": [0], "%": ["0%"], "Tempo": ["00:00:00"]}
+            st.table(pd.DataFrame(mock))
+        else:
+            df_hist = df.copy()
+            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
+            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa']
+            if 'tempo' in df_hist.columns: cols_show.append('tempo')
+            
+            ed = st.data_editor(df_hist[cols_show], hide_index=True)
+            if st.button("💾 ATUALIZAR"):
+                for _, r in ed.iterrows():
+                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
+                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso}).eq("id", r['id']).execute()
+                st.rerun()
+    
+    elif menu == "Configurar":
+        st.subheader("⚙️ Configurar Edital")
+        nm = st.text_input("Nova Matéria")
+        if st.button("Adicionar"):
+            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
+        for m, t in dados.get('materias', {}).items():
+            with st.expander(f"📚 {m}"):
+                tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}")
+                if st.button("Salvar Tópicos", key=f"s_{m}"):
+                    novos = [l.strip() for l in tx.split('\n') if l.strip()]
+                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
