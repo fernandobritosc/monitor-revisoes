@@ -7,7 +7,7 @@ import fitz  # PyMuPDF
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL ---
+# --- 1. CONFIGURAÇÃO VISUAL PROFISSIONAL ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -16,12 +16,24 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #0A0A0B; color: #E2E8F0; }
     header { visibility: hidden; }
     .block-container { padding-top: 1.5rem !important; }
-    .rev-card { background: #17171B; border: 1px solid #2D2D35; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #333; }
+
+    .rev-card {
+        background: #17171B; border: 1px solid #2D2D35; border-radius: 8px;
+        padding: 12px; margin-bottom: 10px; border-left: 4px solid #333;
+    }
     .perf-bad { border-left-color: #EF4444; }
     .perf-med { border-left-color: #F59E0B; }
     .perf-good { border-left-color: #10B981; }
+    
+    .card-subject { font-weight: 800; font-size: 0.85rem; color: #FFF; margin-bottom: 2px; }
+    .card-topic { font-size: 0.75rem; color: #94A3B8; margin-bottom: 6px; line-height: 1.2; }
+    .card-footer { display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748B; align-items: center; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
+
+    .stButton button {
+        background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px;
+        font-weight: 600; transition: 0.2s; width: 100%;
+    }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -41,9 +53,8 @@ def get_editais():
         for row in res.data:
             c = row['concurso']
             if c not in editais:
-                editais[c] = {"cargo": row.get('cargo') or "Geral", "materias": {}}
-            if row.get('materia'): 
-                editais[c]["materias"][row['materia']] = row.get('topicos') or []
+                editais[c] = {"cargo": row.get('cargo') or "Geral", "data_iso": row.get('data_prova'), "materias": {}}
+            if row.get('materia'): editais[c]["materias"][row['materia']] = row.get('topicos') or []
         return editais
     except: return {}
 
@@ -125,7 +136,7 @@ else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
             hrs = (df['tempo'].sum() / 60) if 'tempo' in df.columns else 0
             c1, c2, c3 = st.columns(3)
-            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo", f"{int(hrs)}h")
+            c1.metric("Questões", int(tot)); c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%"); c3.metric("Tempo Líquido", f"{int(hrs)}h")
             st.divider()
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626'], height=350), use_container_width=True)
@@ -142,7 +153,7 @@ else:
                     itens = df_p[df_p['Fase'] == fid]
                     for _, row in itens.iterrows():
                         st.markdown(f'<div class="rev-card {row["CSS"]}"><div class="card-subject">{row["Mat"]}</div><div class="card-topic">{row["Ass"]}</div><div class="card-footer"><span>📅 {row["Data"]}</span><span class="score-badge">{row["Taxa"]:.0f}%</span></div></div>', unsafe_allow_html=True)
-                        if st.button("Ok", key=f"f_{row['id']}_{fid}"):
+                        if st.button("Concluir", key=f"f_{row['id']}_{fid}"):
                             supabase.table("registros_estudos").update({f"rev_{fid}": True}).eq("id", row['id']).execute(); st.rerun()
 
     elif menu == "Registrar":
@@ -170,14 +181,15 @@ else:
                 st.session_state.ia_resultado = fatiar_edital(texto)
         if "ia_resultado" in st.session_state:
             res = st.session_state.ia_resultado
-            st.success(f"{len(res)} matérias identificadas.")
-            if st.button("🔥 SALVAR TUDO NO BANCO"):
-                for m, t in res.items():
-                    supabase.table("editais_materias").insert({"concurso": missao, "materia": m, "topicos": t}).execute()
-                st.success("Configuração concluída!"); time.sleep(1); st.rerun()
+            st.success(f"{len(res)} itens detectados. Salve apenas o que for matéria de prova.")
+            st.divider()
             for m, t in res.items():
-                with st.expander(f"📚 {m}"):
+                with st.expander(f"📚 {m} ({len(t)} tópicos)"):
                     st.write("; ".join(t))
+                    if st.button(f"💾 SALVAR {m}", key=f"save_ia_{m}"):
+                        supabase.table("editais_materias").insert({"concurso": missao, "materia": m, "topicos": t}).execute()
+                        st.success(f"{m} adicionada ao edital!")
+                        time.sleep(0.5); st.rerun()
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
@@ -200,7 +212,6 @@ else:
             edited = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']], hide_index=True, use_container_width=True)
             if st.button("💾 SALVAR ALTERAÇÕES"):
                 for _, r in edited.iterrows():
-                    # Cálculo da taxa corrigido e sem barras invertidas extras
                     nova_taxa = (r['acertos']/r['total']*100) if r['total'] > 0 else 0
                     supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": nova_taxa}).eq("id", r['id']).execute()
                 st.rerun()
