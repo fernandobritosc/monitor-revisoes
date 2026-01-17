@@ -150,7 +150,7 @@ else:
                 if st.button("💾 REGISTRAR BATALHA", type="primary"):
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
-    elif menu == "IA: Novo Edital":
+elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador de Edital")
         if not DOCLING_READY:
             st.error("Erro: Bibliotecas Docling não encontradas no requirements.txt")
@@ -167,14 +167,20 @@ else:
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            # Configuração LITE para evitar erro de permissão do RapidOCR
+                            # --- CONFIGURAÇÃO CORRIGIDA PARA VERSÕES NOVAS ---
+                            from docling.datamodel.pipeline_options import PdfPipelineOptions
+                            from docling.datamodel.base_models import InputFormat
+                            
                             pipeline_opts = PdfPipelineOptions()
-                            pipeline_opts.do_ocr = False
+                            pipeline_opts.do_ocr = False # Mantemos False para evitar o PermissionError
                             pipeline_opts.do_table_structure = True
                             
+                            # A mudança está aqui: usamos format_options
                             converter = DocumentConverter(
                                 allowed_formats=[InputFormat.PDF],
-                                pipeline_options=pipeline_opts
+                                format_options={
+                                    InputFormat.PDF: pipeline_opts
+                                }
                             )
                             
                             result = converter.convert(temp_path)
