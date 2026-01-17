@@ -84,20 +84,16 @@ else:
             st.info("Nenhum registro encontrado.")
         else:
             df_hist = df.copy()
-            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
+            # PREPARAÇÃO DOS DADOS PARA O EDITOR (Obrigatório para evitar o erro)
             df_hist['id'] = df_hist['id'].astype(str)
+            df_hist['taxa'] = pd.to_numeric(df_hist['taxa'], errors='coerce').fillna(0).astype(float)
+            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
             
-            # --- FILTROS NO TOPO ---
-            c1, c2 = st.columns([2, 2])
-            filtro_mat = c1.multiselect("Filtrar por Disciplina", options=df_hist['materia'].unique())
+            # FILTRO
+            filtro_mat = st.multiselect("Filtrar por Disciplina", options=df_hist['materia'].unique())
             if filtro_mat:
                 df_hist = df_hist[df_hist['materia'].isin(filtro_mat)]
             
-            # --- RESUMO RÁPIDO ---
-            total_horas = len(df_hist) # Aqui poderíamos somar o tempo real se quiséssemos
-            st.caption(f"Exibindo {len(df_hist)} registros.")
-
-            # --- EDITOR COM BARRA DE PROGRESSO ---
             cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa', 'tempo', 'comentarios']
             
             ed = st.data_editor(
@@ -106,10 +102,11 @@ else:
                 use_container_width=True,
                 column_config={
                     "id": st.column_config.TextColumn("ID", disabled=True),
-                    "taxa": st.column_config.ProgressColumn("Precisão (%)", min_value=0, max_value=100, format="%f%%"),
+                    "taxa": st.column_config.ProgressColumn("Precisão", min_value=0, max_value=100, format="%.1f%%"),
                     "acertos": st.column_config.NumberColumn("✅", width="small"),
                     "total": st.column_config.NumberColumn("📊", width="small"),
-                    "tempo": st.column_config.TextColumn("⏱️ Tempo"),
+                    "data_estudo": "Data",
+                    "tempo": "⏱️ Tempo"
                 }
             )
             
