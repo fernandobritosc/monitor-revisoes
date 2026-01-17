@@ -69,9 +69,13 @@ else:
                            icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0)
 
-    # --- ABA: REVISÕES (LÓGICA COMPLETA RESTAURADA) ---
+    # --- ABA: REVISÕES (LÓGICA CORRIGIDA) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
+        
+        # Filtro de visualização
+        filtro_rev = st.radio("Visualizar:", ["Pendentes/Hoje", "Todas (incluindo futuras)"], horizontal=True)
+        
         hoje = datetime.date.today()
         pend = []
         if not df.empty:
@@ -80,43 +84,42 @@ else:
                 dias = (hoje - dt_est).days
                 tx = row.get('taxa', 0)
                 
-                # Regra 24h
-                if dias >= 1 and not row.get('rev_24h', False):
+                # Lógica de Revisão 24h
+                if not row.get('rev_24h', False):
                     dt_prev = dt_est + timedelta(days=1)
-                    pend.append({
-                        "id": row['id'], 
-                        "materia": row['materia'], 
-                        "assunto": row['assunto'], 
-                        "tipo": "Revisão 24h", 
-                        "col": "rev_24h", 
-                        "atraso": dias-1, 
-                        "data_prevista": dt_prev.strftime('%d/%m/%Y'),
-                        "coment": row.get('comentarios', '')
-                    })
-                # Regras Ciclos Longos
+                    # Se for amanhã ou antes (ou se o filtro for "Todas")
+                    if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                        atraso = (hoje - dt_prev).days
+                        pend.append({
+                            "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                            "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
+                            "data_prevista": dt_prev.strftime('%d/%m/%Y'), "coment": row.get('comentarios', '')
+                        })
+                
+                # Lógica de Ciclos Longos (só entra se a de 24h já foi feita)
                 elif row.get('rev_24h', True):
                     d_alvo, col_alv, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
-                    if dias >= d_alvo and not row.get(col_alv, False):
+                    if not row.get(col_alv, False):
                         dt_prev = dt_est + timedelta(days=d_alvo)
-                        pend.append({
-                            "id": row['id'], 
-                            "materia": row['materia'], 
-                            "assunto": row['assunto'], 
-                            "tipo": lbl, 
-                            "col": col_alv, 
-                            "atraso": dias-d_alvo, 
-                            "data_prevista": dt_prev.strftime('%d/%m/%Y'),
-                            "coment": row.get('comentarios', '')
-                        })
+                        if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                            atraso = (hoje - dt_prev).days
+                            pend.append({
+                                "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                                "tipo": lbl, "col": col_alv, "atraso": atraso, 
+                                "data_prevista": dt_prev.strftime('%d/%m/%Y'), "coment": row.get('comentarios', '')
+                            })
         
         if not pend: st.success("✅ Tudo em dia!")
         else:
+            # Ordenar por data prevista (mais antigas primeiro)
+            pend = sorted(pend, key=lambda x: datetime.datetime.strptime(x['data_prevista'], '%d/%m/%Y').date())
+            
             for p in pend:
                 with st.container(border=True):
                     c_txt, c_vals, c_btn = st.columns([1.5, 1, 0.8])
                     with c_txt:
-                        # EXIBIÇÃO DA DATA PREVISTA ADICIONADA AQUI
-                        st.markdown(f"**{p['materia']}**\n<span class='small-text'>{p['assunto']} • {p['tipo']} • 📅 {p['data_prevista']}</span>", unsafe_allow_html=True)
+                        cor_data = "#FF4B4B" if p['atraso'] > 0 else "#00FF00" if p['atraso'] == 0 else "#adb5bd"
+                        st.markdown(f"**{p['materia']}**\n<span class='small-text'>{p['assunto']} • {p['tipo']} • <span style='color:{cor_data}'>📅 {p['data_prevista']}</span></span>", unsafe_allow_html=True)
                         if p['coment']: 
                             with st.expander("📝 Ver Anotações"): st.info(p['coment'])
                     with c_vals:
@@ -125,7 +128,11 @@ else:
                         tor_rev = ct.number_input("Total", 0, key=f"rev_to_{p['id']}_{p['col']}")
                     with c_btn:
                         st.write("")
-                        if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:11px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
+                        if p['atraso'] > 0: 
+                            st.markdown(f"<p style='color:#FF4B4B;font-size:11px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
+                        elif p['atraso'] == 0:
+                            st.markdown(f"<p style='color:#00FF00;font-size:11px;text-align:center;'>🎯 Vence hoje</p>", unsafe_allow_html=True)
+                        
                         if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
                             n_ac = res_db.data[0]['acertos'] + acr_rev
