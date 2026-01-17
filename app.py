@@ -263,16 +263,23 @@ else:
         else:
             with st.container():
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                # Usando formulário para garantir que o botão dispare a ação corretamente
-                with st.form("form_registro", clear_on_submit=True):
-                    c1, c2 = st.columns([2, 1])
-                    dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
-                    tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
-                    
-                    mat_reg = st.selectbox("Disciplina", mats)
-                    ass_reg = st.selectbox("Assunto", dados['materias'].get(mat_reg, ["Geral"]), key=f"assunto_{mat_reg}")
-                    
-                    st.divider()
+                
+                # Lógica de Reatividade: Disciplina -> Assunto
+                # Usamos st.selectbox fora do form para garantir a atualização imediata da lista de assuntos
+                c1, c2 = st.columns([2, 1])
+                dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
+                tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
+                
+                mat_reg = st.selectbox("Disciplina", mats)
+                
+                # A chave (key) dinâmica força o Streamlit a recriar o selectbox de assunto quando a matéria muda
+                assuntos_disponiveis = dados['materias'].get(mat_reg, ["Geral"])
+                ass_reg = st.selectbox("Assunto", assuntos_disponiveis, key=f"assunto_select_{mat_reg}")
+                
+                st.divider()
+                
+                # O restante pode ficar dentro de um form para o botão de salvar
+                with st.form("form_registro_final", clear_on_submit=True):
                     ca_reg, ct_reg = st.columns(2)
                     ac_reg = ca_reg.number_input("Questões Acertadas", 0)
                     to_reg = ct_reg.number_input("Total de Questões", 1)
