@@ -7,9 +7,11 @@ import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# Importação do Docling com tratamento de erro blindado
+# Importação blindada do Docling
 try:
     from docling.document_converter import DocumentConverter
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.base_models import InputFormat
     DOCLING_READY = True
 except ImportError:
     DOCLING_READY = False
@@ -157,13 +159,28 @@ else:
                 if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
                     with st.spinner("🤖 Analisando PDF..."):
                         try:
+                            # 1. Ajuste de ambiente para evitar Permission Denied no OCR
+                            # Redireciona o cache de modelos para a pasta do app (onde temos permissão)
+                            os.environ["XDG_CACHE_HOME"] = os.path.join(os.getcwd(), ".cache")
+                            
                             temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            # CONFIGURAÇÃO ULTRA-SIMPLIFICADA PARA EVITAR ERRO DE BACKEND/DICT
-                            converter = DocumentConverter() 
-                            # O Docling nas versões novas já tenta o melhor modo sozinho se não passarmos nada
+                            # 2. Configurações para PDF digital (Sem OCR pesado)
+                            pipeline_options = PdfPipelineOptions()
+                            pipeline_options.do_ocr = False
+                            pipeline_options.do_table_structure = True
+                            
+                            # 3. Conversor
+                            converter = DocumentConverter(
+                                allowed_formats=[InputFormat.PDF],
+                                format_options={
+                                    InputFormat.PDF: {
+                                        "pipeline_options": pipeline_options
+                                    }
+                                }
+                            )
                             
                             result = converter.convert(temp_path)
                             texto_md = result.document.export_to_markdown()
@@ -175,7 +192,7 @@ else:
                                 os.remove(temp_path)
                         except Exception as e:
                             st.error(f"Erro técnico: {e}")
-                            st.info("Dica: Se o erro persistir, pode ser necessário simplificar ainda mais o arquivo PDF.")
+                            st.info("Dica: Certifique-se de que o PDF é de texto selecionável (não uma foto).")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
