@@ -8,11 +8,14 @@ import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- TRATAMENTO DE AMBIENTE ---
+# --- TRATAMENTO DE AMBIENTE (FORÇA BRUTA) ---
 os.environ["XDG_CACHE_HOME"] = os.path.join(os.getcwd(), ".cache")
 
 try:
     from docling.document_converter import DocumentConverter
+    # Importamos as opções específicas para desativar o OCR na raiz
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.base_models import InputFormat
     DOCLING_READY = True
 except ImportError:
     DOCLING_READY = False
@@ -154,28 +157,42 @@ else:
         else:
             with st.container(border=True):
                 nome_concurso = st.text_input("Nome do Concurso")
-                pdf_file = st.file_uploader("Upload PDF", type="pdf")
+                pdf_file = st.file_uploader("Upload PDF (Somente Texto)", type="pdf")
                 
-                if st.button("🚀 EXTRAÇÃO FORÇA BRUTA") and pdf_file:
-                    with st.spinner("🤖 Processando..."):
+                if st.button("🚀 EXTRAÇÃO BLINDADA") and pdf_file:
+                    with st.spinner("🤖 Executando Pipeline Ultra-Light..."):
                         try:
-                            # SALVANDO E USANDO PATHLIB (IMPROVÁVEL)
-                            temp_file = Path("temp_edital.pdf")
-                            temp_file.write_bytes(pdf_file.getbuffer())
+                            # 1. Caminho Temporário
+                            temp_path = Path("temp_edital.pdf")
+                            temp_path.write_bytes(pdf_file.getbuffer())
                             
-                            # INSTANCIAÇÃO PURA (SEM DICIONÁRIOS)
-                            converter = DocumentConverter()
+                            # 2. CONFIGURAÇÃO ATÔMICA: Desativa OCR e qualquer modelo de visão
+                            # Isso impede o Docling de tentar baixar o 'rapidocr'
+                            pipeline_options = PdfPipelineOptions()
+                            pipeline_options.do_ocr = False
+                            pipeline_options.do_table_structure = False # Desativa até tabelas para garantir permissão
                             
-                            # CONVERSÃO DIRETA POR CAMINHO
-                            result = converter.convert(temp_file)
+                            # 3. CONVERSOR SEM ACESSO AO SISTEMA
+                            converter = DocumentConverter(
+                                allowed_formats=[InputFormat.PDF],
+                                format_options={
+                                    InputFormat.PDF: {
+                                        "pipeline_options": pipeline_options
+                                    }
+                                }
+                            )
+                            
+                            # 4. CONVERSÃO
+                            result = converter.convert(temp_path)
                             texto_md = result.document.export_to_markdown()
                             
                             st.success("Concluído!")
                             st.text_area("Resultado:", value=texto_md, height=400)
                             
-                            if temp_file.exists(): temp_file.unlink()
+                            if temp_path.exists(): temp_path.unlink()
                         except Exception as e:
                             st.error(f"Erro: {e}")
+                            st.info("O servidor bloqueou o download do motor de IA. Use um PDF que contenha texto real (não foto).")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
