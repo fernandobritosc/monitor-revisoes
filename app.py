@@ -5,15 +5,14 @@ import datetime
 import plotly.express as px
 from streamlit_option_menu import option_menu
 
-# Importamos nossos módulos blindados
+# Importação dos Módulos Independentes
 from database import supabase
 from logic import get_editais, calcular_pendencias, excluir_concurso_completo
 from styles import apply_styles
 
-# --- 1. INICIALIZAÇÃO E MEMÓRIA DO APP ---
+# --- 1. INICIALIZAÇÃO ---
 apply_styles()
 
-# Garante que o app saiba em qual tela está
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
@@ -32,23 +31,21 @@ if st.session_state.missao_ativa is None:
                 c1, c2, c3 = st.columns([4, 1, 0.5])
                 c1.markdown(f"### {nome}\n*{dados['cargo']}*")
                 
-                # Botão para entrar no concurso
                 if c2.button("ACESSAR", key=f"ac_{nome}"):
                     st.session_state.missao_ativa = nome
                     st.rerun()
                 
-                # Botão da Lixeira
                 if c3.button("🗑️", key=f"del_btn_{nome}", help="Excluir este concurso"):
                     st.session_state[f"confirm_del_{nome}"] = True
 
-                # --- TRAVA DE SEGURANÇA (CONFIRMAÇÃO) ---
+                # Trava de Segurança (Confirmação)
                 if st.session_state.get(f"confirm_del_{nome}", False):
-                    st.warning(f"Excluir **{nome}** e todas as suas matérias?")
+                    st.warning(f"Excluir **{nome}** e todo o seu histórico?")
                     col_sim, col_nao = st.columns(2)
                     
-                    if col_sim.button("✅ SIM, EXCLUIR", key=f"yes_{nome}"):
+                    if col_sim.button("✅ SIM", key=f"yes_{nome}"):
                         if excluir_concurso_completo(supabase, nome):
-                            st.success("Removido com sucesso!")
+                            st.success("Removido!")
                             time.sleep(0.5)
                             del st.session_state[f"confirm_del_{nome}"]
                             st.rerun()
@@ -64,21 +61,15 @@ if st.session_state.missao_ativa is None:
             n_c = st.text_input("Cargo")
             if st.form_submit_button("CRIAR MISSÃO"):
                 if n_n:
-                    # Cria o concurso com uma matéria padrão para ele aparecer na lista
                     supabase.table("editais_materias").insert({
-                        "concurso": n_n, 
-                        "cargo": n_c, 
-                        "materia": "Geral", 
-                        "topicos": []
+                        "concurso": n_n, "cargo": n_c, "materia": "Geral", "topicos": []
                     }).execute()
                     st.success("Missão Criada!")
-                    time.sleep(0.8)
-                    st.rerun()
+                    time.sleep(0.8); st.rerun()
 
 # --- 3. FLUXO INTERNO: PAINEL DE ESTUDOS ---
 else:
     missao = st.session_state.missao_ativa
-    # Busca dados do concurso atual
     res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
     df = pd.DataFrame(res.data)
     dados = get_editais(supabase).get(missao, {})
@@ -98,7 +89,10 @@ else:
         if df.empty: st.info("Sem dados.")
         else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
-            st.metric("Precisão Geral", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
+            c1, c2 = st.columns(2)
+            c1.metric("Questões Totais", int(tot))
+            c2.metric("Precisão", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
+            
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), 
                                     x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626']), use_container_width=True)
@@ -112,38 +106,83 @@ else:
                 with st.container(border=True):
                     st.write(f"**{row['Label']}** - {row['Mat']}")
                     st.caption(row['Ass'])
-                    if st.button("Concluir", key=f"rev_{row['id']}_{row['Fase']}"):
+                    if st.button("Concluir Revisão", key=f"rev_{row['id']}_{row['Fase']}"):
                         supabase.table("registros_estudos").update({f"rev_{row['Fase']}": True}).eq("id", row['id']).execute()
                         st.rerun()
 
     elif menu == "Registrar":
-        st.subheader("📝 Registrar Questões")
+        st.subheader("📝 Novo Registro de Estudo")
         mats = list(dados.get('materias', {}).keys())
-        if not mats: st.warning("Cadastre matérias no menu Configurar.")
+        if not mats:
+            st.warning("Cadastre matérias no menu Configurar primeiro.")
         else:
-            with st.form("reg_questoes"):
-                mat = st.selectbox("Matéria", mats)
-                ass = st.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
-                ac = st.number_input("Acertos", 0)
-                tot = st.number_input("Total", 1)
-                if st.form_submit_button("💾 SALVAR"):
+            with st.container(border=True):
+                # CABEÇALHO: DATA E TEMPO
+                c_data, c_tempo = st.columns([2, 1])
+                with c_data:
+                    data_sel = st.radio("Data do Estudo", ["HOJE", "ONTEM", "OUTRO"], horizontal=True)
+                    if data_sel == "HOJE": dt = datetime.date.today()
+                    elif data_sel == "ONTEM": dt = datetime.date.today() - datetime.timedelta(days=1)
+                    else: dt = st.date_input("Data", datetime.date.today())
+                
+                with c_tempo:
+                    tempo_estudo = st.text_input("Tempo (HH:MM:SS)", value="01:00:00")
+
+                st.divider()
+                # SELEÇÃO DE MATÉRIA
+                c1, c2 = st.columns(2)
+                mat = c1.selectbox("Disciplina", mats)
+                ass = c2.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
+
+                st.divider()
+                # PERFORMANCE: QUESTÕES, PÁGINAS E VÍDEOS
+                col_q, col_p, col_v = st.columns(3)
+                with col_q:
+                    st.markdown("#### 🎯 Questões")
+                    acertos = st.number_input("Acertos", min_value=0, value=0)
+                    total_q = st.number_input("Total", min_value=0, value=0)
+                with col_p:
+                    st.markdown("#### 📖 Páginas")
+                    p_ini = st.number_input("Início", min_value=0, value=0)
+                    p_fim = st.number_input("Fim", min_value=0, value=0)
+                with col_v:
+                    st.markdown("#### 🎬 Videoaula")
+                    v_tit = st.text_input("Título/ID", value="Aula 01")
+                    v_dur = st.text_input("Duração", value="00:30:00")
+
+                st.divider()
+                coment = st.text_area("Comentários / Anotações")
+                
+                if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
+                    taxa = (acertos/total_q*100) if total_q > 0 else 0
                     supabase.table("registros_estudos").insert({
                         "concurso": missao, "materia": mat, "assunto": ass, 
-                        "data_estudo": str(datetime.date.today()), "acertos": ac, "total": tot, 
-                        "taxa": (ac/tot*100), "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
+                        "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": acertos, "total": total_q, 
+                        "taxa": taxa, "comentarios": coment, "paginas": f"{p_ini}-{p_fim}",
+                        "videoaula": v_tit, "tempo": tempo_estudo,
+                        "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False
                     }).execute()
-                    st.rerun()
+                    st.success("Registrado!")
+                    time.sleep(1); st.rerun()
 
     elif menu == "Configurar":
         st.subheader("⚙️ Configurar Edital")
         nm = st.text_input("Nova Matéria")
         if st.button("Adicionar"):
-            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute()
-            st.rerun()
+            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos (um por linha)", "\n".join(t), key=f"t_{m}")
-                if st.button("Salvar Tópicos", key=f"s_{m}"):
+                tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}", height=150)
+                if st.button("Salvar", key=f"s_{m}"):
                     novos = [l.strip() for l in tx.split('\n') if l.strip()]
-                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute()
-                    st.rerun()
+                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
+
+    elif menu == "Histórico":
+        st.subheader("📜 Histórico")
+        if df.empty: st.info("Vazio.")
+        else:
+            ed = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'taxa']], hide_index=True)
+            if st.button("💾 ATUALIZAR"):
+                for _, r in ed.iterrows():
+                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": (r['acertos']/r['total']*100) if r['total']>0 else 0}).eq("id", r['id']).execute()
+                st.rerun()
