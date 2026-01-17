@@ -17,7 +17,7 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# FUNÇÃO: 0130 -> 01:30:00
+# FUNÇÃO FERNANDO: 0130 -> 01:30:00
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -88,41 +88,38 @@ else:
                 dt = c1.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
                 t_bruto = c2.text_input("Tempo (ex: 0130)", placeholder="HHMM")
                 t_final = formatar_tempo_estudo(t_bruto)
-                st.info(f"Tempo: **{t_final}**")
+                st.info(f"Tempo Final: **{t_final}**")
                 
-                mat = st.selectbox("Matéria", mats)
-                ass = st.selectbox("Assunto", dados['materias'].get(mat, ["Geral"]))
+                mat = st.selectbox("Disciplina", mats)
+                ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
                 
                 st.divider()
                 c_ac, c_tot = st.columns(2)
                 ac, tot = c_ac.number_input("Acertos", 0), c_tot.number_input("Total", 1)
-                coment = st.text_area("Comentários")
+                coment = st.text_area("Comentários / Anotações")
                 
                 if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
-                    dados_registro = {
+                    # Agora que o banco sincronizou, enviamos tudo direto!
+                    supabase.table("registros_estudos").insert({
                         "concurso": missao, "materia": mat, "assunto": ass, 
                         "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, 
                         "taxa": (ac/tot*100) if tot > 0 else 0,
                         "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False,
                         "comentarios": str(coment), "tempo": str(t_final)
-                    }
-                    try:
-                        supabase.table("registros_estudos").insert(dados_registro).execute()
-                        st.success("✅ REGISTRO COMPLETO SALVO!")
-                    except:
-                        dados_basicos = {k: v for k, v in dados_registro.items() if k not in ["comentarios", "tempo"]}
-                        supabase.table("registros_estudos").insert(dados_basicos).execute()
-                        st.warning("⚠️ Salvo sem Tempo (Banco sincronizando).")
+                    }).execute()
+                    st.success("✅ REGISTRO SALVO!")
                     time.sleep(1); st.rerun()
 
     elif menu == "Histórico":
         st.subheader("📜 Histórico de Estudos")
         if df.empty:
-            st.info("Nenhum dado real ainda.")
+            st.info("Aguardando seu primeiro registro real...")
         else:
             df_hist = df.copy()
             df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
             cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'tempo', 'comentarios']
+            
+            # Garante que as novas colunas apareçam no histórico
             for col in cols_show:
                 if col not in df_hist.columns: df_hist[col] = ""
 
@@ -134,25 +131,16 @@ else:
                         "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
                         "tempo": r['tempo'], "comentarios": r['comentarios']
                     }).eq("id", r['id']).execute()
-                st.rerun()
+                st.success("Atualizado!"); st.rerun()
 
     elif menu == "Dashboard":
         st.subheader("📊 Performance")
         if df.empty: st.info("Sem dados.")
         else:
             tot, ac = df['total'].sum(), df['acertos'].sum()
-            st.metric("Precisão Geral", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
+            c1, c2 = st.columns(2)
+            c1.metric("Questões Totais", int(tot))
+            c2.metric("Precisão Geral", f"{(ac/tot*100 if tot > 0 else 0):.1f}%")
+            
             df_g = df.copy(); df_g['Data'] = pd.to_datetime(df_g['data_estudo']).dt.strftime('%d/%m')
             st.plotly_chart(px.area(df_g.groupby('Data')[['total', 'acertos']].sum().reset_index(), x='Data', y=['total', 'acertos'], color_discrete_sequence=['#2D2D35', '#DC2626']), use_container_width=True)
-
-    elif menu == "Configurar":
-        st.subheader("⚙️ Configurar Edital")
-        nm = st.text_input("Nova Matéria")
-        if st.button("Add"):
-            supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
-        for m, t in dados.get('materias', {}).items():
-            with st.expander(f"📚 {m}"):
-                tx = st.text_area("Tópicos", "\n".join(t), key=f"t_{m}")
-                if st.button("Salvar", key=f"s_{m}"):
-                    novos = [l.strip() for l in tx.split('\n') if l.strip()]
-                    supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
