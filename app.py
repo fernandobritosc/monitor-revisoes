@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 import datetime
 import time
-import os
-import fitz  # PyMuPDF: Motor estável para GitHub/Streamlit Cloud
-import plotly.express as px
+import re
+import fitz  # PyMuPDF
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# --- 1. CONFIGURAÇÃO VISUAL COM ESTILO COMMANDER ---
+# --- 1. CONFIGURAÇÃO VISUAL ---
 st.set_page_config(page_title="COMMANDER ELITE", page_icon="💀", layout="wide")
 
 st.markdown("""
@@ -21,9 +20,6 @@ st.markdown("""
     .perf-bad { border-left-color: #EF4444; }
     .perf-med { border-left-color: #F59E0B; }
     .perf-good { border-left-color: #10B981; }
-    .card-subject { font-weight: 800; font-size: 0.85rem; color: #FFF; margin-bottom: 2px; }
-    .card-topic { font-size: 0.75rem; color: #94A3B8; margin-bottom: 6px; line-height: 1.2; }
-    .card-footer { display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748B; align-items: center; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
     .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
@@ -45,8 +41,9 @@ def get_editais():
         for row in res.data:
             c = row['concurso']
             if c not in editais:
-                editais[c] = {"cargo": row.get('cargo') or "Geral", "data_iso": row.get('data_prova'), "materias": {}}
-            if row.get('materia'): editais[c]["materias"][row['materia']] = row.get('topicos') or []
+                editais[c] = {"cargo": row.get('cargo') or "Geral", "materias": {}}
+            if row.get('materia'): 
+                editais[c]["materias"][row['materia']] = row.get('topicos') or []
         return editais
     except: return {}
 
@@ -74,7 +71,33 @@ def calcular_pendencias(df):
         elif delta >= 1 and not row['rev_24h']: pendencias.append({**base, "Fase": "24h", "Label": "🔥 D1"})
     return pd.DataFrame(pendencias)
 
-# --- 4. FLUXO APP ---
+# --- 4. IA: FATIAMENTO INTELIGENTE ---
+def fatiar_edital(texto):
+    """Identifica matérias e tópicos usando padrões de texto de editais."""
+    # Padrão: Matéria em CAIXA ALTA (mínimo 5 letras) que pode começar com número
+    linhas = texto.split('\n')
+    progresso = {}
+    materia_atual = None
+    
+    for linha in linhas:
+        linha = linha.strip()
+        if not linha: continue
+        
+        # Detecta Título de Matéria (Ex: 1. LÍNGUA PORTUGUESA ou CONHECIMENTOS GERAIS)
+        if re.match(r'^(\d+\.?)?\s*[A-ZÀ-Ú\s]{5,}$', linha) and len(linha) < 50:
+            materia_atual = linha
+            progresso[materia_atual] = []
+        elif materia_atual:
+            # Se já temos uma matéria, as linhas seguintes são tópicos
+            # Divide tópicos por ponto e vírgula ou ponto final se for uma lista
+            sub_topicos = re.split(r'[;.]', linha)
+            for st in sub_topicos:
+                clean_st = st.strip()
+                if clean_st and len(clean_st) > 3:
+                    progresso[materia_atual].append(clean_st)
+    return progresso
+
+# --- 5. FLUXO APP ---
 if 'missao_ativa' not in st.session_state: st.session_state.missao_ativa = None
 
 if st.session_state.missao_ativa is None:
@@ -100,6 +123,7 @@ else:
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "robot", "gear", "list-task"], 
                            default_index=1, styles={"nav-link-selected": {"background-color": "#DC2626"}})
 
+    # --- ABAS DO MENU ---
     if menu == "Dashboard":
         st.subheader("📊 Performance Geral")
         if df.empty: st.info("Sem dados.")
@@ -140,23 +164,35 @@ else:
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": assunto, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, "taxa": (ac/tot*100), "tempo": h_val*60+m_val, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.toast("Salvo!"); time.sleep(0.5); st.rerun()
 
     elif menu == "IA: Novo Edital":
-        st.subheader("🤖 Importador de Edital")
-        st.info("Suba o PDF e o motor extrairá o texto para organizar as matérias.")
+        st.subheader("🤖 Importador de Edital Inteligente")
+        st.info("O sistema tentará separar as matérias e tópicos automaticamente após a extração.")
+        
         with st.container(border=True):
             pdf_file = st.file_uploader("Upload PDF do Edital", type="pdf")
-            if st.button("🚀 EXTRAIR TEXTO") and pdf_file:
-                with st.spinner("Processando..."):
+            if st.button("🚀 PROCESSAR EDITAL") and pdf_file:
+                with st.spinner("Extraindo e fatiando conteúdo..."):
                     try:
-                        # Leitura via PyMuPDF (Direto da memória para evitar erro de permissão)
                         doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
                         texto_completo = ""
-                        for page in doc:
-                            texto_completo += page.get_text() + "\n"
-                        st.success("Leitura concluída!")
-                        st.text_area("Texto Bruto Extraído:", value=texto_completo, height=450)
+                        for page in doc: texto_completo += page.get_text() + "\n"
                         doc.close()
+                        
+                        # Executa a lógica de fatiamento
+                        resultado = fatiar_edital(texto_completo)
+                        
+                        if not resultado:
+                            st.warning("O texto foi extraído, mas não detectamos o padrão de matérias (Títulos em CAIXA ALTA). Verifique o texto bruto abaixo.")
+                            st.text_area("Texto Extraído:", value=texto_completo, height=300)
+                        else:
+                            st.success(f"Detectamos {len(resultado)} matérias!")
+                            for mat, tops in resultado.items():
+                                with st.expander(f"📚 {mat} ({len(tops)} tópicos)"):
+                                    st.write("; ".join(tops))
+                                    if st.button(f"Salvar {mat}", key=f"save_{mat}"):
+                                        supabase.table("editais_materias").insert({"concurso": missao, "materia": mat, "topicos": tops}).execute()
+                                        st.toast(f"{mat} adicionada!")
                     except Exception as e:
-                        st.error(f"Erro na extração: {e}")
+                        st.error(f"Erro: {e}")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
