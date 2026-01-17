@@ -19,6 +19,7 @@ apply_styles()
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
+# REGRA HHMM: 0130 -> 01:30:00 (OK)
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -79,24 +80,24 @@ else:
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
                            icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=0)
 
-    # --- ABA DASHBOARD (v134.0 - SUB-MENU TÉCNICO) ---
+    # --- ABA DASHBOARD (v135.0 - LAYOUT PROFISSIONAL) ---
     if menu == "Dashboard":
         if df.empty:
-            st.info("Aguardando dados para análise...")
+            st.info("Aguardando dados para gerar as análises...")
         else:
-            # Layout com Sub-menu lateral interno
+            # Layout com Sub-menu lateral de ícones
             c_menu, c_conteudo = st.columns([0.15, 2.5])
             
             with c_menu:
                 st.write("") 
                 sub_aba = option_menu(
                     None, ["Geral", "Evolução", "Matérias"],
-                    icons=["house", "graph-up", "journal-text"], 
+                    icons=["grid-1x2", "graph-up-arrow", "clipboard-data"], 
                     default_index=0,
                     styles={
                         "container": {"padding": "0!important", "background-color": "transparent"},
-                        "icon": {"color": "#ff4b4b", "font-size": "18px"}, 
-                        "nav-link": {"font-size": "0px", "text-align": "center", "margin":"5px", "--hover-color": "#262730"},
+                        "icon": {"color": "#ff4b4b", "font-size": "20px"}, 
+                        "nav-link": {"font-size": "0px", "text-align": "center", "margin":"15px 0px", "--hover-color": "#262730"},
                         "nav-link-selected": {"background-color": "#31333F", "border-radius": "10px"},
                     }
                 )
@@ -110,53 +111,59 @@ else:
                 df['minutos'] = df['tempo'].apply(conv_min)
 
                 if sub_aba == "Geral":
-                    st.markdown("### 🏠 Visão Geral de Desempenho")
+                    st.markdown("### 📊 Desempenho Geral")
                     k1, k2, k3, k4 = st.columns(4)
                     tot_q = df['total'].sum()
                     acc_q = df['acertos'].sum()
+                    err_q = tot_q - acc_q
+                    
                     k1.metric("Questões resolvidas", f"{int(tot_q)}")
-                    k2.metric("Acertos", f"{int(acc_q)}", delta=f"{int(acc_q)}")
-                    k3.metric("Matérias estudadas", len(df['materia'].unique()))
-                    k4.metric("Horas Totais", f"{(df['minutos'].sum()/60):.1f}h")
+                    k2.metric("Acertos", f"{int(acc_q)}", delta=f"{int(acc_q)}", delta_color="normal")
+                    k3.metric("Matérias", len(df['materia'].unique()))
+                    k4.metric("Erros", f"{int(err_q)}", delta=f"-{int(err_q)}", delta_color="inverse")
                     st.divider()
                     
                     col_p1, col_p2 = st.columns(2)
                     with col_p1:
-                        st.markdown("**Distribuição de Questões**")
-                        df_p = df.groupby('materia')['total'].sum().reset_index()
-                        fig_d = px.pie(df_p, values='total', names='materia', hole=0.5)
-                        st.plotly_chart(fig_d, use_container_width=True)
+                        # Gráfico de Rosca Central (Precisão)
+                        fig_g = go.Figure(go.Pie(
+                            values=[acc_q, err_q], labels=['Acertos', 'Erros'],
+                            hole=.6, marker_colors=['#00ff00', '#ff4b4b'],
+                            textinfo='percent'
+                        ))
+                        fig_g.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                        st.plotly_chart(fig_g, use_container_width=True)
                     with col_p2:
-                        st.markdown("**Média de Acertos por Disciplina**")
+                        # Radar de Competências
                         df_r = df.groupby('materia')['taxa'].mean().reset_index()
                         fig_r = px.line_polar(df_r, r='taxa', theta='materia', line_close=True)
                         fig_r.update_traces(fill='toself', line_color='#ff4b4b')
                         st.plotly_chart(fig_r, use_container_width=True)
 
                 elif sub_aba == "Evolução":
-                    st.markdown("### 📈 Evolução do Estudante")
+                    st.markdown("### 📈 Evolução do Desempenho")
                     df_ev = df.groupby('data_estudo').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index().sort_values('data_estudo')
-                    
-                    st.markdown("**Volume de Questões (Acertos vs Total)**")
                     fig_area = px.area(df_ev, x='data_estudo', y=['total', 'acertos'], color_discrete_map={"total": "#31333F", "acertos": "#ff4b4b"})
                     st.plotly_chart(fig_area, use_container_width=True)
-                    
-                    st.markdown("**Percentual de Acertos Diário**")
-                    fig_line = px.line(df_ev, x='data_estudo', y='taxa', markers=True, color_discrete_sequence=['#ff4b4b'])
-                    fig_line.update_layout(yaxis_range=[0, 100])
-                    st.plotly_chart(fig_line, use_container_width=True)
 
                 elif sub_aba == "Matérias":
-                    st.markdown("### 📚 Estatísticas por Matéria")
+                    st.markdown("### 📚 Atividades por Matéria")
                     df_mat = df.groupby('materia').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-                    st.dataframe(df_mat, use_container_width=True, hide_index=True, column_config={
-                        "materia": "Disciplina", "total": "Qtd Questões", "acertos": "Acertos",
-                        "taxa": st.column_config.ProgressColumn("Precisão (%)", min_value=0, max_value=100, format="%.1f%%")
-                    })
+                    
+                    for _, row in df_mat.iterrows():
+                        taxa = row['taxa']
+                        st.markdown(f"**{row['materia']}** ({int(row['total'])} questões)")
+                        # Barra de progresso bicolore customizada via HTML
+                        st.markdown(f"""
+                            <div style="width: 100%; background-color: #ff4b4b; border-radius: 5px; height: 12px; margin-bottom: 15px;">
+                                <div style="width: {taxa}%; background-color: #00ff00; border-radius: 5px; height: 12px; text-align: right;">
+                                    <span style="padding-right: 5px; color: black; font-size: 10px; font-weight: bold;">{taxa:.1f}%</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
-    # --- DEMAIS ABAS (REVISÕES, REGISTRAR, ETC) MANTIDAS INTEGRALMENTE ---
+    # --- DEMAIS ABAS PRESERVADAS ---
     elif menu == "Revisões":
-        # (Lógica da v132.0 mantida aqui para brevidade do código)
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
         pend = []
@@ -204,7 +211,7 @@ else:
                 tb = c2.text_input("Tempo (HHMM)", placeholder="0130")
                 tf = formatar_tempo_estudo(tb); st.info(f"Tempo: **{tf}**")
                 mat = st.selectbox("Disciplina", mats); ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
-                c_a, c_t = st.columns(2); ac = c_a.number_input("Acertos", 0); to = c_t.number_input("Total", 1)
+                ca, ct = st.columns(2); ac = ca.number_input("Acertos", 0); to = ct.number_input("Total", 1)
                 com = st.text_area("Comentários (Links TEC)")
                 if st.button("💾 SALVAR", type="primary", use_container_width=True):
                     supabase.table("registros_estudos").insert({"concurso": missao, "materia": mat, "assunto": ass, "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": to, "taxa": (ac/to*100), "comentarios": str(com), "tempo": str(tf), "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}).execute(); st.rerun()
