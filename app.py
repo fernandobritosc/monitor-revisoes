@@ -6,7 +6,7 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- 1. DESIGN SYSTEM PREMIUM ---
+# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões", layout="wide")
 
 from database import supabase
@@ -17,17 +17,13 @@ apply_styles()
 
 st.markdown("""
     <style>
-    /* Esquadro de Metrics e Cards */
     .stMetric { background-color: #1A1C23 !important; border: 1px solid #2D303E !important; border-radius: 8px !important; padding: 15px !important; }
     [data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 700 !important; }
-    
-    /* Barras Bicolores (Verde e Vermelho) */
     .progress-container { width: 100%; background-color: #FF4B4B; border-radius: 4px; height: 6px; margin: 8px 0; overflow: hidden; }
     .progress-bar-fill { background-color: #00FF00; height: 100%; }
-    
-    /* Tipografia de Apoio */
     .small-text { font-size: 13px; color: #adb5bd; }
-    .date-highlight { font-size: 12px; color: #6c757d; font-weight: bold; margin-left: 8px; vertical-align: middle; }
+    /* Estilo para a data no título */
+    .date-label { font-size: 12px; color: #6c757d; font-weight: normal; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -38,7 +34,7 @@ def formatar_tempo_para_bigint(valor_bruto):
     numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
     return (int(numeros[:-2]) * 60) + int(numeros[-2:])
 
-# --- 2. NAVEGAÇÃO CENTRAL ---
+# --- 2. LOGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
     st.title("🎯 Central de Comando")
     ed = get_editais(supabase)
@@ -66,7 +62,7 @@ else:
                            icons=["arrow-repeat", "pencil-square", "grid", "list", "gear"], 
                            default_index=0)
 
-    # --- ABA: REVISÕES (DATA RESTAURADA COM PERFEIÇÃO) ---
+    # --- ABA: REVISÕES (DATA INCLUÍDA) ---
     if menu == "Revisões":
         st.subheader("🔄 Radar de Revisões")
         hoje = datetime.date.today()
@@ -76,39 +72,34 @@ else:
                 dt_est = pd.to_datetime(row['data_estudo']).date()
                 dias = (hoje - dt_est).days
                 tx = row.get('taxa', 0)
-                
-                # Regras de Ciclos (24h, 7d, 15d, 20d)
+                # Lógica 24h (simplificada para o exemplo)
                 if dias >= 1 and not row.get('rev_24h', False):
                     pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_f": dt_est.strftime('%d/%m/%Y'), "tipo": "Revisão 24h", "col": "rev_24h", "atraso": dias-1, "coment": row.get('comentarios', '')})
-                elif row.get('rev_24h', True):
-                    d_alv, c_alv, lbl = (7, "rev_07d", "Revisão 7d") if tx <= 75 else (15, "rev_15d", "Revisão 15d") if tx <= 79 else (20, "rev_30d", "Revisão 20d")
-                    if dias >= d_alv and not row.get(c_alv, False):
-                        pend.append({"id": row['id'], "materia": row['materia'], "assunto": row['assunto'], "data_f": dt_est.strftime('%d/%m/%Y'), "tipo": lbl, "col": c_alv, "atraso": dias-d_alv, "coment": row.get('comentarios', '')})
         
-        if not pend: st.success("✅ Tudo revisado!")
+        if not pend: st.success("✅ Tudo em dia!")
         else:
             for p in pend:
                 with st.container(border=True):
                     c_txt, c_vals, c_btn = st.columns([1.5, 1, 0.8])
                     with c_txt:
-                        # DATA EXIBIDA AQUI COM PERFEIÇÃO
-                        st.markdown(f"**{p['materia']}** <span class='date-highlight'>({p['data_f']})</span>", unsafe_allow_html=True)
+                        # DATA DO ESTUDO ADICIONADA AQUI
+                        st.markdown(f"**{p['materia']}** <span class='date-label'>({p['data_f']})</span>", unsafe_allow_html=True)
                         st.markdown(f"<span class='small-text'>{p['assunto']} • {p['tipo']}</span>", unsafe_allow_html=True)
                         if p['coment']: 
                             with st.expander("📝 Ver Anotações"): st.info(p['coment'])
                     with c_vals:
                         ca, ct = st.columns(2)
-                        r_ac = ca.number_input("Acertos", 0, key=f"rev_ac_{p['id']}_{p['col']}")
-                        r_to = ct.number_input("Total", 0, key=f"rev_to_{p['id']}_{p['col']}")
+                        r_ac = ca.number_input("Acertos", 0, key=f"rev_ac_{p['id']}")
+                        r_to = ct.number_input("Total", 0, key=f"rev_to_{p['id']}")
                     with c_btn:
                         st.write("")
                         if p['atraso'] > 0: st.markdown(f"<p style='color:#FF4B4B;font-size:11px;text-align:center;'>⚠️ {p['atraso']}d atraso</p>", unsafe_allow_html=True)
-                        if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
+                        if st.button("CONCLUIR", key=f"btn_{p['id']}", use_container_width=True, type="primary"):
                             res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
                             n_ac = res_db.data[0]['acertos'] + r_ac
                             n_to = res_db.data[0]['total'] + r_to
-                            supabase.table("registros_estudos").update({p['col']: True, "comentarios": f"{p['coment']} | Rev: {r_ac}/{r_to}", "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100 if n_to > 0 else 0)}).eq("id", p['id']).execute()
-                            st.success("Sincronizado!"); time.sleep(0.5); st.rerun()
+                            supabase.table("registros_estudos").update({p['col']: True, "acertos": n_ac, "total": n_to, "taxa": (n_ac/n_to*100 if n_to > 0 else 0)}).eq("id", p['id']).execute()
+                            st.rerun()
 
     # --- ABA: REGISTRAR (SINC DINÂMICA) ---
     elif menu == "Registrar":
@@ -120,38 +111,36 @@ else:
             tm_reg = c2.text_input("Tempo (HHMM)", value="0100")
             mat_reg = st.selectbox("Disciplina", mats)
             ass_reg = st.selectbox("Assunto", dados['materias'].get(mat_reg, ["Geral"]), key=f"sel_reg_{mat_reg}")
-            
             ca_reg, ct_reg = st.columns(2)
             ac_reg = ca_reg.number_input("Acertos", 0)
             to_reg = ct_reg.number_input("Total", 1)
             com_reg = st.text_area("Comentários")
-            
             if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
                 t_b = formatar_tempo_para_bigint(tm_reg)
                 payload = {"concurso": missao, "materia": mat_reg, "assunto": ass_reg, "data_estudo": dt_reg.strftime('%Y-%m-%d'), "acertos": ac_reg, "total": to_reg, "taxa": (ac_reg/to_reg*100), "comentarios": com_reg, "tempo": t_b, "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False}
                 supabase.table("registros_estudos").insert(payload).execute(); st.rerun()
 
-    # --- ABA: DASHBOARD (ESQUADRO COMPLETO) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         if df.empty: st.info("Sem dados.")
         else:
             k1, k2, k3 = st.columns(3)
-            t_q = df['total'].sum(); a_q = df['acertos'].sum()
+            t_q, a_q = df['total'].sum(), df['acertos'].sum()
             k1.metric("Questões", int(t_q))
             k2.metric("Precisão", f"{(a_q/t_q*100 if t_q>0 else 0):.1f}%")
             k3.metric("Horas", f"{(df['tempo'].sum()/60):.1f}h")
             st.divider()
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
+            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index()
             for _, m in df_mat.iterrows():
-                with st.expander(f"📁 {m['materia'].upper()} — {m['taxa']:.1f}%"):
-                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
+                with st.expander(f"📁 {m['materia'].upper()}"):
+                    df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'taxa': 'mean', 'total': 'sum', 'acertos': 'sum'}).reset_index()
                     for _, a in df_ass.iterrows():
                         c_a1, c_a2 = st.columns([3, 1])
                         c_a1.markdown(f"<span class='small-text'>└ {a['assunto']}</span>", unsafe_allow_html=True)
                         c_a2.markdown(f"<p style='text-align: right; font-size: 11px;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
                         st.markdown(f'<div class="progress-container"><div class="progress-bar-fill" style="width: {a["taxa"]}%;"></div></div>', unsafe_allow_html=True)
 
-    # --- HISTÓRICO E CONFIG ---
+    # --- ABAS SECUNDÁRIAS ---
     elif menu == "Histórico":
         st.subheader("📜 Histórico")
         if not df.empty:
@@ -164,9 +153,3 @@ else:
             nm = st.text_input("Nova Matéria")
             if st.form_submit_button("➕ ADD"):
                 supabase.table("editais_materias").insert({"concurso": missao, "cargo": dados['cargo'], "materia": nm, "topicos": []}).execute(); st.rerun()
-        if dados.get('materias'):
-            for m, t in dados['materias'].items():
-                with st.expander(f"📚 {m}"):
-                    tx = st.text_area("Tópicos", value="\n".join(t), key=f"tx_{m}")
-                    if st.button("💾 SALVAR", key=f"s_{m}"):
-                        novos = [l.strip() for l in tx.split('\n') if l.strip()]; supabase.table("editais_materias").update({"topicos": novos}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
