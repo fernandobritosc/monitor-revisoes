@@ -76,30 +76,20 @@ def fatiar_edital(texto):
     linhas = texto.split('\n')
     progresso = {}
     materia_atual = None
-    
-    # Blacklist expandida para ignorar cabeçalhos de anexo
     blacklist = ["ANEXO", "CONTEÚDO", "PROGRAMÁTICO", "INSCRIÇÃO", "REQUISITO", "PROVA", "CARGO", "NÍVEL"]
 
     for linha in linhas:
         linha = linha.strip()
         if not linha or len(linha) < 4: continue
-        
-        # Detecta Títulos (MAIÚSCULAS) - Ex: DIREITO CONSTITUCIONAL
         if linha.isupper() and len(linha) < 60:
-            if any(word in linha for word in blacklist):
-                continue
+            if any(word in linha for word in blacklist): continue
             materia_atual = linha
             progresso[materia_atual] = []
-        
         elif materia_atual:
-            # Quebra a linha em tópicos (por ; ou , ou .)
             topicos_linha = re.split(r'[;,]', linha)
             for t in topicos_linha:
                 t_clean = t.strip()
-                if len(t_clean) > 5: # Evita tópicos curtos demais que são erro de leitura
-                    progresso[materia_atual].append(t_clean)
-    
-    # Limpeza final: remove matérias sem tópicos
+                if len(t_clean) > 5: progresso[materia_atual].append(t_clean)
     return {k: v for k, v in progresso.items() if len(v) > 0}
 
 # --- 5. FLUXO APP ---
@@ -170,7 +160,6 @@ else:
     elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador Programático")
         st.warning("Dica: Faça o upload apenas das páginas do Anexo de Conteúdo Programático.")
-        
         pdf_file = st.file_uploader("Upload PDF (Anexo)", type="pdf")
         if st.button("🚀 ANALISAR ANEXO") and pdf_file:
             with st.spinner("Processando..."):
@@ -179,16 +168,13 @@ else:
                 for page in doc: texto += page.get_text() + "\n"
                 doc.close()
                 st.session_state.ia_resultado = fatiar_edital(texto)
-        
         if "ia_resultado" in st.session_state:
             res = st.session_state.ia_resultado
             st.success(f"{len(res)} matérias identificadas.")
-            
             if st.button("🔥 SALVAR TUDO NO BANCO"):
                 for m, t in res.items():
                     supabase.table("editais_materias").insert({"concurso": missao, "materia": m, "topicos": t}).execute()
                 st.success("Configuração concluída!"); time.sleep(1); st.rerun()
-
             for m, t in res.items():
                 with st.expander(f"📚 {m}"):
                     st.write("; ".join(t))
@@ -196,14 +182,15 @@ else:
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
         nm = st.text_input("Nova Matéria")
-        if st.button("Add"):
+        if st.button("Adicionar"):
             supabase.table("editais_materias").insert({"concurso": missao, "materia": nm, "topicos": []}).execute(); st.rerun()
         for m, t in dados.get('materias', {}).items():
             with st.expander(f"📚 {m}"):
                 tx = st.text_area("Tópicos", "; ".join(t), key=f"t_{m}")
-                if st.button("Salvar", key=f"s_{m}"):
+                cs, cd = st.columns([4, 1])
+                if cs.button("Salvar", key=f"s_{m}"):
                     supabase.table("editais_materias").update({"topicos": [x.strip() for x in tx.split(";") if x.strip()]}).eq("concurso", missao).eq("materia", m).execute(); st.rerun()
-                if st.button("🗑️", key=f"d_{m}"):
+                if cd.button("🗑️", key=f"d_{m}"):
                     supabase.table("editais_materias").delete().eq("concurso", missao).eq("materia", m).execute(); st.rerun()
 
     elif menu == "Histórico":
@@ -211,7 +198,14 @@ else:
         if df.empty: st.info("Vazio.")
         else:
             edited = st.data_editor(df[['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total']], hide_index=True, use_container_width=True)
-            if st.button("💾 SALVAR"):
+            if st.button("💾 SALVAR ALTERAÇÕES"):
                 for _, r in edited.iterrows():
-                    supabase.table("registros_estudos").update({"acertos": r['acertos'], \"total\": r['total'], \"taxa\": (r['acertos']/r['total']*100) if r['total'] > 0 else 0}).eq(\"id\", r['id']).execute()
+                    # Cálculo da taxa corrigido e sem barras invertidas extras
+                    nova_taxa = (r['acertos']/r['total']*100) if r['total'] > 0 else 0
+                    supabase.table("registros_estudos").update({"acertos": r['acertos'], "total": r['total'], "taxa": nova_taxa}).eq("id", r['id']).execute()
                 st.rerun()
+            st.divider()
+            alvo = st.selectbox("Escolha um registro para apagar:", ["Selecione..."] + [f"{r['data_estudo']} | {r['materia']} ({r['id']})" for _, r in df.iterrows()])
+            if alvo != "Selecione..." and st.button("🗑️ EXCLUIR REGISTRO"):
+                rid = alvo.split('(')[-1].strip(')')
+                supabase.table("registros_estudos").delete().eq("id", rid).execute(); st.rerun()
