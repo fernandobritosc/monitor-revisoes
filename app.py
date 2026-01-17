@@ -6,18 +6,20 @@ import plotly.express as px
 import re
 from streamlit_option_menu import option_menu
 
-# Importação dos Módulos Independentes
+# --- 1. CONFIGURAÇÃO DE PÁGINA (MUDANÇA PARA LAYOUT AMPLO) ---
+st.set_page_config(page_title="Monitor de Revisões", layout="wide")
+
+# Importações dos Módulos
 from database import supabase
 from logic import get_editais, calcular_pendencias, excluir_concurso_completo
 from styles import apply_styles
 
-# --- 1. INICIALIZAÇÃO ---
 apply_styles()
 
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# FUNÇÃO FERNANDO: 0130 -> 01:30:00
+# FUNÇÃO DE TEMPO: 0130 -> 01:30:00
 def formatar_tempo_estudo(valor_bruto):
     numeros = re.sub(r'\D', '', valor_bruto) 
     if not numeros: return "00:00:00"
@@ -26,7 +28,7 @@ def formatar_tempo_estudo(valor_bruto):
     minutos = numeros[-2:].zfill(2)
     return f"{horas}:{minutos}:00"
 
-# --- 2. TELA INICIAL: CENTRAL DE COMANDO ---
+# --- 2. CENTRAL DE COMANDO ---
 if st.session_state.missao_ativa is None:
     st.title("💀 CENTRAL DE COMANDO")
     tabs = st.tabs(["🎯 Missões Ativas", "➕ Novo Concurso"])
@@ -61,7 +63,7 @@ if st.session_state.missao_ativa is None:
                     supabase.table("editais_materias").insert({"concurso": n_n, "cargo": n_c, "materia": "Geral", "topicos": []}).execute()
                     st.rerun()
 
-# --- 3. PAINEL INTERNO ---
+# --- 3. PAINEL INTERNO (EXPANSÍVEL) ---
 else:
     missao = st.session_state.missao_ativa
     try:
@@ -75,10 +77,48 @@ else:
     with st.sidebar:
         st.title(f"🎯 {missao}")
         if st.button("🔙 VOLTAR"): st.session_state.missao_ativa = None; st.rerun()
+        st.divider()
         menu = option_menu(None, ["Dashboard", "Revisões", "Registrar", "Configurar", "Histórico"], 
-                           icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=2)
+                           icons=["speedometer2", "arrow-repeat", "pencil-square", "gear", "list-task"], default_index=4)
 
-    if menu == "Registrar":
+    # --- HISTÓRICO MELHORADO ---
+    if menu == "Histórico":
+        st.subheader("📜 Histórico de Estudos")
+        if df.empty:
+            st.info("Nenhum dado real ainda.")
+        else:
+            df_hist = df.copy()
+            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
+            
+            # Ordenação das colunas para o visual
+            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'tempo', 'comentarios']
+            for col in cols_show:
+                if col not in df_hist.columns: df_hist[col] = ""
+
+            # O use_container_width=True faz a tabela esticar ao fechar o menu lateral
+            ed = st.data_editor(
+                df_hist[cols_show], 
+                hide_index=True, 
+                use_container_width=True,
+                column_config={
+                    "id": st.column_config.TextColumn("ID", width="small"),
+                    "data_estudo": st.column_config.TextColumn("Data", width="medium"),
+                    "materia": st.column_config.TextColumn("Matéria", width="large"),
+                    "assunto": st.column_config.TextColumn("Assunto", width="large"),
+                    "comentarios": st.column_config.TextColumn("Comentários", width="large")
+                }
+            )
+            
+            if st.button("💾 CONFIRMAR ALTERAÇÕES", use_container_width=True):
+                for _, r in ed.iterrows():
+                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
+                    supabase.table("registros_estudos").update({
+                        "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
+                        "tempo": r['tempo'], "comentarios": r['comentarios']
+                    }).eq("id", r['id']).execute()
+                st.success("Alterações salvas!"); time.sleep(1); st.rerun()
+
+    elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
         mats = list(dados.get('materias', {}).keys())
         if not mats: st.warning("Cadastre matérias no menu Configurar primeiro.")
@@ -88,7 +128,7 @@ else:
                 dt = c1.date_input("Data", datetime.date.today(), format="DD/MM/YYYY")
                 t_bruto = c2.text_input("Tempo (ex: 0130)", placeholder="HHMM")
                 t_final = formatar_tempo_estudo(t_bruto)
-                st.info(f"Tempo Final: **{t_final}**")
+                st.info(f"Tempo: **{t_final}**")
                 
                 mat = st.selectbox("Disciplina", mats)
                 ass = st.selectbox("Tópico", dados['materias'].get(mat, ["Geral"]))
@@ -96,42 +136,16 @@ else:
                 st.divider()
                 c_ac, c_tot = st.columns(2)
                 ac, tot = c_ac.number_input("Acertos", 0), c_tot.number_input("Total", 1)
-                coment = st.text_area("Comentários / Anotações")
+                coment = st.text_area("Comentários")
                 
                 if st.button("💾 SALVAR REGISTRO", type="primary", use_container_width=True):
-                    # Agora que o banco sincronizou, enviamos tudo direto!
                     supabase.table("registros_estudos").insert({
                         "concurso": missao, "materia": mat, "assunto": ass, 
                         "data_estudo": dt.strftime('%Y-%m-%d'), "acertos": ac, "total": tot, 
                         "taxa": (ac/tot*100) if tot > 0 else 0,
-                        "rev_24h": False, "rev_07d": False, "rev_15d": False, "rev_30d": False,
                         "comentarios": str(coment), "tempo": str(t_final)
                     }).execute()
-                    st.success("✅ REGISTRO SALVO!")
-                    time.sleep(1); st.rerun()
-
-    elif menu == "Histórico":
-        st.subheader("📜 Histórico de Estudos")
-        if df.empty:
-            st.info("Aguardando seu primeiro registro real...")
-        else:
-            df_hist = df.copy()
-            df_hist['data_estudo'] = pd.to_datetime(df_hist['data_estudo']).dt.strftime('%d/%m/%Y')
-            cols_show = ['id', 'data_estudo', 'materia', 'assunto', 'acertos', 'total', 'tempo', 'comentarios']
-            
-            # Garante que as novas colunas apareçam no histórico
-            for col in cols_show:
-                if col not in df_hist.columns: df_hist[col] = ""
-
-            ed = st.data_editor(df_hist[cols_show], hide_index=True, use_container_width=True)
-            if st.button("💾 CONFIRMAR ALTERAÇÕES"):
-                for _, r in ed.iterrows():
-                    dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
-                    supabase.table("registros_estudos").update({
-                        "acertos": r['acertos'], "total": r['total'], "data_estudo": dt_iso,
-                        "tempo": r['tempo'], "comentarios": r['comentarios']
-                    }).eq("id", r['id']).execute()
-                st.success("Atualizado!"); st.rerun()
+                    st.success("✅ SALVO!"); time.sleep(1); st.rerun()
 
     elif menu == "Dashboard":
         st.subheader("📊 Performance")
