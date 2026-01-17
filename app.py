@@ -7,11 +7,12 @@ import plotly.express as px
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
-# Importação blindada do Docling
+# --- TRATAMENTO DE IMPORTAÇÃO DOCLING ---
 try:
     from docling.document_converter import DocumentConverter
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.datamodel.base_models import InputFormat
+    # Definimos as opções de forma global para evitar recriação constante
     DOCLING_READY = True
 except ImportError:
     DOCLING_READY = False
@@ -30,7 +31,7 @@ st.markdown("""
     .perf-med { border-left-color: #F59E0B; }
     .perf-good { border-left-color: #10B981; }
     .score-badge { background: #2D2D35; color: #FFF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; transition: 0.3s; }
+    .stButton button { background: #1E1E24; border: 1px solid #3F3F46; border-radius: 6px; font-weight: 600; width: 100%; }
     .stButton button:hover { background: #DC2626; border-color: #DC2626; color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -149,50 +150,43 @@ else:
     elif menu == "IA: Novo Edital":
         st.subheader("🤖 IA: Importador de Edital")
         if not DOCLING_READY:
-            st.error("Erro: Docling não está carregado corretamente.")
+            st.error("Erro: Bibliotecas Docling não instaladas ou com erro no requirements.txt")
         else:
-            st.info("Suba o PDF (pág. de conteúdo) para extração automática.")
+            st.info("Suba o PDF do edital para extração automática.")
             with st.container(border=True):
                 nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: PCGO")
                 pdf_file = st.file_uploader("Escolha o Edital (PDF)", type="pdf")
                 
-                if st.button("🚀 INICIAR EXTRAÇÃO INTELIGENTE") and pdf_file and nome_concurso:
-                    with st.spinner("🤖 Analisando PDF..."):
+                if st.button("🚀 INICIAR EXTRAÇÃO") and pdf_file and nome_concurso:
+                    with st.spinner("🤖 Analisando estrutura..."):
                         try:
-                            # 1. Ajuste de ambiente para evitar Permission Denied no OCR
-                            # Redireciona o cache de modelos para a pasta do app (onde temos permissão)
+                            # Ajuste de Cache para permissão no Streamlit
                             os.environ["XDG_CACHE_HOME"] = os.path.join(os.getcwd(), ".cache")
                             
                             temp_path = os.path.join(os.getcwd(), "temp_edital.pdf")
                             with open(temp_path, "wb") as f:
                                 f.write(pdf_file.getbuffer())
                             
-                            # 2. Configurações para PDF digital (Sem OCR pesado)
+                            # CONFIGURAÇÃO EXPLÍCITA (Sem dicionários para evitar erro de 'backend')
                             pipeline_options = PdfPipelineOptions()
                             pipeline_options.do_ocr = False
                             pipeline_options.do_table_structure = True
                             
-                            # 3. Conversor
-                            converter = DocumentConverter(
-                                allowed_formats=[InputFormat.PDF],
-                                format_options={
-                                    InputFormat.PDF: {
-                                        "pipeline_options": pipeline_options
-                                    }
-                                }
-                            )
+                            # Usamos a abordagem mais direta possível
+                            converter = DocumentConverter()
                             
                             result = converter.convert(temp_path)
                             texto_md = result.document.export_to_markdown()
                             
-                            st.success("Leitura concluída!")
-                            st.text_area("Conteúdo Extraído:", value=texto_md, height=400)
+                            st.success("Extração realizada com sucesso!")
+                            st.text_area("Texto Bruto Extraído:", value=texto_md, height=400)
                             
                             if os.path.exists(temp_path):
                                 os.remove(temp_path)
+                                
                         except Exception as e:
                             st.error(f"Erro técnico: {e}")
-                            st.info("Dica: Certifique-se de que o PDF é de texto selecionável (não uma foto).")
+                            st.info("Dica: Certifique-se de que o PDF é texto e não imagem.")
 
     elif menu == "Configurar":
         st.subheader("⚙️ Edital")
