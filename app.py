@@ -68,7 +68,7 @@ if st.session_state.missao_ativa is None:
 else:
     missao = st.session_state.missao_ativa
     try:
-        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("id", desc=True).execute()
         df = pd.DataFrame(res.data)
     except:
         df = pd.DataFrame()
@@ -124,7 +124,10 @@ else:
                 }
             )
             
-            if st.button("💾 CONFIRMAR ALTERAÇÕES", use_container_width=True):
+            # --- BOTÕES DE AÇÃO ---
+            c_save, c_del = st.columns([4, 1])
+            
+            if c_save.button("💾 CONFIRMAR ALTERAÇÕES NA TABELA", use_container_width=True):
                 for _, r in ed.iterrows():
                     dt_iso = datetime.datetime.strptime(r['data_estudo'], '%d/%m/%Y').strftime('%Y-%m-%d')
                     supabase.table("registros_estudos").update({
@@ -133,6 +136,15 @@ else:
                         "taxa": (r['acertos']/r['total']*100) if r['total'] > 0 else 0
                     }).eq("id", r['id']).execute()
                 st.success("Alterações salvas!"); time.sleep(1); st.rerun()
+
+            with c_del.popover("🗑️ APAGAR REGISTRO"):
+                st.write("Digite o ID do lançamento que deseja remover:")
+                id_del = st.text_input("Número do ID", key="id_to_del")
+                if st.button("CONFIRMAR EXCLUSÃO", type="primary"):
+                    if id_del:
+                        supabase.table("registros_estudos").delete().eq("id", id_del).execute()
+                        st.error(f"Registro {id_del} removido com sucesso!")
+                        time.sleep(1); st.rerun()
 
     elif menu == "Registrar":
         st.subheader("📝 Novo Registro")
