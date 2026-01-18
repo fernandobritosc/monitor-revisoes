@@ -456,7 +456,7 @@ else:
             m1, m2, m3, m4 = st.columns(4)
             with m1: render_metric_card("Total de Questões", int(t_q), "📝")
             with m2: render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
-            with m3: render_metric_card("Erros Notion", questões_revisar_notion, "🔥") # <--- INTEGRAÇÃO
+            with m3: render_metric_card("Questoes Revisar no Notion", erros_notion, "🔥") # <--- INTEGRAÇÃO
             with m4: render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
             
             st.write("")
