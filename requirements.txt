@@ -6,3 +6,4 @@ supabase
 docling
 docling-core
 pymupdf
+notion-client
