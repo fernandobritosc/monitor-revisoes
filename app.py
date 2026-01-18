@@ -14,6 +14,10 @@ from database import supabase
 from logic import get_editais, excluir_concurso_completo
 from styles import apply_styles
 
+# --- INICIALIZAÇÃO DO ESTADO (Coloque isso no topo) ---
+if 'missao_ativa' not in st.session_state:
+    st.session_state.missao_ativa = None
+
 # Aplicar estilos base
 apply_styles()
 
