@@ -6,7 +6,7 @@ import plotly.express as px
 import re
 import time
 from streamlit_option_menu import option_menu
-from notion_client import Client # ADICIONADO PARA INTEGRAÇÃO
+from notion_client import Client # Integração Notion
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
@@ -15,25 +15,21 @@ from database import supabase
 from logic import get_editais, excluir_concurso_completo
 from styles import apply_styles
 
-# --- CONFIGURAÇÃO DO NOTION (INTEGRAÇÃO) ---
-# Seus dados capturados das imagens anteriores
+# CONFIGURAÇÃO DO NOTION (Dados da sua integração)
 NOTION_TOKEN = "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"
 DATABASE_ID = "2ec82bc022d780a592dcea3616f520c0"
 
 notion = Client(auth=NOTION_TOKEN)
 
 def get_notion_errors_count():
-    """Busca no Notion a quantidade de erros pendentes (Revisado = Falso)"""
+    """Busca no Notion a quantidade de erros pendentes para o Dashboard"""
     try:
         response = notion.databases.query(
             database_id=DATABASE_ID,
-            filter={
-                "property": "Revisado",
-                "checkbox": {"equals": False}
-            }
+            filter={"property": "Revisado", "checkbox": {"equals": False}}
         )
         return len(response.get("results", []))
-    except Exception as e:
+    except:
         return 0
 
 # Aplicar estilos base
@@ -436,11 +432,11 @@ else:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD (INTEGRAÇÃO COM NOTION INCLUÍDA) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # BUSCA DE ERROS NO NOTION PARA A ALEGO
+        # BUSCA DE ERROS NO NOTION
         erros_notion = get_notion_errors_count()
         
         if df.empty:
@@ -452,16 +448,16 @@ else:
             precisao = (a_q/t_q*100 if t_q>0 else 0)
             horas = df['tempo'].sum()/60
             
-            # 4 Colunas para incluir o contador do Notion
+            # 4 Colunas para incluir o Notion
             m1, m2, m3, m4 = st.columns(4)
             with m1: render_metric_card("Total de Questões", int(t_q), "📝")
             with m2: render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
-            with m3: render_metric_card("Erros Notion", erros_notion, "🔥") # <--- INTEGRAÇÃO
+            with m3: render_metric_card("Erros Notion", erros_notion, "🔥") # <--- NOVIDADE
             with m4: render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
             
             st.write("")
             
-            # Gráficos (Mantidos integralmente do original)
+            # Gráficos
             c_g1, c_g2 = st.columns(2)
             with c_g1:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
