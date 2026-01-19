@@ -130,6 +130,36 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+def get_badge_cor(taxa):
+    if taxa >= 80: return "#00FF00", "Excelente", "rgba(0, 255, 0, 0.1)"
+    elif taxa >= 60: return "#FFD700", "Aceitável", "rgba(255, 215, 0, 0.1)"
+    else: return "#FF4B4B", "Crítico", "rgba(255, 75, 75, 0.1)"
+
+def calcular_streak(df):
+    if df.empty: return 0
+    datas = pd.to_datetime(df['data_estudo']).dt.date.unique()
+    datas = sorted(datas, reverse=True)
+    streak, hoje, alvo = 0, datetime.date.today(), datetime.date.today()
+    if datas[0] < hoje and (hoje - datas[0]).days > 1: return 0
+    elif datas[0] < hoje: alvo = datas[0]
+    for d in datas:
+        if d == alvo:
+            streak += 1
+            alvo -= timedelta(days=1)
+        else: break
+    return streak
+
+def calcular_countdown(data_prova_str):
+    if not data_prova_str: return None, "#adb5bd"
+    dias = (pd.to_datetime(data_prova_str).date() - datetime.date.today()).days
+    cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
+    return dias, cor
+
+def formatar_minutos(minutos):
+    h = int(minutos // 60)
+    m = int(minutos % 60)
+    return f"{h}h {m:02d}m"
+
 # --- CONTINUAÇÃO DAS FUNÇÕES AUXILIARES (COLE AQUI) ---
 
 def formatar_tempo_para_bigint(valor_bruto):
