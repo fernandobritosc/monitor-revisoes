@@ -275,7 +275,7 @@ else:
         with c1: render_metric_card("Horas Totais", f"{df['tempo'].sum()/60:.1f}h", "⏱️")
         with c2: render_metric_card("Precisão", f"{df['taxa'].mean():.1f}%", "🎯")
         with c3: render_metric_card("Questões", int(df['total'].sum()), "📝")
-        with m4: render_metric_card("Streak", "🔥 5 Dias", "") # Exemplo de consistência
+        with c4: render_metric_card("Streak", "🔥 5 Dias", "") # Exemplo de consistência
 
         st.divider()
 
