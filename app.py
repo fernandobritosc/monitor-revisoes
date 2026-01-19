@@ -7,18 +7,16 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# ... seus imports (streamlit, pandas, etc)
-
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque tudo aqui no topo) ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA (Topo do arquivo) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
-st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
-# ... resto do código
+# Se for implementar a lógica de dias seguidos (Streak)
+if 'streak_dias' not in st.session_state:
+    st.session_state.streak_dias = 0
 
 # --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
 if 'missao_ativa' not in st.session_state:
@@ -257,6 +255,45 @@ else:
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
 
+    
+    menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                   icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
+                   default_index=0, # O 0 agora fará o app abrir direto na Home
+                   styles={
+                       "container": {"padding": "0!important", "background-color": "transparent"},
+                       "icon": {"color": "#FF4B4B", "font-size": "18px"}, 
+                       "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px", "--hover-color": "rgba(255,75,75,0.1)"},
+                       "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
+                   })
+    
+    # --- ABA: HOME (A "VITRINE" DO SEU ESTUDO) ---
+    if menu == "Home":
+        st.markdown(f'<h1 class="main-title">🏠 Painel de Controle: {missao}</h1>', unsafe_allow_html=True)
+        
+        # 1. Métricas principais (usando o seu df que já foi carregado acima)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: render_metric_card("Horas Totais", f"{df['tempo'].sum()/60:.1f}h", "⏱️")
+        with c2: render_metric_card("Precisão", f"{df['taxa'].mean():.1f}%", "🎯")
+        with c3: render_metric_card("Questões", int(df['total'].sum()), "📝")
+        with m4: render_metric_card("Streak", "🔥 5 Dias", "") # Exemplo de consistência
+
+        st.divider()
+
+        # 2. Resumo de Revisões e Gráfico Rápido
+        col_esq, col_dir = st.columns([1.5, 1])
+        with col_esq:
+            st.markdown("### 🔄 Próximas Revisões (Top 3)")
+            # O código para mostrar as 3 primeiras revisões vai aqui
+            
+        with col_dir:
+            st.markdown("### 📊 Status por Dificuldade")
+            # Um mini gráfico de barras aqui ficaria excelente
+            
+    # --- ABA: REVISÕES (Aqui você muda de 'if' para 'elif') ---
+    elif menu == "Revisões":
+        st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
+        # ... resto do código que você já tem
+    
     # --- ABA: REVISÕES ---
     if menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
