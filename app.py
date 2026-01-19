@@ -139,20 +139,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 2. FUNÇÕES AUXILIARES ---
-def formatar_tempo_para_bigint(valor_bruto):
-    numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
-    return (int(numeros[:-2]) * 60) + int(numeros[-2:])
-
-def render_metric_card(label, value, icon="📊"):
-    st.markdown(f"""
-        <div class="modern-card" style="text-align: center; padding: 15px;">
-            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
-            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #fff;">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-
+def calcular_countdown(data_str):
+    if not data_str: return None, "#adb5bd"
+    try:
+        dias = (pd.to_datetime(data_str).date() - datetime.date.today()).days
+        cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
+        return dias, cor
+    except: return None, "#adb5bd"
 # Formata minutos em '2h 15m'
 def formatar_minutos(minutos_totais):
     try:
@@ -652,8 +645,26 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
+        # --- PARTE NOVA: BUSCAR DATA DA PROVA ---
+        ed_dados = get_editais(supabase).get(missao, {})
+        data_prova_str = ed_dados.get('data_prova')
+        
+        dias_prova = None
+        if data_prova_str:
+            try:
+                dt_p = pd.to_datetime(data_prova_str).date()
+                dias_prova = (dt_p - datetime.date.today()).days
+            except:
+                pass
+        # ---------------------------------------
+
         if df.empty:
-            st.info("Ainda não há dados suficientes para gerar o dashboard.")
+            # Se não tem estudos, mostramos apenas o card da prova e o aviso
+            m1, m2 = st.columns([1, 3])
+            with m1:
+                render_metric_card("Prova em", f"{dias_prova} dias" if dias_prova is not None else "---", "📅")
+            with m2:
+                st.info("Ainda não há dados de estudos para gerar o restante do dashboard.")
         else:
             # Métricas Principais
             t_q = df['total'].sum()
@@ -661,12 +672,21 @@ else:
             precisao = (a_q/t_q*100 if t_q>0 else 0)
             horas = df['tempo'].sum()/60
             
-            m1, m2, m3 = st.columns(3)
-            with m1: render_metric_card("Total de Questões", int(t_q), "📝")
+            # CRIANDO 4 COLUNAS EM VEZ DE 3
+            m1, m2, m3, m4 = st.columns(4)
+            with m1: render_metric_card("Total Questões", int(t_q), "📝")
             with m2: render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
             with m3: render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
+            with m4: render_metric_card("Prova em", f"{dias_prova} dias" if dias_prova is not None else "---", "📅")
             
             st.write("")
+
+        # 4. Só mostra os gráficos se houver dados
+        if df.empty:
+            st.info("📚 Os gráficos aparecerão aqui assim que registares o teu primeiro estudo!")
+        else:
+            # Aqui continuaria o teu código de gráficos (se tiveres)
+            pass
             
             # Gráficos
             c_g1, c_g2 = st.columns(2)
