@@ -132,15 +132,40 @@ st.markdown("""
 
 # --- RESTAURAÇÃO DAS FUNÇÕES DE LÓGICA DE REVISÃO ---
 
-def calcular_proximo_intervalo(dificuldade):
-    """Resolve o erro da linha 303"""
-    intervalos = {
-        "Fácil": 15,    # 15 dias
-        "Médio": 7,     # 7 dias
-        "Difícil": 3,   # 3 dias
-        "Crítico": 1    # 1 dia
-    }
-    return intervalos.get(dificuldade, 7)
+def calcular_proximo_intervalo(dificuldade, taxa):
+    """
+    Calcula o intervalo adaptativo de revisão baseado em dificuldade e taxa de acerto.
+    
+    Lógica:
+    - Fácil: 15 dias (ou 20 se taxa > 80%)
+    - Médio: 7 dias (padrão)
+    - Difícil: 3 dias se taxa < 70%, senão 5 dias
+    
+    Args:
+        dificuldade: str - "🟢 Fácil", "🟡 Médio" ou "🔴 Difícil"
+        taxa: float - Taxa de acerto em porcentagem (0-100)
+    
+    Returns:
+        int - Número de dias até a próxima revisão
+    """
+    # Normalizar dificuldade (remover emojis se necessário)
+    dif_limpa = dificuldade.replace("🟢", "").replace("🟡", "").replace("🔴", "").strip()
+    
+    if "Fácil" in dif_limpa or dificuldade == "🟢 Fácil":
+        # Fácil: 15-20 dias dependendo da performance
+        return 20 if taxa >= 80 else 15
+    
+    elif "Médio" in dif_limpa or dificuldade == "🟡 Médio":
+        # Médio: 7 dias (padrão)
+        return 7
+    
+    elif "Difícil" in dif_limpa or dificuldade == "🔴 Difícil":
+        # Difícil: 3 dias se taxa baixa, 5 se taxa aceitável
+        return 3 if taxa < 70 else 5
+    
+    else:
+        # Fallback: 7 dias
+        return 7
 
 def tempo_recomendado_rev24h(tempo_original_min):
     """Resolve os erros nas linhas 358, 430 e 695"""
@@ -318,7 +343,7 @@ else:
                 # Lógica de Ciclos Longos (AGORA ADAPTATIVA)
                 elif row.get('rev_24h', True):
                     # 🆕 Usar intervalo adaptativo baseado em dificuldade
-                    intervalo = calcular_proximo_intervalo(dif, tx)
+                    intervalo = calcular_proximo_intervalo(dif, tx)  # ← 2 parâmetros
                     
                     # Determinar qual coluna atualizar (simplificado)
                     if intervalo == 3:
