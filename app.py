@@ -354,38 +354,26 @@ menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard",
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
 
-# --- ABA: REVISÕES ---
-    if menu == "Revisões":
+# --- 3. LÓGICA DE NAVEGAÇÃO ---
+    # (Este bloco deve estar recuado dentro do 'else' da missão ativa)
+
+    # ABA: HOME (Adicionada como primeira opção)
+    if menu == "Home":
+        st.markdown('<h2 class="main-title">🏠 Painel Principal</h2>', unsafe_allow_html=True)
+        # ... (resto do código da home que analisamos antes)
+
+    # ABA: REVISÕES (Agora vira um ELIF)
+    elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             filtro_rev = st.segmented_control("Visualizar:", ["Pendentes/Hoje", "Todas (incluindo futuras)"], default="Pendentes/Hoje")
-        with c2:
-            filtro_dif = st.segmented_control("Dificuldade:", ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], default="Todas")
-    
-        hoje = datetime.date.today()
-        pend = []
-        if not df.empty:
-            for _, row in df.iterrows():
-                dt_est = pd.to_datetime(row['data_estudo']).date()
-                dias = (hoje - dt_est).days
-                tx = row.get('taxa', 0)
-                dif = row.get('dificuldade', '🟡 Médio')  # 🆕 Ler dificuldade
-                
-                # Lógica de Revisão 24h
-                if not row.get('rev_24h', False):
-                    dt_prev = dt_est + timedelta(days=1)
-                    if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
-                        atraso = (hoje - dt_prev).days
-                        pend.append({
-                            "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
-                            "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
-                            "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                            "dificuldade": dif,  # 🆕 Adicionar dificuldade
-                            "taxa": tx
-                        })
-                
+        # ... (continua o código das revisões)
+
+    # ABA: REGISTRAR
+    elif menu == "Registrar":
+        st.markdown('<h2 class="main-title">📝 Novo Registro</h2>', unsafe_allow_html=True)                
                 # Lógica de Ciclos Longos (AGORA ADAPTATIVA)
                 elif row.get('rev_24h', True):
                     # 🆕 Usar intervalo adaptativo baseado em dificuldade
