@@ -238,10 +238,9 @@ else:
         if st.button("← Voltar à Central", use_container_width=True): 
             st.session_state.missao_ativa = None
             st.rerun()
-        
         st.write("")
-        menu = option_menu(None, ["Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
+        menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
                            default_index=0,
                            styles={
                                "container": {"padding": "0!important", "background-color": "transparent"},
@@ -249,17 +248,6 @@ else:
                                "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px", "--hover-color": "rgba(255,75,75,0.1)"},
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
-
-    
-    menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
-                   icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
-                   default_index=0, # O 0 agora fará o app abrir direto na Home
-                   styles={
-                       "container": {"padding": "0!important", "background-color": "transparent"},
-                       "icon": {"color": "#FF4B4B", "font-size": "18px"}, 
-                       "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px", "--hover-color": "rgba(255,75,75,0.1)"},
-                       "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
-                   })
     
     # --- ABA: HOME (A "VITRINE" DO SEU ESTUDO) ---
     if menu == "Home":
