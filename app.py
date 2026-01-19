@@ -7,20 +7,15 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Topo do arquivo) ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
-# Se for implementar a lógica de dias seguidos (Streak)
 if 'streak_dias' not in st.session_state:
     st.session_state.streak_dias = 0
-
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
-if 'missao_ativa' not in st.session_state:
-    st.session_state.missao_ativa = None
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
