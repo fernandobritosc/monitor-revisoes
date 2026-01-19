@@ -7,15 +7,13 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
+# --- INICIALIZAÇÃO DE ESTADOS ---
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
-
-if 'streak_dias' not in st.session_state:
-    st.session_state.streak_dias = 0
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
@@ -238,9 +236,10 @@ else:
         if st.button("← Voltar à Central", use_container_width=True): 
             st.session_state.missao_ativa = None
             st.rerun()
+        
         st.write("")
-        menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
+        menu = option_menu(None, ["Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
                            default_index=0,
                            styles={
                                "container": {"padding": "0!important", "background-color": "transparent"},
@@ -248,35 +247,7 @@ else:
                                "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px", "--hover-color": "rgba(255,75,75,0.1)"},
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
-    
-    # --- ABA: HOME (A "VITRINE" DO SEU ESTUDO) ---
-    if menu == "Home":
-        st.markdown(f'<h1 class="main-title">🏠 Painel de Controle: {missao}</h1>', unsafe_allow_html=True)
-        
-        # 1. Métricas principais (usando o seu df que já foi carregado acima)
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: render_metric_card("Horas Totais", f"{df['tempo'].sum()/60:.1f}h", "⏱️")
-        with c2: render_metric_card("Precisão", f"{df['taxa'].mean():.1f}%", "🎯")
-        with c3: render_metric_card("Questões", int(df['total'].sum()), "📝")
-        with c4: render_metric_card("Streak", "🔥 5 Dias", "") # Exemplo de consistência
 
-        st.divider()
-
-        # 2. Resumo de Revisões e Gráfico Rápido
-        col_esq, col_dir = st.columns([1.5, 1])
-        with col_esq:
-            st.markdown("### 🔄 Próximas Revisões (Top 3)")
-            # O código para mostrar as 3 primeiras revisões vai aqui
-            
-        with col_dir:
-            st.markdown("### 📊 Status por Dificuldade")
-            # Um mini gráfico de barras aqui ficaria excelente
-            
-    # --- ABA: REVISÕES (Aqui você muda de 'if' para 'elif') ---
-    elif menu == "Revisões":
-        st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
-        # ... resto do código que você já tem
-    
     # --- ABA: REVISÕES ---
     if menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
@@ -833,4 +804,302 @@ else:
         else:
             st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
 
-# ...existing code... (resto do arquivo)
+# --- ABA: HOME (REFATORADA COMPLETAMENTE) ---
+if menu == "Home":
+    st.markdown('<h2 class="main-title">🏠 Painel Principal</h2>', unsafe_allow_html=True)
+    
+    if df.empty:
+        st.info("📚 Comece a registrar seus estudos para ver o painel em ação!")
+    else:
+        # ========== TOPO: MÉTRICAS PRINCIPAIS (4 COLUNAS) ==========
+        st.markdown("#### 📊 Suas Métricas")
+        
+        col_tempo, col_precisao, col_streak, col_countdown = st.columns(4)
+        
+        # 1. Tempo Total
+        with col_tempo:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            tempo_total = df['tempo'].sum() / 60
+            st.markdown(f"""
+                <div style="text-align: center;">
+                    <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">⏱️ Tempo Total</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #fff; margin-bottom: 5px;">{formatar_minutos(tempo_total)}</div>
+                    <div style="color: #adb5bd; font-size: 0.7rem;">{len(df)} registros</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 2. Precisão Geral
+        with col_precisao:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            total_q = int(df['total'].sum())
+            acertos_q = int(df['acertos'].sum())
+            taxa_geral = (acertos_q / total_q * 100) if total_q > 0 else 0
+            cor_taxa, _, _ = get_badge_cor(taxa_geral)
+            
+            st.markdown(f"""
+                <div style="text-align: center;">
+                    <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">🎯 Precisão</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: {cor_taxa}; margin-bottom: 5px;">{taxa_geral:.0f}%</div>
+                    <div style="color: #adb5bd; font-size: 0.7rem;">{acertos_q}/{total_q} questões</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 3. Streak (Constância)
+        with col_streak:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            streak = calcular_streak(df)
+            
+            st.markdown(f"""
+                <div style="text-align: center;">
+                    <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">🔥 Constância</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #FF4B4B; margin-bottom: 5px;">{streak}</div>
+                    <div style="color: #adb5bd; font-size: 0.7rem;">dias seguidos</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 4. Countdown para Prova
+        with col_countdown:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            try:
+                data_prova = dados.get('data_prova', None)
+                dias_faltam, cor_urgencia = calcular_countdown(data_prova)
+                
+                if dias_faltam is not None:
+                    st.markdown(f"""
+                        <div style="text-align: center;">
+                            <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">⏰ Para a Vitória</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: {cor_urgencia}; margin-bottom: 5px;">{dias_faltam}</div>
+                            <div style="color: #adb5bd; font-size: 0.7rem;">dias faltam</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <div style="text-align: center;">
+                            <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">⏰ Para a Vitória</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: #FF8E8E;">Não config.</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            except:
+                st.markdown(f"""
+                    <div style="text-align: center;">
+                        <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">⏰ Para a Vitória</div>
+                        <div style="font-size: 0.9rem; color: #adb5bd;">Erro ao carregar</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # ========== METAS SEMANAIS COM EXPANSOR ==========
+        st.markdown("#### 📋 Metas Semanais")
+        
+        with st.expander("⚙️ Ajustar Metas Semanais", expanded=False):
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            
+            col_meta1, col_meta2 = st.columns(2)
+            
+            with col_meta1:
+                meta_horas_input = st.number_input(
+                    "Meta de Horas (semanal)",
+                    value=int(dados.get('meta_horas', 15)),
+                    min_value=1,
+                    max_value=168,
+                    step=1,
+                    key="meta_horas_input"
+                )
+            
+            with col_meta2:
+                meta_questoes_input = st.number_input(
+                    "Meta de Questões (semanal)",
+                    value=int(dados.get('meta_questoes', 100)),
+                    min_value=1,
+                    max_value=10000,
+                    step=10,
+                    key="meta_questoes_input"
+                )
+            
+            st.divider()
+            
+            if st.button("💾 SALVAR METAS", use_container_width=True, type="primary"):
+                try:
+                    supabase.table("editais_materias").update({
+                        "meta_horas": int(meta_horas_input),
+                        "meta_questoes": int(meta_questoes_input)
+                    }).eq("concurso", missao).execute()
+                    
+                    st.success("✅ Metas atualizadas com sucesso!")
+                    dados['meta_horas'] = meta_horas_input
+                    dados['meta_questoes'] = meta_questoes_input
+                    time.sleep(1)
+                except Exception as e:
+                    st.error(f"❌ Erro ao salvar metas: {e}")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # ========== PROGRESSO DAS METAS (BARRAS) ==========
+        st.markdown("##### 📈 Progresso da Semana")
+        
+        horas_semana, questoes_semana = obter_progresso_semana(df)
+        meta_horas = dados.get('meta_horas', 15)
+        meta_questoes = dados.get('meta_questoes', 100)
+        
+        progress_horas = min((horas_semana / meta_horas * 100) if meta_horas > 0 else 0, 100)
+        progress_questoes = min((questoes_semana / meta_questoes * 100) if meta_questoes > 0 else 0, 100)
+        
+        col_prog1, col_prog2 = st.columns(2)
+        
+        with col_prog1:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            cor_horas = "#00FF00" if progress_horas >= 100 else "#FFD700" if progress_horas >= 70 else "#FF4B4B"
+            
+            st.markdown(f"""
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #adb5bd; font-size: 0.8rem; font-weight: 600;">⏱️ Horas de Estudo</span>
+                        <span style="color: {cor_horas}; font-size: 0.9rem; font-weight: 700;">
+                            {horas_semana:.1f}h / {meta_horas}h
+                        </span>
+                    </div>
+                </div>
+                <div class="modern-progress-container">
+                    <div class="modern-progress-fill" style="width: {progress_horas}%; background: linear-gradient(90deg, {cor_horas}, #FF8E8E);"></div>
+                </div>
+                <div style="color: #adb5bd; font-size: 0.75rem; margin-top: 8px; text-align: right;">
+                    {progress_horas:.0f}% da meta
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_prog2:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            cor_questoes = "#00FF00" if progress_questoes >= 100 else "#FFD700" if progress_questoes >= 70 else "#FF4B4B"
+            
+            st.markdown(f"""
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #adb5bd; font-size: 0.8rem; font-weight: 600;">📝 Questões Resolvidas</span>
+                        <span style="color: {cor_questoes}; font-size: 0.9rem; font-weight: 700;">
+                            {int(questoes_semana)} / {meta_questoes}
+                        </span>
+                    </div>
+                </div>
+                <div class="modern-progress-container">
+                    <div class="modern-progress-fill" style="width: {progress_questoes}%; background: linear-gradient(90deg, {cor_questoes}, #FF8E8E);"></div>
+                </div>
+                <div style="color: #adb5bd; font-size: 0.75rem; margin-top: 8px; text-align: right;">
+                    {progress_questoes:.0f}% da meta
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # ========== TABELA DE DISCIPLINAS (GRID COM HTML/CSS) ==========
+        st.markdown("#### 📚 Resumo por Disciplina")
+        
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        
+        df_disciplinas = df.groupby('materia').agg({
+            'tempo': 'sum',
+            'total': 'sum',
+            'acertos': 'sum',
+            'taxa': 'mean'
+        }).reset_index().sort_values('total', ascending=False)
+        
+        # Header da tabela (Grid)
+        st.markdown("""
+            <div style="display: grid; grid-template-columns: 2.5fr 1.2fr 1.5fr 1fr 1.2fr; gap: 15px; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid rgba(255,255,255,0.1);">
+                <div style="color: #adb5bd; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Disciplina</div>
+                <div style="color: #adb5bd; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Tempo</div>
+                <div style="color: #adb5bd; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Desempenho</div>
+                <div style="color: #adb5bd; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Taxa</div>
+                <div style="color: #adb5bd; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Status</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Linhas da tabela
+        for _, disc in df_disciplinas.iterrows():
+            tempo_formatado = formatar_minutos(disc['tempo'])
+            acer_disc = int(disc['acertos'])
+            total_disc = int(disc['total'])
+            taxa_disc = disc['taxa']
+            
+            cor_taxa, badge_text, cor_bg_badge = get_badge_cor(taxa_disc)
+            
+            st.markdown(f"""
+                <div style="display: grid; grid-template-columns: 2.5fr 1.2fr 1.5fr 1fr 1.2fr; gap: 15px; align-items: center; margin-bottom: 15px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <div style="color: #fff; font-weight: 600; font-size: 0.95rem;">{disc['materia']}</div>
+                    <div style="color: #adb5bd; font-size: 0.9rem;">{tempo_formatado}</div>
+                    <div style="color: #adb5bd; font-size: 0.9rem;">{acer_disc}/{total_disc}</div>
+                    <div style="color: {cor_taxa}; font-weight: 700; font-size: 0.9rem;">{taxa_disc:.0f}%</div>
+                    <div>
+                        <span class="badge" style="background: {cor_bg_badge}; color: {cor_taxa}; border: 1px solid {cor_taxa}80; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            {badge_text}
+                        </span>
+                    </div>
+                </div>
+                <div class="modern-progress-container" style="margin: 0 0 15px 0; height: 6px;">
+                    <div class="modern-progress-fill" style="width: {taxa_disc}%; background: linear-gradient(90deg, {cor_taxa}, #FF8E8E);"></div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # ========== GRÁFICOS (LADO A LADO, REDUZIDOS) ==========
+        st.markdown("#### 📊 Análise Visual")
+        
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### Distribuição por Disciplina")
+            
+            fig_pie = px.pie(
+                df, 
+                values='total', 
+                names='materia', 
+                hole=0.6,
+                color_discrete_sequence=["#FF4B4B", "#FFD700", "#00FF00", "#4B90FF", "#FF8E8E"]
+            )
+            fig_pie.update_layout(
+                margin=dict(t=0, b=0, l=0, r=0), 
+                showlegend=True,
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color="#fff", size=11),
+                height=300
+            )
+            st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_g2:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### Evolução de Desempenho")
+            
+            df_evo = df.sort_values('data_estudo').groupby('data_estudo')['taxa'].mean().reset_index()
+            df_evo.columns = ['data_estudo', 'taxa']
+            df_evo['data_estudo'] = pd.to_datetime(df_evo['data_estudo']).dt.strftime('%d/%m')
+            
+            fig_line = px.line(df_evo, x='data_estudo', y='taxa', markers=True)
+            fig_line.update_traces(
+                line=dict(color='#FF4B4B', width=3), 
+                marker=dict(size=7, color='#FF4B4B')
+            )
+            fig_line.update_layout(
+                margin=dict(t=20, b=0, l=40, r=0),
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color="#fff", size=11),
+                xaxis_title=None, 
+                yaxis_title="Taxa %",
+                hovermode='x unified',
+                height=300,
+                yaxis=dict(range=[0, 100])
+            )
+            st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
+            st.markdown('</div>', unsafe_allow_html=True)
