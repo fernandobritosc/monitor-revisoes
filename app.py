@@ -7,6 +7,10 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
+# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
+if 'missao_ativa' not in st.session_state:
+    st.session_state.missao_ativa = None
+
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
