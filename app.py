@@ -274,11 +274,22 @@ if st.session_state.missao_ativa is None:
                         }
                         if data_prova_input:
                             payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
-                        supabase.table("editais_materias").insert(payload).execute()
-                        st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
-                        time.sleep(1)
-                        st.session_state.missao_ativa = nome_concurso
-                        st.rerun()
+                        res_ins = supabase.table("editais_materias").insert(payload).execute()
+                        # confirmar inserção
+                        try:
+                            check = supabase.table("editais_materias").select("data_prova").eq("concurso", nome_concurso).execute()
+                            if check.data and len(check.data) > 0:
+                                st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
+                                time.sleep(1)
+                                st.session_state.missao_ativa = nome_concurso
+                                st.rerun()
+                            else:
+                                st.warning("Missão criada, mas não foi possível confirmar 'data_prova' no banco. Verifique o supabase.")
+                        except Exception:
+                            st.success(f"✅ Missão '{nome_concurso}' criada (não foi possível confirmar via consulta).")
+                            time.sleep(1)
+                            st.session_state.missao_ativa = nome_concurso
+                            st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao cadastrar: {e}")
                 else:
@@ -944,7 +955,7 @@ else:
             st.markdown('### Dados do Edital', unsafe_allow_html=True)
             st.write(f"**Concurso:** {missao}")
             st.write(f"**Cargo:** {dados.get('cargo', '—')}")
-            st.write(f"**Data da Prova (atual):** {data_prova_atual if data_prova_atual else '—'}")
+            st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
 
             with st.form("form_editar_edital"):
                 definir = st.checkbox("Definir/Atualizar data da prova")
