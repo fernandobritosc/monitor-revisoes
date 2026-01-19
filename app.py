@@ -645,41 +645,49 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # --- PARTE NOVA: BUSCAR DATA DA PROVA ---
-        ed_dados = get_editais(supabase).get(missao, {})
-        data_prova_str = ed_dados.get('data_prova')
-        
-        dias_prova = None
-        if data_prova_str:
-            try:
+        # 1. BUSCA A DATA NO BANCO (GARANTE QUE O DADO NOVO APAREÇA)
+        # Forçamos a atualização para não depender de cache antigo
+        try:
+            ed_dados = get_editais(supabase).get(missao, {})
+            data_prova_str = ed_dados.get('data_prova')
+            
+            dias_prova = None
+            if data_prova_str:
                 dt_p = pd.to_datetime(data_prova_str).date()
                 dias_prova = (dt_p - datetime.date.today()).days
-            except:
-                pass
-        # ---------------------------------------
+        except:
+            dias_prova = None
 
+        # 2. CÁLCULO DAS MÉTRICAS (COM PROTEÇÃO SE O DF ESTIVER VAZIO)
+        t_q = df['total'].sum() if not df.empty else 0
+        a_q = df['acertos'].sum() if not df.empty else 0
+        precisao = (a_q/t_q*100 if t_q > 0 else 0)
+        horas = df['tempo'].sum()/60 if not df.empty else 0
+        
+        # 3. CRIA AS 4 COLUNAS (ORGANIZAÇÃO VISUAL)
+        m1, m2, m3, m4 = st.columns(4)
+        
+        with m1: 
+            render_metric_card("Total Questões", int(t_q), "📝")
+        with m2: 
+            render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
+        with m3: 
+            render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
+        with m4: 
+            # MOSTRA OS DIAS OU "---" SE NÃO TIVER DATA
+            txt_dias = f"{dias_prova} dias" if dias_prova is not None else "---"
+            render_metric_card("Prova em", txt_dias, "📅")
+        
+        st.write("---")
+
+        # 4. PARTE DOS GRÁFICOS
         if df.empty:
-            # Se não tem estudos, mostramos apenas o card da prova e o aviso
-            m1, m2 = st.columns([1, 3])
-            with m1:
-                render_metric_card("Prova em", f"{dias_prova} dias" if dias_prova is not None else "---", "📅")
-            with m2:
-                st.info("Ainda não há dados de estudos para gerar o restante do dashboard.")
+            st.info("📚 Quando você registrar seus estudos, os gráficos aparecerão aqui!")
         else:
-            # Métricas Principais
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
-            precisao = (a_q/t_q*100 if t_q>0 else 0)
-            horas = df['tempo'].sum()/60
-            
-            # CRIANDO 4 COLUNAS EM VEZ DE 3
-            m1, m2, m3, m4 = st.columns(4)
-            with m1: render_metric_card("Total Questões", int(t_q), "📝")
-            with m2: render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
-            with m3: render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
-            with m4: render_metric_card("Prova em", f"{dias_prova} dias" if dias_prova is not None else "---", "📅")
-            
-            st.write("")
+            # Exemplo de gráfico de evolução (se quiser adicionar agora)
+            st.subheader("📈 Evolução de Acertos")
+            df_evo = df.groupby('data')['acertos'].sum().reset_index()
+            st.line_chart(df_evo.set_index('data'))
 
         # 4. Só mostra os gráficos se houver dados
         if df.empty:
