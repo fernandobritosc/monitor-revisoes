@@ -958,35 +958,35 @@ else:
             st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
 
         with st.form("form_editar_edital"):
-                st.markdown("### 📅 Atualizar Data do Edital")
-                st.info(f"Edital Ativo: **{missao}**") # Indica qual edital está sendo editado
+                st.markdown("### 📅 Ajustar Data da Prova")
                 
-                # O calendário fica sempre aberto e funcional
+                # Calendário sempre visível
                 nova_data_escolhida = st.date_input(
-                    "Selecione a nova data da prova:", 
+                    "Selecione a data da prova", 
                     value=(data_prova_atual or datetime.date.today())
                 )
                 
-                remover = st.checkbox("Remover data cadastrada (deixar em branco)")
+                remover = st.checkbox("Remover data da prova (deixar em branco)")
 
-                submitted = st.form_submit_button("💾 SALVAR ALTERAÇÕES NO EDITAL", use_container_width=True, type="primary")
+                submitted = st.form_submit_button("Salvar alterações", use_container_width=True)
                 
                 if submitted:
                     try:
-                        # Define se vai gravar a data ou limpar o campo (None)
                         valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
                         
-                        # O comando .eq("concurso", missao) garante que a data seja 
-                        # atualizada em TODAS as matérias desse edital específico
+                        # Executa a atualização no Supabase
                         res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
                         
-                        if res.data:
-                            st.success(f"✅ Data do edital '{missao}' atualizada com sucesso!")
+                        if len(res.data) > 0:
+                            # 🚨 O SEGREDO ESTÁ AQUI:
+                            st.cache_data.clear() # Limpa a memória do app para ler o banco de novo
+                            
+                            st.success(f"✅ Sucesso! Data atualizada para {len(res.data)} disciplinas.")
                             time.sleep(1)
-                            st.rerun() # Recarrega para mostrar a nova data na Home
+                            st.rerun()
                         else:
-                            st.error("⚠️ Erro: Não foi possível encontrar esse edital no banco de dados.")
+                            st.warning("⚠️ Nenhuma linha foi alterada. Verifique as permissões no Supabase.")
                             
                     except Exception as e:
-                        st.error(f"❌ Erro de conexão com o banco: {e}")
+                        st.error(f"❌ Erro ao atualizar: {e}")
 # ...existing code... (resto do arquivo)
