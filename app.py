@@ -10,14 +10,12 @@ from streamlit_option_menu import option_menu
 # --- INICIALIZAÇÃO OBRIGATÓRIA ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
-
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
-
 if 'streak_dias' not in st.session_state:
     st.session_state.streak_dias = 0
 
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
+# --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
 from database import supabase
@@ -346,8 +344,8 @@ else:
             st.rerun()
         
         st.write("")
-        menu = option_menu(None, ["Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
+menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
                            default_index=0,
                            styles={
                                "container": {"padding": "0!important", "background-color": "transparent"},
@@ -356,7 +354,7 @@ else:
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
 
-    # --- ABA: REVISÕES ---
+# --- ABA: REVISÕES ---
     if menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
