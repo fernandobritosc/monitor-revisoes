@@ -654,25 +654,28 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. Puxar a data da prova
-        ed_info = get_editais(supabase).get(missao, {})
-        data_prova_str = ed_info.get('data_prova')
+        # --- 1. DEFINIR A VARIÁVEL LOGO NO INÍCIO (EVITA O NAMEERROR) ---
+        dias_prova = None 
         
-        dias_restantes = None
-        if data_prova_str:
-            try:
+        try:
+            # Busca os dados do edital para pegar a data
+            ed_dados = get_editais(supabase).get(missao, {})
+            data_prova_str = ed_dados.get('data_prova')
+            
+            if data_prova_str:
                 dt_p = pd.to_datetime(data_prova_str).date()
-                dias_restantes = (dt_p - datetime.date.today()).days
-            except:
-                pass
+                dias_prova = (dt_p - datetime.date.today()).days
+        except Exception as e:
+            st.error(f"Erro ao calcular data: {e}")
+            dias_prova = None
 
-        # 2. Calcular métricas (usando t_q como o seu erro sugeriu)
+        # --- 2. CÁLCULO DAS MÉTRICAS (TOTAL, PRECISÃO, HORAS) ---
         t_q = df['total'].sum() if not df.empty else 0
         a_q = df['acertos'].sum() if not df.empty else 0
         precisao = (a_q/t_q*100 if t_q > 0 else 0)
         horas = df['tempo'].sum()/60 if not df.empty else 0
         
-        # 3. Criar os 4 Cartões
+        # --- 3. CRIAR OS 4 CARTÕES ---
         m1, m2, m3, m4 = st.columns(4)
         
         with m1: 
@@ -680,16 +683,16 @@ else:
         with m2: 
             render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
         with m3: 
-            render_metric_card("Horas Estudo", f"{horas:.1f}h", "⏱️")
+            render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
         with m4: 
-            txt_dias = f"{dias_restantes} dias" if dias_restantes is not None else "---"
-            render_metric_card("Prova em", txt_dias, "📅")
-
-            # MOSTRA OS DIAS OU "---" SE NÃO TIVER DATA
-            txt_dias = f"{dias_prova} dias" if dias_prova is not None else "---"
-            render_metric_card("Prova em", txt_dias, "📅")
+            # AGORA A VARIÁVEL EXISTE E NÃO DÁ MAIS ERRO
+            txt_display = f"{dias_prova} dias" if dias_prova is not None else "---"
+            render_metric_card("Prova em", txt_display, "📅")
         
         st.write("---")
+
+        if df.empty:
+            st.info("📚 Quando você registrar seus estudos, os gráficos aparecerão aqui!")
 
         # 4. PARTE DOS GRÁFICOS
         if df.empty:
