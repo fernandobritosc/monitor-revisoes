@@ -17,6 +17,10 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
+# INICIALIZAÇÃO DO ESTADO (Coloque isso no topo para não travar)
+if 'missao_ativa' not in st.session_state:
+    st.session_state.missao_ativa = None
+
 # Inicializar estados do Pomodoro
 if 'pomodoro_seconds' not in st.session_state:
     st.session_state.pomodoro_seconds = 25 * 60
