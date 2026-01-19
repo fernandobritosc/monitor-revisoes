@@ -654,7 +654,7 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. DEFINE A VARIÁVEL DA PROVA (Para não dar erro)
+        # 1. DATA DA PROVA (Busca segura)
         dias_prova = None
         try:
             ed_dados = get_editais(supabase).get(missao, {})
@@ -665,7 +665,7 @@ else:
         except:
             pass
 
-        # 2. CÁLCULOS SEGUROS
+        # 2. MÉTRICAS (Segurança se não houver estudos)
         if df.empty:
             t_q, precisao, horas = 0, 0, 0
         else:
@@ -674,7 +674,7 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             horas = df['tempo'].sum()/60
         
-        # 3. CARTÕES (O seu contador vai aparecer aqui!)
+        # 3. CARTÕES (Visualização das métricas)
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
@@ -684,6 +684,18 @@ else:
             render_metric_card("Prova em", txt_dias, "📅")
         
         st.divider()
+
+        # 4. GRÁFICO DE EVOLUÇÃO (Corrigido para usar 'data_estudo')
+        if not df.empty:
+            st.subheader("📈 Evolução de Acertos")
+            try:
+                # Agrupa pela coluna certa: 'data_estudo'
+                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
+                st.line_chart(df_evo.set_index('data_estudo'))
+            except Exception as e:
+                st.error(f"Erro ao gerar gráfico: {e}")
+        else:
+            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
         # 4. DESCOBRIR O NOME DA COLUNA (DEBUG)
         if not df.empty:
