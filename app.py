@@ -957,31 +957,35 @@ else:
             st.write(f"**Cargo:** {dados.get('cargo', '—')}")
             st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
 
-            with st.form("form_editar_edital"):
-                definir = st.checkbox("Definir/Atualizar data da prova")
-                if definir:
-                    nova_data = st.date_input("Nova data da prova", value=(data_prova_atual or datetime.date.today()))
-                else:
-                    nova_data = None
 
-                remover = st.checkbox("Remover data da prova")
+        with st.form("form_editar_edital"):
+                st.markdown("### 📅 Ajustar Data da Prova")
+                
+                # O calendário fica sempre aberto para facilitar
+                data_selecionada = st.date_input(
+                    "Selecione a data da prova", 
+                    value=(data_prova_atual or datetime.date.today())
+                )
+                
+                remover = st.checkbox("Remover data da prova (deixar em branco)")
 
                 submitted = st.form_submit_button("Salvar alterações", use_container_width=True)
+                
                 if submitted:
                     try:
-                        if remover:
-                            supabase.table("editais_materias").update({"data_prova": None}).eq("concurso", missao).execute()
-                            st.success("Data da prova removida com sucesso.")
-                        elif nova_data:
-                            supabase.table("editais_materias").update({"data_prova": nova_data.strftime("%Y-%m-%d")}).eq("concurso", missao).execute()
-                            st.success("Data da prova atualizada com sucesso.")
+                        # Lógica direta: se não for para remover, usa a data do calendário
+                        valor_final = None if remover else data_selecionada.strftime("%Y-%m-%d")
+                        
+                        # Atualização no Banco de Dados
+                        res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
+                        
+                        if res.data:
+                            st.success("✅ Sucesso! Data atualizada.")
+                            time.sleep(1)
+                            st.rerun()
                         else:
-                            st.info("Nenhuma alteração realizada.")
-                        time.sleep(1)
-                        st.rerun()
+                            st.error("⚠️ Não foi possível encontrar o registro para atualizar.")
+                            
                     except Exception as e:
-                        st.error(f"Erro ao atualizar edital: {e}")
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
+                        st.error(f"❌ Erro ao atualizar no Supabase: {e}")
 # ...existing code... (resto do arquivo)
