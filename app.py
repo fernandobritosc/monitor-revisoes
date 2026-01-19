@@ -957,10 +957,9 @@ else:
             st.write(f"**Cargo:** {dados.get('cargo', '—')}")
             st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
 
-        with st.form("form_editar_edital"):
+       with st.form("form_editar_edital"):
                 st.markdown("### 📅 Ajustar Data da Prova")
                 
-                # Calendário sempre visível
                 nova_data_escolhida = st.date_input(
                     "Selecione a data da prova", 
                     value=(data_prova_atual or datetime.date.today())
@@ -974,19 +973,19 @@ else:
                     try:
                         valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
                         
-                        # Executa a atualização no Supabase
+                        # 1. SALVA NO BANCO
                         res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
                         
-                        if len(res.data) > 0:
-                            # 🚨 O SEGREDO ESTÁ AQUI:
-                            st.cache_data.clear() # Limpa a memória do app para ler o banco de novo
+                        if res.data:
+                            # 2. LIMPA A MEMÓRIA DO APP (MUITO IMPORTANTE)
+                            st.cache_data.clear() 
                             
-                            st.success(f"✅ Sucesso! Data atualizada para {len(res.data)} disciplinas.")
+                            # 3. ATUALIZA O ESTADO DA MISSÃO PARA FORÇAR RECARREGAMENTO
+                            st.session_state.missao_ativa = missao
+                            
+                            st.success(f"✅ Data atualizada no banco! Recarregando...")
                             time.sleep(1)
                             st.rerun()
-                        else:
-                            st.warning("⚠️ Nenhuma linha foi alterada. Verifique as permissões no Supabase.")
-                            
                     except Exception as e:
-                        st.error(f"❌ Erro ao atualizar: {e}")
+                        st.error(f"❌ Erro ao salvar: {e}")
 # ...existing code... (resto do arquivo)
