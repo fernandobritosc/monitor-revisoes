@@ -160,7 +160,9 @@ def formatar_minutos(minutos):
     m = int(minutos % 60)
     return f"{h}h {m:02d}m"
 
-# --- CONTINUAÇÃO DAS FUNÇÕES AUXILIARES (COLE AQUI) ---
+# ... (linha 162 termina a função obter_progresso_semana)
+
+# --- CONTINUAÇÃO DAS FUNÇÕES AUXILIARES ---
 
 def formatar_tempo_para_bigint(valor_bruto):
     """Converte HHMM ou strings para minutos totais."""
@@ -189,6 +191,7 @@ def render_metric_card(label, value, icon="📊"):
         </div>
     """, unsafe_allow_html=True)
 
+# --- 3. LÓGICA DE NAVEGAÇÃO --- (Esta linha deve vir logo após a 190)
 # --- RESTAURAÇÃO DAS FUNÇÕES DE LÓGICA DE REVISÃO ---
 
 def calcular_proximo_intervalo(dificuldade, taxa):
