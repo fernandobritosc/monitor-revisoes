@@ -957,7 +957,7 @@ else:
             st.write(f"**Cargo:** {dados.get('cargo', '—')}")
             st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
 
-       with st.form("form_editar_edital"):
+        with st.form("form_editar_edital"):
                 st.markdown("### 📅 Ajustar Data da Prova")
                 
                 nova_data_escolhida = st.date_input(
