@@ -130,6 +130,35 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- CONTINUAÇÃO DAS FUNÇÕES AUXILIARES (COLE AQUI) ---
+
+def formatar_tempo_para_bigint(valor_bruto):
+    """Converte HHMM ou strings para minutos totais."""
+    numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
+    return (int(numeros[:-2]) * 60) + int(numeros[-2:])
+
+def formatar_minutos(minutos_totais):
+    """Converte minutos totais para o formato 'XXh XXm'."""
+    h = int(minutos_totais // 60)
+    m = int(minutos_totais % 60)
+    return f"{h}h {m:02d}m"
+
+def get_badge_cor(taxa):
+    """Define as cores do design system para os badges de performance."""
+    if taxa >= 80: return "#00FF00", "Excelente", "rgba(0, 255, 0, 0.1)"
+    elif taxa >= 60: return "#FFD700", "Aceitável", "rgba(255, 215, 0, 0.1)"
+    else: return "#FF4B4B", "Crítico", "rgba(255, 75, 75, 0.1)"
+
+def render_metric_card(label, value, icon="📊"):
+    """Renderiza o card de métrica estilizado para a aba Dashboard."""
+    st.markdown(f"""
+        <div class="modern-card" style="text-align: center; padding: 15px;">
+            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
+            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
+            <div style="font-size: 1.8rem; font-weight: 700; color: #fff;">{value}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
 # --- RESTAURAÇÃO DAS FUNÇÕES DE LÓGICA DE REVISÃO ---
 
 def calcular_proximo_intervalo(dificuldade, taxa):
@@ -167,40 +196,26 @@ def calcular_proximo_intervalo(dificuldade, taxa):
         # Fallback: 7 dias
         return 7
 
-def tempo_recomendado_rev24h(tempo_original_min):
-    """Resolve os erros nas linhas 358, 430 e 695"""
-    # A regra geral de revisão é dedicar 20% do tempo original para revisar
-    tempo_rev = int(tempo_original_min * 0.20)
-    return max(tempo_rev, 5) # Mínimo de 5 minutos de revisão
-
-# --- 2. FUNÇÕES AUXILIARES ---
-
-def formatar_tempo_para_bigint(valor_bruto):
-    """Corrige o erro das linhas 455 e 725"""
-    numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
-    return (int(numeros[:-2]) * 60) + int(numeros[-2:])
-
-def render_metric_card(label, value, icon="📊"):
-    """Corrige o erro da linha 562"""
-    st.markdown(f"""
-        <div class="modern-card" style="text-align: center; padding: 15px;">
-            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
-            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
-            <div style="font-size: 1.8rem; font-weight: 700; color: #fff;">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-def formatar_minutos(minutos):
-    """Usado na aba Home"""
-    horas = int(minutos // 60)
-    mins = int(minutos % 60)
-    return f"{horas}h {mins:02d}m"
-
-def get_badge_cor(taxa):
-    """Usado na tabela de disciplinas"""
-    if taxa >= 80: return "#00FF00", "Excelente", "rgba(0, 255, 0, 0.1)"
-    elif taxa >= 60: return "#FFD700", "Aceitável", "rgba(255, 215, 0, 0.1)"
-    else: return "#FF4B4B", "Crítico", "rgba(255, 75, 75, 0.1)"
+def tempo_recomendado_rev24h(dificuldade):
+    """
+    Retorna tempo recomendado e descrição para revisão 24h baseado na dificuldade.
+    
+    Args:
+        dificuldade: str - "🟢 Fácil", "🟡 Médio" ou "🔴 Difícil"
+    
+    Returns:
+        tuple: (tempo_minutos: int, descricao: str)
+    """
+    dif_limpa = dificuldade.replace("🟢", "").replace("🟡", "").replace("🔴", "").strip()
+    
+    if "Fácil" in dif_limpa or dificuldade == "🟢 Fácil":
+        return 15, "Rápida (Fácil)"
+    elif "Médio" in dif_limpa or dificuldade == "🟡 Médio":
+        return 25, "Normal (Médio)"
+    elif "Difícil" in dif_limpa or dificuldade == "🔴 Difícil":
+        return 35, "Aprofundada (Difícil)"
+    else:
+        return 20, "Padrão"
 
 def calcular_streak(df):
     if df.empty: return 0
@@ -879,7 +894,7 @@ else:
             # 1. Tempo Total
             with col_tempo:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                tempo_total = df['tempo'].sum() / 60
+                tempo_total = df['tempo'].sum()
                 st.markdown(f"""
                     <div style="text-align: center;">
                         <div style="color: #adb5bd; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">⏱️ Tempo Total</div>
