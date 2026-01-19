@@ -254,18 +254,27 @@ if st.session_state.missao_ativa is None:
         with st.form("form_novo_concurso", clear_on_submit=True):
             nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
             cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
+            # Opcional: permitir informar a data da prova ao criar o edital
+            informar_data_prova = st.checkbox("Informar data da prova (opcional)")
+            if informar_data_prova:
+                data_prova_input = st.date_input("Data da Prova")
+            else:
+                data_prova_input = None
             
             btn_cadastrar = st.form_submit_button("🚀 INICIAR MISSÃO", use_container_width=True, type="primary")
             
             if btn_cadastrar:
                 if nome_concurso and cargo_concurso:
                     try:
-                        supabase.table("editais_materias").insert({
+                        payload = {
                             "concurso": nome_concurso,
                             "cargo": cargo_concurso,
                             "materia": "Geral",
                             "topicos": ["Introdução"]
-                        }).execute()
+                        }
+                        if data_prova_input:
+                            payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
+                        supabase.table("editais_materias").insert(payload).execute()
                         st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
                         time.sleep(1)
                         st.session_state.missao_ativa = nome_concurso
@@ -917,5 +926,51 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
+
+    # --- ABA: CONFIGURAR ---
+    elif menu == "Configurar":
+        st.markdown('<h2 class="main-title">⚙️ Configurar Missão</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Editar dados do edital ativo</p>', unsafe_allow_html=True)
+
+        # mostrar data atual se existir
+        data_prova_raw = dados.get('data_prova') if isinstance(dados, dict) else None
+        try:
+            data_prova_atual = pd.to_datetime(data_prova_raw).date() if data_prova_raw else None
+        except Exception:
+            data_prova_atual = None
+
+        with st.container():
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown('### Dados do Edital', unsafe_allow_html=True)
+            st.write(f"**Concurso:** {missao}")
+            st.write(f"**Cargo:** {dados.get('cargo', '—')}")
+            st.write(f"**Data da Prova (atual):** {data_prova_atual if data_prova_atual else '—'}")
+
+            with st.form("form_editar_edital"):
+                definir = st.checkbox("Definir/Atualizar data da prova")
+                if definir:
+                    nova_data = st.date_input("Nova data da prova", value=(data_prova_atual or datetime.date.today()))
+                else:
+                    nova_data = None
+
+                remover = st.checkbox("Remover data da prova")
+
+                submitted = st.form_submit_button("Salvar alterações", use_container_width=True)
+                if submitted:
+                    try:
+                        if remover:
+                            supabase.table("editais_materias").update({"data_prova": None}).eq("concurso", missao).execute()
+                            st.success("Data da prova removida com sucesso.")
+                        elif nova_data:
+                            supabase.table("editais_materias").update({"data_prova": nova_data.strftime("%Y-%m-%d")}).eq("concurso", missao).execute()
+                            st.success("Data da prova atualizada com sucesso.")
+                        else:
+                            st.info("Nenhuma alteração realizada.")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao atualizar edital: {e}")
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ...existing code... (resto do arquivo)
