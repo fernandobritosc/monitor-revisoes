@@ -355,18 +355,23 @@ menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard",
                            })
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
+# --- 3. LÓGICA DE NAVEGAÇÃO ---
 
         if menu == "Home":
             st.markdown('<h2 class="main-title">🏠 Painel Principal</h2>', unsafe_allow_html=True)
-            
             if df.empty:
                 st.info("📚 Comece a registrar seus estudos para ver o painel!")
             else:
-                # O conteúdo da sua Home (Métricas, Gráficos, etc.) entra aqui
-                # Certifique-se de que tudo aqui dentro tem +4 espaços de recuo
+                # Métricas e conteúdo da Home aqui
                 col_t, col_p, col_s, col_c = st.columns(4)
-                # ... resto do código da Home ...
+                # ... resto do código ...
 
+        elif menu == "Revisões":
+            st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
+            # ... resto do código ...
+
+        elif menu == "Registrar":
+            st.markdown('<h2 class="main-title">📝 Novo Registro</h2>', unsafe_allow_html=True)
         elif menu == "Revisões":
             # O código que você mandou das revisões entra aqui
             st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
