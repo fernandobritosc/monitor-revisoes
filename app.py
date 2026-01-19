@@ -356,12 +356,43 @@ menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard",
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 
-    if menu == "Home":
-        # Esta parte chama o bloco da Home que refatoramos
+        if menu == "Home":
+            st.markdown('<h2 class="main-title">🏠 Painel Principal</h2>', unsafe_allow_html=True)
+            
+            if df.empty:
+                st.info("📚 Comece a registrar seus estudos para ver o painel!")
+            else:
+                # O conteúdo da sua Home (Métricas, Gráficos, etc.) entra aqui
+                # Certifique-se de que tudo aqui dentro tem +4 espaços de recuo
+                col_t, col_p, col_s, col_c = st.columns(4)
+                # ... resto do código da Home ...
+
+        elif menu == "Revisões":
+            # O código que você mandou das revisões entra aqui
+            st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
+            # ... resto do código de Revisões ...
+
+        elif menu == "Registrar":
+            # O código do formulário entra aqui
+            st.markdown('<h2 class="main-title">📝 Novo Registro</h2>', unsafe_allow_html=True)    if menu == "Home":
         st.markdown('<h2 class="main-title">🏠 Painel Principal</h2>', unsafe_allow_html=True)
-        # (O código da sua Home deve estar logo abaixo desta linha)
+        
+        # Colunas de métricas
+        col_tempo, col_precisao, col_streak, col_countdown = st.columns(4)
+        
+        with col_tempo:
+            render_metric_card("Tempo Total", formatar_minutos(df['tempo'].sum()), "⏱️")
+        with col_precisao:
+            taxa_med = df['taxa'].mean() if not df.empty else 0
+            render_metric_card("Precisão", f"{taxa_med:.0f}%", "🎯")
+        with col_streak:
+            render_metric_card("Streak", f"{calcular_streak(df)} dias", "🔥")
+        with col_countdown:
+            dias, cor = calcular_countdown(dados.get('data_prova'))
+            render_metric_card("Prova em", f"{dias} dias" if dias else "---", "📅")
 
     elif menu == "Revisões":
+        # O resto do teu código que já está na imagem_32e8c3 continua aqui...    elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns([2, 1, 1])
