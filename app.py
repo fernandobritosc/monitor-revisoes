@@ -7,13 +7,15 @@ import re
 import time
 from streamlit_option_menu import option_menu
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
-# --- INICIALIZAÇÃO DE ESTADOS ---
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
+
+if 'streak_dias' not in st.session_state:
+    st.session_state.streak_dias = 0
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
@@ -22,7 +24,6 @@ from database import supabase
 from logic import get_editais, excluir_concurso_completo
 from styles import apply_styles
 
-# Aplicar estilos base
 apply_styles()
 
 # Inicializar estados do Pomodoro
@@ -129,12 +130,33 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- RESTAURAÇÃO DAS FUNÇÕES DE LÓGICA DE REVISÃO ---
+
+def calcular_proximo_intervalo(dificuldade):
+    """Resolve o erro da linha 303"""
+    intervalos = {
+        "Fácil": 15,    # 15 dias
+        "Médio": 7,     # 7 dias
+        "Difícil": 3,   # 3 dias
+        "Crítico": 1    # 1 dia
+    }
+    return intervalos.get(dificuldade, 7)
+
+def tempo_recomendado_rev24h(tempo_original_min):
+    """Resolve os erros nas linhas 358, 430 e 695"""
+    # A regra geral de revisão é dedicar 20% do tempo original para revisar
+    tempo_rev = int(tempo_original_min * 0.20)
+    return max(tempo_rev, 5) # Mínimo de 5 minutos de revisão
+
 # --- 2. FUNÇÕES AUXILIARES ---
+
 def formatar_tempo_para_bigint(valor_bruto):
+    """Corrige o erro das linhas 455 e 725"""
     numeros = re.sub(r'\D', '', str(valor_bruto)).zfill(4)
     return (int(numeros[:-2]) * 60) + int(numeros[-2:])
 
 def render_metric_card(label, value, icon="📊"):
+    """Corrige o erro da linha 562"""
     st.markdown(f"""
         <div class="modern-card" style="text-align: center; padding: 15px;">
             <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
@@ -143,31 +165,44 @@ def render_metric_card(label, value, icon="📊"):
         </div>
     """, unsafe_allow_html=True)
 
-# --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
-def calcular_proximo_intervalo(dificuldade, taxa_acerto):
-    """
-    Calcula o próximo intervalo de revisão baseado na dificuldade e desempenho.
-    
-    Fácil:   → 15 ou 20 dias (aproveita ciclos longos)
-    Médio:   → 7 dias (padrão confiável)
-    Difícil: → 3 dias se acerto < 70%, senão 7
-    """
-    if dificuldade == "🟢 Fácil":
-        return 15 if taxa_acerto > 80 else 7
-    elif dificuldade == "🟡 Médio":
-        return 7
-    else:  # 🔴 Difícil
-        return 3 if taxa_acerto < 70 else 5
+def formatar_minutos(minutos):
+    """Usado na aba Home"""
+    horas = int(minutos // 60)
+    mins = int(minutos % 60)
+    return f"{horas}h {mins:02d}m"
 
-def tempo_recomendado_rev24h(dificuldade):
-    """Retorna tempo sugerido para revisão de 24h (em minutos)."""
-    tempos = {
-        "🟢 Fácil": (2, "Apenas releitura rápida dos títulos"),
-        "🟡 Médio": (8, "Revise seus grifos + 5 questões"),
-        "🔴 Difícil": (18, "Active Recall completo + questões-chave")
-    }
-    return tempos.get(dificuldade, (5, "Padrão"))
+def get_badge_cor(taxa):
+    """Usado na tabela de disciplinas"""
+    if taxa >= 80: return "#00FF00", "Excelente", "rgba(0, 255, 0, 0.1)"
+    elif taxa >= 60: return "#FFD700", "Aceitável", "rgba(255, 215, 0, 0.1)"
+    else: return "#FF4B4B", "Crítico", "rgba(255, 75, 75, 0.1)"
 
+def calcular_streak(df):
+    if df.empty: return 0
+    datas = pd.to_datetime(df['data_estudo']).dt.date.unique()
+    datas = sorted(datas, reverse=True)
+    streak, hoje, alvo = 0, datetime.date.today(), datetime.date.today()
+    if datas[0] < hoje and (hoje - datas[0]).days > 1: return 0
+    elif datas[0] < hoje: alvo = datas[0]
+    for d in datas:
+        if d == alvo:
+            streak += 1
+            alvo -= timedelta(days=1)
+        else: break
+    return streak
+
+def calcular_countdown(data_prova_str):
+    if not data_prova_str: return None, "#adb5bd"
+    dias = (pd.to_datetime(data_prova_str).date() - datetime.date.today()).days
+    cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
+    return dias, cor
+
+def obter_progresso_semana(df):
+    if df.empty: return 0, 0
+    hoje = datetime.date.today()
+    inicio_semana = hoje - timedelta(days=hoje.weekday())
+    df_sem = df[pd.to_datetime(df['data_estudo']).dt.date >= inicio_semana]
+    return df_sem['tempo'].sum()/60, df_sem['total'].sum()
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
     st.markdown('<h1 class="main-title">🎯 Central de Comando</h1>', unsafe_allow_html=True)
