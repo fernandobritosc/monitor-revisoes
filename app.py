@@ -152,6 +152,52 @@ def render_metric_card(label, value, icon="📊"):
         </div>
     """, unsafe_allow_html=True)
 
+
+# Formata minutos em '2h 15m'
+def formatar_minutos(minutos_totais):
+    try:
+        minutos = int(minutos_totais)
+    except Exception:
+        return "0m"
+    horas = minutos // 60
+    minutos_rest = minutos % 60
+    if horas > 0:
+        return f"{horas}h {minutos_rest}m"
+    return f"{minutos_rest}m"
+
+
+def get_badge_cor(taxa):
+    """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
+    try:
+        t = float(taxa)
+    except Exception:
+        return "badge-gray"
+    if t >= 80:
+        return "badge-green"
+    if t >= 60:
+        return "badge-gray"
+    return "badge-red"
+
+
+def calcular_streak(df):
+    """Calcula dias consecutivos até hoje baseado na coluna 'data_estudo'."""
+    if df is None or df.empty:
+        return 0
+    if 'data_estudo' not in df.columns:
+        return 0
+    try:
+        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
+    except Exception:
+        return 0
+    dias = set(datas)
+    streak = 0
+    hoje = datetime.date.today()
+    alvo = hoje
+    while alvo in dias:
+        streak += 1
+        alvo = alvo - datetime.timedelta(days=1)
+    return streak
+
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
     """
@@ -247,8 +293,8 @@ else:
             st.rerun()
         
         st.write("")
-        menu = option_menu(None, ["Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
-                           icons=["arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
+        menu = option_menu(None, ["Home", "Revisões", "Registrar", "Foco", "Dashboard", "Histórico", "Configurar"], 
+                           icons=["house", "arrow-repeat", "pencil-square", "clock", "grid", "list", "gear"], 
                            default_index=0,
                            styles={
                                "container": {"padding": "0!important", "background-color": "transparent"},
@@ -256,6 +302,65 @@ else:
                                "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px", "--hover-color": "rgba(255,75,75,0.1)"},
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
+
+    # --- ABA: HOME (PAINEL GERAL) ---
+    if menu == "Home":
+        st.markdown('<h2 class="main-title">🏠 Home — Painel Geral</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Visão rápida: tempo, precisão, streak e contagem regressiva</p>', unsafe_allow_html=True)
+
+        if df.empty:
+            st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
+        else:
+            # Métricas principais
+            t_q = df['total'].sum()
+            a_q = df['acertos'].sum()
+            precisao = (a_q / t_q * 100) if t_q > 0 else 0
+            minutos_totais = int(df['tempo'].sum())
+            streak = calcular_streak(df)
+
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            with c1:
+                render_metric_card("Tempo Total", formatar_minutos(minutos_totais), "⏱️")
+            with c2:
+                render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+            with c3:
+                render_metric_card("Streak", f"{streak} 🔥", "🔥")
+            with c4:
+                # Countdown da prova (se disponível em dados)
+                data_prova_raw = dados.get('data_prova') if isinstance(dados, dict) else None
+                dias_restantes = None
+                if data_prova_raw:
+                    try:
+                        dt_prova = pd.to_datetime(data_prova_raw).date()
+                        dias_restantes = (dt_prova - datetime.date.today()).days
+                    except Exception:
+                        dias_restantes = None
+                if dias_restantes is not None:
+                    render_metric_card("Dias para a Prova", f"{dias_restantes} dias", "📅")
+                else:
+                    render_metric_card("Dias para a Prova", "—", "📅")
+
+            st.divider()
+
+            # Status por disciplina (barras de progresso)
+            st.markdown('<h3 style="margin-top:1rem; color:#fff;">Status por Disciplina</h3>', unsafe_allow_html=True)
+            df_mat = df.groupby('materia').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean', 'tempo': 'sum'}).reset_index()
+            for _, row in df_mat.iterrows():
+                pct = float(row['taxa']) if not pd.isna(row['taxa']) else 0
+                tempo_mat = int(row['tempo'])
+                badge = get_badge_cor(pct)
+                st.markdown(f"<div class='modern-card' style='padding:12px;'>", unsafe_allow_html=True)
+                cols = st.columns([4, 1])
+                with cols[0]:
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; align-items:center;'><strong style='color:#fff;'>{row['materia']}</strong><span class='{badge}' style='font-size:0.85rem;padding:4px 8px;border-radius:8px;'>{pct:.1f}%</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div class="modern-progress-container" style="margin-top:8px;">
+                            <div class="modern-progress-fill" style="width: {pct}%;"></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with cols[1]:
+                    st.markdown(f"<div style='text-align:right; color:#adb5bd;'>{formatar_minutos(tempo_mat)}</div>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: REVISÕES ---
     if menu == "Revisões":
