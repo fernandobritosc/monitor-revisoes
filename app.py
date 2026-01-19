@@ -654,7 +654,7 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. DATA DA PROVA (Busca segura)
+        # 1. TENTA BUSCAR A DATA DA PROVA
         dias_prova = None
         try:
             ed_dados = get_editais(supabase).get(missao, {})
@@ -665,7 +665,7 @@ else:
         except:
             pass
 
-        # 2. MÉTRICAS (Segurança se não houver estudos)
+        # 2. CÁLCULO DAS MÉTRICAS
         if df.empty:
             t_q, precisao, horas = 0, 0, 0
         else:
@@ -674,7 +674,7 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             horas = df['tempo'].sum()/60
         
-        # 3. CARTÕES (Visualização das métricas)
+        # 3. MOSTRA OS CARTÕES (O contador vai aparecer aqui)
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
@@ -684,6 +684,28 @@ else:
             render_metric_card("Prova em", txt_dias, "📅")
         
         st.divider()
+
+        # 4. GRÁFICO "BLINDADO" (NÃO TRAVA O APP)
+        if not df.empty:
+            st.subheader("📈 Evolução de Acertos")
+            try:
+                # TENTATIVA 1: Usa 'data_estudo'
+                coluna_data = 'data_estudo' 
+                
+                # Se não existir, avisa e mostra as opções
+                if coluna_data not in df.columns:
+                    st.warning(f"⚠️ Não achei a coluna '{coluna_data}'.")
+                    st.write("Colunas encontradas:", list(df.columns))
+                else:
+                    # Se existir, gera o gráfico
+                    df_evo = df.groupby(coluna_data)['acertos'].sum().reset_index()
+                    st.line_chart(df_evo.set_index(coluna_data))
+                    
+            except Exception as e:
+                st.error("Erro ao gerar gráfico. Veja as colunas abaixo:")
+                st.write(list(df.columns)) # Isso vai nos dizer o nome certo!
+        else:
+            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
         # 4. GRÁFICO DE EVOLUÇÃO (Corrigido para usar 'data_estudo')
         if not df.empty:
