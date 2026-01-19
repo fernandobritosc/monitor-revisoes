@@ -9,6 +9,15 @@ from streamlit_option_menu import option_menu
 
 # ... seus imports (streamlit, pandas, etc)
 
+def render_metric_card(label, value, icon="📊"):
+    st.markdown(f"""
+        <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;">
+            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
+            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
+            <div style="font-size: 1.8rem; font-weight: 700;">{value}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
 # --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque tudo aqui no topo) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
@@ -645,26 +654,25 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. BUSCA A DATA NO BANCO (GARANTE QUE O DADO NOVO APAREÇA)
-        # Forçamos a atualização para não depender de cache antigo
-        try:
-            ed_dados = get_editais(supabase).get(missao, {})
-            data_prova_str = ed_dados.get('data_prova')
-            
-            dias_prova = None
-            if data_prova_str:
+        # 1. Puxar a data da prova
+        ed_info = get_editais(supabase).get(missao, {})
+        data_prova_str = ed_info.get('data_prova')
+        
+        dias_restantes = None
+        if data_prova_str:
+            try:
                 dt_p = pd.to_datetime(data_prova_str).date()
-                dias_prova = (dt_p - datetime.date.today()).days
-        except:
-            dias_prova = None
+                dias_restantes = (dt_p - datetime.date.today()).days
+            except:
+                pass
 
-        # 2. CÁLCULO DAS MÉTRICAS (COM PROTEÇÃO SE O DF ESTIVER VAZIO)
+        # 2. Calcular métricas (usando t_q como o seu erro sugeriu)
         t_q = df['total'].sum() if not df.empty else 0
         a_q = df['acertos'].sum() if not df.empty else 0
         precisao = (a_q/t_q*100 if t_q > 0 else 0)
         horas = df['tempo'].sum()/60 if not df.empty else 0
         
-        # 3. CRIA AS 4 COLUNAS (ORGANIZAÇÃO VISUAL)
+        # 3. Criar os 4 Cartões
         m1, m2, m3, m4 = st.columns(4)
         
         with m1: 
@@ -672,8 +680,11 @@ else:
         with m2: 
             render_metric_card("Precisão Média", f"{precisao:.1f}%", "🎯")
         with m3: 
-            render_metric_card("Horas Estudadas", f"{horas:.1f}h", "⏱️")
+            render_metric_card("Horas Estudo", f"{horas:.1f}h", "⏱️")
         with m4: 
+            txt_dias = f"{dias_restantes} dias" if dias_restantes is not None else "---"
+            render_metric_card("Prova em", txt_dias, "📅")
+
             # MOSTRA OS DIAS OU "---" SE NÃO TIVER DATA
             txt_dias = f"{dias_prova} dias" if dias_prova is not None else "---"
             render_metric_card("Prova em", txt_dias, "📅")
