@@ -462,6 +462,8 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.05);
         width: 100%;
+        max-height: 500px;
+        overflow-y: auto;
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 75, 75, 0.3) rgba(255, 255, 255, 0.05);
     }
