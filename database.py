@@ -1,9 +1,14 @@
-import streamlit as st
+import os
 from supabase import create_client, Client
 
-@st.cache_resource
-def init_connection():
-    # Puxa as credenciais que já estão no seu Streamlit Secrets
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+# Configurar conexão com Supabase
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://seu-projeto.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sua-chave-supabase")
 
-supabase = init_connection()
+# Inicializar cliente Supabase
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("✅ Conectado ao Supabase")
+except Exception as e:
+    print(f"❌ Erro ao conectar ao Supabase: {e}")
+    supabase = None
