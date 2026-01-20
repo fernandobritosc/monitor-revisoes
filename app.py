@@ -1,4 +1,4 @@
-# app.py (COMPLETO com estilo da imagem aplicado)
+# app.py (corrigido e completo)
 
 import streamlit as st
 import pandas as pd
@@ -7,9 +7,10 @@ from datetime import timedelta
 import plotly.express as px
 import re
 import time
+from streamlit_option_menu import option_menu
 import calendar
 
-# --- FUNÇÕES DO ESTILO DA IMAGEM ---
+# --- NOVA FUNÇÃO: Cartões de métricas estilo da imagem ---
 def render_metric_card_simple(label, value, help_text=None):
     """Renderiza cartões de métricas no estilo da imagem (simples e limpo)"""
     st.markdown(f"""
@@ -43,150 +44,7 @@ def render_metric_card_simple(label, value, help_text=None):
         </div>
     """, unsafe_allow_html=True)
 
-def render_constancy_section_horizontal(streak, record, month_days, total_days_month, percent, performance_status):
-    """Renderiza a seção de constância HORIZONTAL como na imagem"""
-    # Determinar cores
-    streak_color = "#FF4B4B"  # Vermelho padrão
-    status_color = "#FF4B4B"  # Vermelho para "Precisa melhorar"
-    
-    if performance_status == "🟢 Excelente":
-        streak_color = "#00FF00"
-        status_color = "#00FF00"
-    elif performance_status == "🟡 Bom":
-        streak_color = "#FFD700"
-        status_color = "#FFD700"
-    
-    html = f"""
-    <div style="
-        margin: 2rem 0;
-        padding: 2rem;
-        background: linear-gradient(135deg, rgba(26, 28, 35, 0.9), rgba(26, 28, 35, 0.7));
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-            <div style="font-size: 1.8rem; font-weight: 700; color: #fff;">CONSTÂNCIA NOS ESTUDOS</div>
-            <div style="
-                padding: 8px 16px;
-                background: rgba(255, 75, 75, 0.2);
-                border: 1px solid rgba(255, 75, 75, 0.3);
-                border-radius: 20px;
-                color: {status_color};
-                font-weight: 600;
-                font-size: 0.85rem;
-            ">{performance_status.replace('🟢', '').replace('🟡', '').replace('🔴', '').strip()}</div>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; gap: 20px; margin-bottom: 2rem; flex-wrap: wrap;">
-            <!-- Cartão 1: Streak Atual -->
-            <div style="
-                flex: 1;
-                min-width: 200px;
-                text-align: center;
-                padding: 25px 15px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                background: rgba(26, 28, 35, 0.8);
-            ">
-                <div style="color: #adb5bd; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; font-weight: 600;">
-                    STREAK ATUAL
-                </div>
-                <div style="font-size: 3.5rem; font-weight: 800; color: {streak_color}; line-height: 1; margin-bottom: 10px;">
-                    {streak}
-                </div>
-                <div style="color: #adb5bd; font-size: 0.85rem; margin-top: 5px;">
-                    dias consecutivos
-                </div>
-            </div>
-            
-            <!-- Cartão 2: Seu Recorde -->
-            <div style="
-                flex: 1;
-                min-width: 200px;
-                text-align: center;
-                padding: 25px 15px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                background: rgba(26, 28, 35, 0.8);
-            ">
-                <div style="color: #adb5bd; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; font-weight: 600;">
-                    SEU RECORDE
-                </div>
-                <div style="font-size: 3.5rem; font-weight: 800; color: #00FF00; line-height: 1; margin-bottom: 10px;">
-                    {record}
-                </div>
-                <div style="color: #adb5bd; font-size: 0.85rem; margin-top: 5px;">
-                    dias seguidos
-                </div>
-            </div>
-            
-            <!-- Cartão 3: Mês Atual -->
-            <div style="
-                flex: 1;
-                min-width: 200px;
-                text-align: center;
-                padding: 25px 15px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                background: rgba(26, 28, 35, 0.8);
-            ">
-                <div style="color: #adb5bd; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; font-weight: 600;">
-                    MÊS ATUAL
-                </div>
-                <div style="font-size: 2.5rem; font-weight: 800; color: #FFD700; line-height: 1; margin-bottom: 10px;">
-                    {month_days}/{total_days_month}
-                </div>
-                <div style="color: #adb5bd; font-size: 0.85rem; margin-top: 5px;">
-                    dias estudados ({percent:.0f}%)
-                </div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-            <div style="color: #adb5bd; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1.5rem; font-weight: 600; text-align: center;">
-                ÚLTIMOS 31 DIAS
-            </div>
-    """
-    return html
-
-def render_calendar_horizontal(calendario_data):
-    """Renderiza calendário horizontal com números"""
-    html = '<div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem;">'
-    
-    for dia in calendario_data:
-        if dia['hoje']:
-            bg_color = "linear-gradient(135deg, #FFD700, #FFA500)"
-            text_color = "#000"
-            border_color = "rgba(255, 215, 0, 0.7)"
-            tooltip = f"HOJE - {dia['dia']}/{dia['mes_ano']}"
-        elif dia['estudou']:
-            bg_color = "linear-gradient(135deg, #00FF00, #00CC00)"
-            text_color = "#fff"
-            border_color = "rgba(0, 255, 0, 0.7)"
-            tooltip = f"✓ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Estudou"
-        else:
-            bg_color = "rgba(255, 255, 255, 0.1)"
-            text_color = "#fff"
-            border_color = "rgba(255, 255, 255, 0.2)"
-            tooltip = f"✗ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Não estudou"
-        
-        html += f"""
-        <div style="
-            width: 40px; height: 40px; border-radius: 50%; 
-            background: {bg_color}; border: 2px solid {border_color};
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 600; font-size: 0.9rem; color: {text_color};
-            position: relative; cursor: pointer; transition: transform 0.3s;
-        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
-        title="{tooltip}">
-            {dia['dia']}
-        </div>
-        """
-    
-    html += '</div>'
-    return html
-
-# --- FUNÇÕES ORIGINAIS DO SISTEMA (TODAS PRESERVADAS) ---
+# --- FUNÇÃO ORIGINAL MANTIDA PARA COMPATIBILIDADE ---
 def render_metric_card(label, value, icon="📊"):
     st.markdown(f"""
         <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;">
@@ -196,6 +54,7 @@ def render_metric_card(label, value, icon="📊"):
         </div>
     """, unsafe_allow_html=True)
 
+# --- ADICIONAR FUNÇÃO PARA BARRA DE PROGRESSO SIMPLES ---
 def render_progress_bar(percentage, height=8):
     """Renderiza uma barra de progresso simples"""
     st.markdown(f"""
@@ -216,6 +75,7 @@ def render_progress_bar(percentage, height=8):
         </div>
     """, unsafe_allow_html=True)
 
+# --- FUNÇÃO ADICIONADA: Conversor de tempo ---
 def formatar_tempo_para_bigint(tempo_str):
     """Converte string HHMM para minutos inteiros."""
     try:
@@ -233,312 +93,31 @@ def formatar_tempo_para_bigint(tempo_str):
     except:
         return 0
 
-def calcular_countdown(data_str):
-    if not data_str: return None, "#adb5bd"
-    try:
-        dias = (pd.to_datetime(data_str).date() - datetime.date.today()).days
-        cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
-        return dias, cor
-    except: return None, "#adb5bd"
-
-def formatar_minutos(minutos_totais):
-    try:
-        minutos = int(minutos_totais)
-    except Exception:
-        return "0m"
-    horas = minutos // 60
-    minutos_rest = minutos % 60
-    if horas > 0:
-        return f"{horas}h{minutos_rest:02d}min"
-    return f"{minutos_rest}min"
-
-def formatar_horas_minutos(minutos_totais):
-    """Formata minutos para 'Xh YYmin'"""
-    try:
-        minutos = int(minutos_totais)
-    except Exception:
-        return "0h00min"
-    horas = minutos // 60
-    minutos_rest = minutos % 60
-    return f"{horas}h{minutos_rest:02d}min"
-
-def get_badge_cor(taxa):
-    """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
-    try:
-        t = float(taxa)
-    except Exception:
-        return "badge-gray"
-    if t >= 80:
-        return "badge-green"
-    if t >= 60:
-        return "badge-gray"
-    return "badge-red"
-
-def calcular_streak(df):
-    """Calcula dias consecutivos até hoje baseado na coluna 'data_estudo'."""
-    if df is None or df.empty:
-        return 0
-    if 'data_estudo' not in df.columns:
-        return 0
-    try:
-        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
-    except Exception:
-        return 0
-    dias = set(datas)
-    streak = 0
-    hoje = datetime.date.today()
-    alvo = hoje
-    while alvo in dias:
-        streak += 1
-        alvo = alvo - datetime.timedelta(days=1)
-    return streak
-
-def calcular_recorde_streak(df):
-    """Calcula o maior streak (record) já alcançado."""
-    if df is None or df.empty:
-        return 0
-    if 'data_estudo' not in df.columns:
-        return 0
-    try:
-        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().sort_values().unique()
-    except Exception:
-        return 0
-    
-    if len(datas) == 0:
-        return 0
-    
-    recorde = 0
-    streak_atual = 1
-    
-    for i in range(1, len(datas)):
-        diferenca = (datas[i] - datas[i-1]).days
-        if diferenca == 1:
-            streak_atual += 1
-        else:
-            recorde = max(recorde, streak_atual)
-            streak_atual = 1
-    
-    return max(recorde, streak_atual)
-
-def calcular_datas_streak(df):
-    """Calcula as datas de início e fim do streak atual."""
-    if df is None or df.empty:
-        return None, None
-    if 'data_estudo' not in df.columns:
-        return None, None
-    
-    try:
-        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
-        datas = sorted(datas, reverse=True)  # Mais recentes primeiro
-    except Exception:
-        return None, None
-    
-    if not datas:
-        return None, None
-    
-    hoje = datetime.date.today()
-    streak = calcular_streak(df)
-    
-    if streak == 0:
-        return None, None
-    
-    fim_streak = hoje - datetime.timedelta(days=1)
-    inicio_streak = fim_streak - datetime.timedelta(days=streak-1)
-    
-    return inicio_streak, fim_streak
-
-def calcular_estudos_semana(df):
-    """Calcula o total de horas e questões da semana atual."""
-    if df is None or df.empty:
-        return 0, 0
-    
-    hoje = datetime.date.today()
-    inicio_semana = hoje - datetime.timedelta(days=hoje.weekday())  # Segunda-feira
-    fim_semana = inicio_semana + datetime.timedelta(days=6)  # Domingo
-    
-    try:
-        df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
-        df_semana = df[(df['data_estudo_date'] >= inicio_semana) & (df['data_estudo_date'] <= fim_semana)]
-        
-        horas_semana = df_semana['tempo'].sum() / 60
-        questoes_semana = df_semana['total'].sum()
-        
-        return horas_semana, questoes_semana
-    except Exception:
-        return 0, 0
-
-def gerar_calendario_estudos(df, dias=31):
-    """Gera um calendário dos últimos dias com indicação de estudo."""
-    if df is None or df.empty:
-        return []
-    
-    hoje = datetime.date.today()
-    calendario = []
-    
-    try:
-        # Converte datas de estudo para conjunto de datas
-        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
-        
-        # Gera os últimos X dias
-        for i in range(dias-1, -1, -1):
-            data = hoje - datetime.timedelta(days=i)
-            estudou = data in datas_estudo
-            
-            calendario.append({
-                'data': data,
-                'dia': data.day,
-                'dia_semana': data.strftime('%a'),
-                'mes_ano': data.strftime('%b/%y'),
-                'estudou': estudou,
-                'hoje': data == hoje
-            })
-    except Exception:
-        # Se houver erro, gera calendário vazio
-        for i in range(31):
-            data = datetime.date.today() - datetime.timedelta(days=30-i)
-            calendario.append({
-                'data': data,
-                'dia': data.day,
-                'dia_semana': data.strftime('%a'),
-                'mes_ano': data.strftime('%b/%y'),
-                'estudou': False,
-                'hoje': data == hoje
-            })
-    
-    return calendario
-
-def gerar_numeros_mes(df):
-    """Gera os números de 1 a 31 com indicação visual."""
-    hoje = datetime.date.today()
-    dia_hoje = hoje.day
-    # Obter número de dias no mês atual
-    _, num_dias_mes = calendar.monthrange(hoje.year, hoje.month)
-    
-    numeros = []
-    
-    try:
-        # Converte datas de estudo para conjunto de datas
-        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
-        
-        # Gera os números de 1 até num_dias_mes
-        for dia in range(1, num_dias_mes + 1):
-            # Verifica se este dia do mês atual foi estudado
-            estudou = any(
-                data.day == dia and data.month == hoje.month and data.year == hoje.year 
-                for data in datas_estudo
-            )
-            
-            numeros.append({
-                'numero': dia,
-                'estudou': estudou,
-                'hoje': dia == dia_hoje
-            })
-    except Exception:
-        # Em caso de erro, gera números básicos
-        for dia in range(1, num_dias_mes + 1):
-            numeros.append({
-                'numero': dia,
-                'estudou': False,
-                'hoje': dia == dia_hoje
-            })
-    
-    return numeros
-
-def calcular_proximo_intervalo(dificuldade, taxa_acerto):
-    """
-    Calcula o próximo intervalo de revisão baseado na dificuldade e desempenho.
-    
-    Fácil:   → 15 ou 20 dias (aproveita ciclos longos)
-    Médio:   → 7 dias (padrão confiável)
-    Difícil: → 3 dias se acerto < 70%, senão 5
-    """
-    if dificuldade == "🟢 Fácil":
-        return 15 if taxa_acerto > 80 else 7
-    elif dificuldade == "🟡 Médio":
-        return 7
-    else:  # 🔴 Difícil
-        return 3 if taxa_acerto < 70 else 5
-
-def tempo_recomendado_rev24h(dificuldade):
-    """Retorna tempo sugerido para revisão de 24h (em minutos)."""
-    tempos = {
-        "🟢 Fácil": (2, "Apenas releitura rápida dos títulos"),
-        "🟡 Médio": (8, "Revise seus grifos + 5 questões"),
-        "🔴 Difícil": (18, "Active Recall completo + questões-chave")
-    }
-    return tempos.get(dificuldade, (5, "Padrão"))
-
-@st.cache_data(ttl=300)
-def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
-    """Calcula revisões pendentes com cache para melhor performance."""
-    hoje = datetime.date.today()
-    pend = []
-    
-    if df.empty:
-        return pend
-        
-    for _, row in df.iterrows():
-        dt_est = pd.to_datetime(row['data_estudo']).date()
-        dias = (hoje - dt_est).days
-        tx = row.get('taxa', 0)
-        dif = row.get('dificuldade', '🟡 Médio')
-        
-        # Lógica de Revisão 24h
-        if not row.get('rev_24h', False):
-            dt_prev = dt_est + timedelta(days=1)
-            if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
-                atraso = (hoje - dt_prev).days
-                pend.append({
-                    "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
-                    "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
-                    "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                    "dificuldade": dif, "taxa": tx
-                })
-        
-        # Lógica de Ciclos Longos (ADAPTATIVA)
-        elif row.get('rev_24h', True):
-            intervalo = calcular_proximo_intervalo(dif, tx)
-            
-            # Determinar qual coluna atualizar
-            if intervalo <= 7:
-                col_alv, lbl = "rev_07d", f"Revisão {intervalo}d"
-            else:  # 15+ dias
-                col_alv, lbl = "rev_15d", f"Revisão {intervalo}d"
-            
-            if not row.get(col_alv, False):
-                dt_prev = dt_est + timedelta(days=intervalo)
-                if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
-                    atraso = (hoje - dt_prev).days
-                    pend.append({
-                        "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
-                        "tipo": lbl, "col": col_alv, "atraso": atraso, 
-                        "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                        "dificuldade": dif, "taxa": tx
-                    })
-    
-    # Filtrar por dificuldade
-    if filtro_dif != "Todas":
-        pend = [p for p in pend if p['dificuldade'] == filtro_dif]
-    
-    return pend
-
-# --- INICIALIZAÇÃO OBRIGATÓRIA ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA - sem duplicação) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
+# Inicializar estados das metas semanais
 if 'meta_horas_semana' not in st.session_state:
-    st.session_state.meta_horas_semana = 22
+    st.session_state.meta_horas_semana = 22  # Valor padrão
 
 if 'meta_questoes_semana' not in st.session_state:
-    st.session_state.meta_questoes_semana = 350
+    st.session_state.meta_questoes_semana = 350  # Valor padrão
 
-# --- CONFIGURAÇÃO E DESIGN SYSTEM ---
+# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
+from database import supabase
+from logic import get_editais, excluir_concurso_completo
+from styles import apply_styles
+
 # Aplicar estilos base
+apply_styles()
+
+# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS dos números da sidebar)
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -660,7 +239,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
     
-    /* Menu Lateral Personalizado */
+    /* Menu Lateral Personalizado (ATUALIZADO para corresponder à imagem) */
     .sidebar-menu {
         background: transparent;
         margin-top: 20px;
@@ -714,6 +293,8 @@ st.markdown("""
         color: #FF4B4B;
         font-weight: 600;
     }
+    
+    /* REMOVIDO: Navegação por páginas estilo da imagem (1-6) */
     
     /* Tabela de Disciplinas */
     .disciplina-table {
@@ -865,9 +446,241 @@ st.markdown("""
         display: inline-block;
     }
     
+    /* Calendário de estudos - BOLINHAS */
+    .calendario-container {
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+    }
+    
+    .calendario-title {
+        color: #adb5bd;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+    }
+    
+    .calendario-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .dia-calendario {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 600;
+        font-size: 0.9rem;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    .dia-estudado {
+        background: linear-gradient(135deg, #00FF00, #00CC00);
+        border: 2px solid rgba(0, 255, 0, 0.7);
+        color: #fff;
+    }
+    
+    .dia-nao-estudado {
+        background: linear-gradient(135deg, #FF4B4B, #CC0000);
+        border: 2px solid rgba(255, 75, 75, 0.7);
+        color: #fff;
+    }
+    
+    .dia-hoje {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        border: 2px solid rgba(255, 215, 0, 0.7);
+        color: #000;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    }
+    
+    .dia-calendario:hover {
+        transform: scale(1.15);
+        box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
+        z-index: 10;
+    }
+    
+    .dia-numero {
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+    
+    .dia-tooltip {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.95);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s, visibility 0.3s;
+        z-index: 1000;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .dia-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
+    }
+    
+    .dia-calendario:hover .dia-tooltip {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    /* Legenda do calendário */
+    .legenda-calendario {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 25px;
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .legenda-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #adb5bd;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
     /* Estilo para os filtros do Radar de Revisões */
     .stSegmentedControl {
         margin-bottom: 10px;
+    }
+    
+    /* Números de 1 a 31 em linha horizontal ÚNICA - CORRIGIDO */
+    .numeros-mes-container {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 8px;
+        margin: 15px 0;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        width: 100%;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 75, 75, 0.3) rgba(255, 255, 255, 0.05);
+    }
+    
+    .numeros-mes-container::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .numeros-mes-container::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+    
+    .numeros-mes-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 75, 75, 0.3);
+        border-radius: 3px;
+    }
+    
+    .numeros-mes-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 75, 75, 0.5);
+    }
+    
+    .numero-dia {
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+        transition: all 0.3s;
+        position: relative;
+        border: 2px solid transparent;
+    }
+    
+    .numero-dia.hoje {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        font-weight: 700;
+        border: 2px solid rgba(255, 215, 0, 0.7);
+        transform: scale(1.1);
+    }
+    
+    .numero-dia.estudou {
+        background: linear-gradient(135deg, #00FF00, #00CC00);
+        border: 2px solid rgba(0, 255, 0, 0.7);
+        color: #fff;
+    }
+    
+    .numero-dia:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Tooltip para números */
+    .numero-tooltip {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.95);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s, visibility 0.3s;
+        z-index: 1000;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .numero-dia:hover .numero-tooltip {
+        opacity: 1;
+        visibility: visible;
     }
     
     /* Seção de Constância Melhorada */
@@ -908,23 +721,327 @@ st.markdown("""
         .streak-value-box {
             width: 100%;
         }
+        
+        .calendario-grid {
+            gap: 5px;
+        }
+        
+        .dia-calendario {
+            width: 35px;
+            height: 35px;
+        }
+        
+        .legenda-calendario {
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .numero-dia {
+            width: 35px;
+            height: 35px;
+            font-size: 0.8rem;
+        }
     }
+    
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIMULAÇÃO DAS IMPORTAÇÕES (substitua pelas reais quando usar) ---
-# from database import supabase
-# from logic import get_editais, excluir_concurso_completo
-# from styles import apply_styles
+# --- 2. FUNÇÕES AUXILIARES ---
+def calcular_countdown(data_str):
+    if not data_str: return None, "#adb5bd"
+    try:
+        dias = (pd.to_datetime(data_str).date() - datetime.date.today()).days
+        cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
+        return dias, cor
+    except: return None, "#adb5bd"
 
-# Simulação das funções para demonstração
-supabase = None
-def get_editais(db):
-    return {"Exemplo": {"cargo": "Cargo Exemplo", "materias": {}}}
-def excluir_concurso_completo():
-    pass
+# Formata minutos em '2h 15m'
+def formatar_minutos(minutos_totais):
+    try:
+        minutos = int(minutos_totais)
+    except Exception:
+        return "0m"
+    horas = minutos // 60
+    minutos_rest = minutos % 60
+    if horas > 0:
+        return f"{horas}h{minutos_rest:02d}min"
+    return f"{minutos_rest}min"
 
-# --- LÓGICA DE NAVEGAÇÃO ---
+def formatar_horas_minutos(minutos_totais):
+    """Formata minutos para 'Xh YYmin'"""
+    try:
+        minutos = int(minutos_totais)
+    except Exception:
+        return "0h00min"
+    horas = minutos // 60
+    minutos_rest = minutos % 60
+    return f"{horas}h{minutos_rest:02d}min"
+
+def get_badge_cor(taxa):
+    """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
+    try:
+        t = float(taxa)
+    except Exception:
+        return "badge-gray"
+    if t >= 80:
+        return "badge-green"
+    if t >= 60:
+        return "badge-gray"
+    return "badge-red"
+
+def calcular_streak(df):
+    """Calcula dias consecutivos até hoje baseado na coluna 'data_estudo'."""
+    if df is None or df.empty:
+        return 0
+    if 'data_estudo' not in df.columns:
+        return 0
+    try:
+        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
+    except Exception:
+        return 0
+    dias = set(datas)
+    streak = 0
+    hoje = datetime.date.today()
+    alvo = hoje
+    while alvo in dias:
+        streak += 1
+        alvo = alvo - datetime.timedelta(days=1)
+    return streak
+
+def calcular_recorde_streak(df):
+    """Calcula o maior streak (record) já alcançado."""
+    if df is None or df.empty:
+        return 0
+    if 'data_estudo' not in df.columns:
+        return 0
+    try:
+        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().sort_values().unique()
+    except Exception:
+        return 0
+    
+    if len(datas) == 0:
+        return 0
+    
+    recorde = 0
+    streak_atual = 1
+    
+    for i in range(1, len(datas)):
+        diferenca = (datas[i] - datas[i-1]).days
+        if diferenca == 1:
+            streak_atual += 1
+        else:
+            recorde = max(recorde, streak_atual)
+            streak_atual = 1
+    
+    return max(recorde, streak_atual)
+
+def calcular_datas_streak(df):
+    """Calcula as datas de início e fim do streak atual."""
+    if df is None or df.empty:
+        return None, None
+    if 'data_estudo' not in df.columns:
+        return None, None
+    
+    try:
+        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
+        datas = sorted(datas, reverse=True)  # Mais recentes primeiro
+    except Exception:
+        return None, None
+    
+    if not datas:
+        return None, None
+    
+    hoje = datetime.date.today()
+    streak = calcular_streak(df)
+    
+    if streak == 0:
+        return None, None
+    
+    fim_streak = hoje - datetime.timedelta(days=1)
+    inicio_streak = fim_streak - datetime.timedelta(days=streak-1)
+    
+    return inicio_streak, fim_streak
+
+def calcular_estudos_semana(df):
+    """Calcula o total de horas e questões da semana atual."""
+    if df is None or df.empty:
+        return 0, 0
+    
+    hoje = datetime.date.today()
+    inicio_semana = hoje - datetime.timedelta(days=hoje.weekday())  # Segunda-feira
+    fim_semana = inicio_semana + datetime.timedelta(days=6)  # Domingo
+    
+    try:
+        df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
+        df_semana = df[(df['data_estudo_date'] >= inicio_semana) & (df['data_estudo_date'] <= fim_semana)]
+        
+        horas_semana = df_semana['tempo'].sum() / 60
+        questoes_semana = df_semana['total'].sum()
+        
+        return horas_semana, questoes_semana
+    except Exception:
+        return 0, 0
+
+# --- FUNÇÃO MELHORADA: Calendário de estudos com bolinhas ---
+def gerar_calendario_estudos(df, dias=31):
+    """Gera um calendário dos últimos dias com indicação de estudo."""
+    if df is None or df.empty:
+        return []
+    
+    hoje = datetime.date.today()
+    calendario = []
+    
+    try:
+        # Converte datas de estudo para conjunto de datas
+        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
+        
+        # Gera os últimos X dias
+        for i in range(dias-1, -1, -1):
+            data = hoje - datetime.timedelta(days=i)
+            estudou = data in datas_estudo
+            
+            calendario.append({
+                'data': data,
+                'dia': data.day,
+                'dia_semana': data.strftime('%a'),
+                'mes_ano': data.strftime('%b/%y'),
+                'estudou': estudou,
+                'hoje': data == hoje
+            })
+    except Exception:
+        # Se houver erro, gera calendário vazio
+        for i in range(31):
+            data = datetime.date.today() - datetime.timedelta(days=30-i)
+            calendario.append({
+                'data': data,
+                'dia': data.day,
+                'dia_semana': data.strftime('%a'),
+                'mes_ano': data.strftime('%b/%y'),
+                'estudou': False,
+                'hoje': data == hoje
+            })
+    
+    return calendario
+
+# --- FUNÇÃO CORRIGIDA: Gerar números de 1 a 31 para visualização ---
+def gerar_numeros_mes(df):
+    """Gera os números de 1 a 31 com indicação visual."""
+    hoje = datetime.date.today()
+    dia_hoje = hoje.day
+    # Obter número de dias no mês atual
+    _, num_dias_mes = calendar.monthrange(hoje.year, hoje.month)
+    
+    numeros = []
+    
+    try:
+        # Converte datas de estudo para conjunto de datas
+        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
+        
+        # Gera os números de 1 até num_dias_mes
+        for dia in range(1, num_dias_mes + 1):
+            # Verifica se este dia do mês atual foi estudado
+            estudou = any(
+                data.day == dia and data.month == hoje.month and data.year == hoje.year 
+                for data in datas_estudo
+            )
+            
+            numeros.append({
+                'numero': dia,
+                'estudou': estudou,
+                'hoje': dia == dia_hoje
+            })
+    except Exception:
+        # Em caso de erro, gera números básicos
+        for dia in range(1, num_dias_mes + 1):
+            numeros.append({
+                'numero': dia,
+                'estudou': False,
+                'hoje': dia == dia_hoje
+            })
+    
+    return numeros
+
+# --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
+def calcular_proximo_intervalo(dificuldade, taxa_acerto):
+    """
+    Calcula o próximo intervalo de revisão baseado na dificuldade e desempenho.
+    
+    Fácil:   → 15 ou 20 dias (aproveita ciclos longos)
+    Médio:   → 7 dias (padrão confiável)
+    Difícil: → 3 dias se acerto < 70%, senão 5
+    """
+    if dificuldade == "🟢 Fácil":
+        return 15 if taxa_acerto > 80 else 7
+    elif dificuldade == "🟡 Médio":
+        return 7
+    else:  # 🔴 Difícil
+        return 3 if taxa_acerto < 70 else 5
+
+def tempo_recomendado_rev24h(dificuldade):
+    """Retorna tempo sugerido para revisão de 24h (em minutos)."""
+    tempos = {
+        "🟢 Fácil": (2, "Apenas releitura rápida dos títulos"),
+        "🟡 Médio": (8, "Revise seus grifos + 5 questões"),
+        "🔴 Difícil": (18, "Active Recall completo + questões-chave")
+    }
+    return tempos.get(dificuldade, (5, "Padrão"))
+
+# --- FUNÇÃO COM CACHE PARA PERFORMANCE ---
+@st.cache_data(ttl=300)
+def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
+    """Calcula revisões pendentes com cache para melhor performance."""
+    hoje = datetime.date.today()
+    pend = []
+    
+    if df.empty:
+        return pend
+        
+    for _, row in df.iterrows():
+        dt_est = pd.to_datetime(row['data_estudo']).date()
+        dias = (hoje - dt_est).days
+        tx = row.get('taxa', 0)
+        dif = row.get('dificuldade', '🟡 Médio')
+        
+        # Lógica de Revisão 24h
+        if not row.get('rev_24h', False):
+            dt_prev = dt_est + timedelta(days=1)
+            if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                atraso = (hoje - dt_prev).days
+                pend.append({
+                    "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                    "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
+                    "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
+                    "dificuldade": dif, "taxa": tx
+                })
+        
+        # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
+        else:  # rev_24h = True
+            intervalo = calcular_proximo_intervalo(dif, tx)
+            
+            # Determinar qual coluna atualizar
+            if intervalo <= 7:
+                col_alv, lbl = "rev_07d", f"Revisão {intervalo}d"
+            else:  # 15+ dias
+                col_alv, lbl = "rev_15d", f"Revisão {intervalo}d"
+            
+            if not row.get(col_alv, False):
+                dt_prev = dt_est + timedelta(days=intervalo)
+                if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                    atraso = (hoje - dt_prev).days
+                    pend.append({
+                        "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                        "tipo": lbl, "col": col_alv, "atraso": atraso, 
+                        "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
+                        "dificuldade": dif, "taxa": tx
+                    })
+    
+    # Filtrar por dificuldade
+    if filtro_dif != "Todas":
+        pend = [p for p in pend if p['dificuldade'] == filtro_dif]
+    
+    return pend
+
+# --- 3. LÓGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
     st.markdown('<h1 class="main-title">🎯 Central de Comando</h1>', unsafe_allow_html=True)
     st.markdown('<p class="section-subtitle">Selecione sua missão ou inicie um novo ciclo</p>', unsafe_allow_html=True)
@@ -965,64 +1082,68 @@ if st.session_state.missao_ativa is None:
             
             if btn_cadastrar:
                 if nome_concurso and cargo_concurso:
-                    st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
-                    time.sleep(1)
-                    st.session_state.missao_ativa = nome_concurso
-                    st.rerun()
+                    try:
+                        payload = {
+                            "concurso": nome_concurso,
+                            "cargo": cargo_concurso,
+                            "materia": "Geral",
+                            "topicos": ["Introdução"]
+                        }
+                        if data_prova_input:
+                            payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
+                        res_ins = supabase.table("editais_materias").insert(payload).execute()
+                        # confirmar inserção
+                        try:
+                            check = supabase.table("editais_materias").select("data_prova").eq("concurso", nome_concurso).execute()
+                            if check.data and len(check.data) > 0:
+                                st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
+                                time.sleep(1)
+                                st.session_state.missao_ativa = nome_concurso
+                                st.rerun()
+                            else:
+                                st.warning("Missão criada, mas não foi possível confirmar 'data_prova' no banco. Verifique o supabase.")
+                        except Exception:
+                            st.success(f"✅ Missão '{nome_concurso}' criada (não foi possível confirmar via consulta).")
+                            time.sleep(1)
+                            st.session_state.missao_ativa = nome_concurso
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao cadastrar: {e}")
                 else:
                     st.warning("⚠️ Por favor, preencha o nome e o cargo.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     missao = st.session_state.missao_ativa
+    try:
+        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        df = pd.DataFrame(res.data)
+    except: df = pd.DataFrame()
     
-    # Dados de exemplo (substitua pela sua lógica real)
-    dados_exemplo = {
-        "cargo": "Analista Judiciário",
-        "materias": {
-            "Direito Constitucional": ["Princípios Fundamentais", "Direitos e Garantias"],
-            "Direito Administrativo": ["Atos Administrativos", "Licitação"],
-            "Português": ["Gramática", "Interpretação de Texto"]
-        }
-    }
+    # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
+    try:
+        res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
+        if res_data_prova.data and len(res_data_prova.data) > 0:
+            data_prova_direta = res_data_prova.data[0].get('data_prova')
+        else:
+            data_prova_direta = None
+    except:
+        data_prova_direta = None
     
-    # DataFrame de exemplo
-    hoje = datetime.date.today()
-    df = pd.DataFrame({
-        'id': [1, 2, 3, 4, 5],
-        'materia': ['Direito Constitucional', 'Direito Administrativo', 'Português', 'Matemática', 'Informática'],
-        'assunto': ['Princípios Fundamentais', 'Atos Administrativos', 'Gramática', 'Álgebra', 'Hardware'],
-        'data_estudo': [
-            hoje - datetime.timedelta(days=1), 
-            hoje - datetime.timedelta(days=2), 
-            hoje,
-            hoje - datetime.timedelta(days=3),
-            hoje - datetime.timedelta(days=5)
-        ],
-        'acertos': [8, 6, 9, 7, 5],
-        'total': [10, 10, 10, 10, 10],
-        'taxa': [80, 60, 90, 70, 50],
-        'dificuldade': ['🟡 Médio', '🔴 Difícil', '🟢 Fácil', '🟡 Médio', '🔴 Difícil'],
-        'comentarios': ['Bom desempenho', 'Precisa revisar', 'Excelente', 'Razoável', 'Dificuldade'],
-        'tempo': [120, 90, 60, 100, 80],
-        'rev_24h': [True, False, False, True, False],
-        'rev_07d': [False, False, False, False, False],
-        'rev_15d': [False, False, False, False, False],
-        'rev_30d': [False, False, False, False, False]
-    })
-    
-    dados = dados_exemplo
-    
+    dados = get_editais(supabase).get(missao, {})
+
     with st.sidebar:
         st.markdown(f"<h2 style='color:#FF4B4B; margin-bottom:0;'>{missao}</h2>", unsafe_allow_html=True)
         st.markdown(f"<p style='color:#adb5bd; font-size:0.9rem; margin-bottom:20px;'>{dados.get('cargo', '')}</p>", unsafe_allow_html=True)
         
+        # Botão com seta como na imagem
         if st.button("◀ Voltar à Central", use_container_width=True): 
             st.session_state.missao_ativa = None
             st.rerun()
         
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
+        # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
         opcoes_menu = [
             "🏠 Home",
             "🔄 Revisões", 
@@ -1042,6 +1163,9 @@ else:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # REMOVIDO: Navegação por páginas (1-6) - Conforme solicitado
+        
+        # Extrair o nome real do menu (remover ícone)
         if "🏠 Home" in menu_selecionado:
             menu = "Home"
         elif "🔄 Revisões" in menu_selecionado:
@@ -1057,7 +1181,7 @@ else:
         else:
             menu = "Home"
 
-    # --- ABA: HOME (COM ESTILO DA IMAGEM) ---
+    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO conforme imagem ---
     if menu == "Home":
         # Título principal
         st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
@@ -1078,10 +1202,16 @@ else:
             # Formatar tempo como na imagem (3h45min)
             tempo_formatado = formatar_minutos(minutos_totais)
             
-            # Dias para a prova (exemplo)
-            dias_restantes = 45
+            # Dias para a prova
+            dias_restantes = None
+            if data_prova_direta:
+                try:
+                    dt_prova = pd.to_datetime(data_prova_direta).date()
+                    dias_restantes = (dt_prova - datetime.date.today()).days
+                except Exception:
+                    dias_restantes = None
             
-            # 4 cartões de métricas (como na imagem) - HORIZONTAL
+            # 4 cartões de métricas (como na imagem)
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             with c1:
                 render_metric_card_simple("TEMPO TOTAL", tempo_formatado)
@@ -1090,65 +1220,136 @@ else:
             with c3:
                 render_metric_card_simple("QUESTÕES", f"{int(t_q)}")
             with c4:
-                render_metric_card_simple("DIAS PARA A PROVA", f"{dias_restantes}")
+                if dias_restantes is not None:
+                    render_metric_card_simple("DIAS PARA A PROVA", f"{dias_restantes}")
+                else:
+                    render_metric_card_simple("DIAS PARA A PROVA", "—")
             
             st.divider()
 
-            # --- SEÇÃO DE CONSTÂNCIA HORIZONTAL (ESTILO DA IMAGEM) ---
+            # --- SEÇÃO DE CONSTÂNCIA MELHORADA ---
+            st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
+            
             streak = calcular_streak(df)
             recorde = calcular_recorde_streak(df)
-            
-            # Calcular dias estudados no mês
-            hoje = datetime.date.today()
-            dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
-            dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
-            percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
-            
-            # Determinar performance
-            performance = "🔴 Precisa melhorar"
-            if streak >= 7:
-                performance = "🟢 Excelente"
-            elif streak >= 3:
-                performance = "🟡 Bom"
-            
-            # Renderizar seção horizontal
-            st.markdown(render_constancy_section_horizontal(
-                streak=streak,
-                record=recorde,
-                month_days=dias_estudados_mes,
-                total_days_month=dias_no_mes,
-                percent=percentual_mes,
-                performance_status=performance
-            ), unsafe_allow_html=True)
-            
-            # Gerar calendário
+            inicio_streak, fim_streak = calcular_datas_streak(df)
             calendario = gerar_calendario_estudos(df, dias=31)
             
-            # Renderizar calendário horizontal
-            st.markdown(render_calendar_horizontal(calendario), unsafe_allow_html=True)
+            st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
+            st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
             
-            # Legenda do calendário
-            st.markdown('''
-                <div style="display: flex; justify-content: center; align-items: center; gap: 25px; margin-top: 20px; padding: 15px; background: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
-                    <div style="display: flex; align-items: center; gap: 10px; color: #adb5bd; font-size: 0.85rem; font-weight: 500;">
-                        <div style="width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #00FF00, #00CC00); border: 2px solid rgba(0, 255, 0, 0.7);"></div>
+            # Indicador de performance (como na imagem)
+            performance = "🟢 Excelente" if streak >= 7 else "🟡 Bom" if streak >= 3 else "🔴 Precisa melhorar"
+            st.markdown(f'<div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Stats de constância em 3 colunas
+            col_s1, col_s2, col_s3 = st.columns(3)
+            
+            with col_s1:
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 75, 75, 0.1); border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.2);">
+                        <div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">STREAK ATUAL</div>
+                        <div style="font-size: 2.8rem; font-weight: 800; color: #FF4B4B; margin: 10px 0;">{streak}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias consecutivos</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col_s2:
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 20px; background: rgba(0, 255, 0, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 0, 0.2);">
+                        <div style="color: #00FF00; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">SEU RECORDE</div>
+                        <div style="font-size: 2.8rem; font-weight: 800; color: #00FF00; margin: 10px 0;">{recorde}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias seguidos</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col_s3:
+                # Calcular dias estudados no mês
+                hoje = datetime.date.today()
+                dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
+                dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
+                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
+                
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.2);">
+                        <div style="color: #FFD700; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">MÊS ATUAL</div>
+                        <div style="font-size: 2.2rem; font-weight: 800; color: #FFD700; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            # Período do streak atual
+            if inicio_streak and fim_streak:
+                data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
+                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
+            
+            # Calendário de bolinhas - ÚLTIMOS 31 DIAS
+            if calendario:
+                st.markdown('<div class="calendario-container">', unsafe_allow_html=True)
+                st.markdown('<div class="calendario-title">ÚLTIMOS 31 DIAS</div>', unsafe_allow_html=True)
+                
+                # Criar grid de bolinhas
+                st.markdown('<div class="calendario-grid">', unsafe_allow_html=True)
+                
+                for dia in calendario:
+                    if dia['hoje']:
+                        classe_dia = "dia-hoje"
+                        tooltip = f"HOJE - {dia['dia']}/{dia['mes_ano']}"
+                        emoji = "H"
+                    elif dia['estudou']:
+                        classe_dia = "dia-estudado"
+                        tooltip = f"✓ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Estudou"
+                        emoji = "✓"
+                    else:
+                        classe_dia = "dia-nao-estudado"
+                        tooltip = f"✗ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Não estudou"
+                        emoji = "✗"
+                    
+                    st.markdown(f'''
+                    <div class="dia-calendario {classe_dia}">
+                        <div class="dia-numero">{emoji}</div>
+                        <div class="dia-tooltip">{tooltip}</div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Legenda
+                st.markdown('<div class="legenda-calendario">', unsafe_allow_html=True)
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-estudado" style="margin-right: 0;">
+                            <div class="dia-numero">✓</div>
+                        </div>
                         <span>Estudou</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px; color: #adb5bd; font-size: 0.85rem; font-weight: 500;">
-                        <div style="width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2);"></div>
+                ''', unsafe_allow_html=True)
+                
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-nao-estudado" style="margin-right: 0;">
+                            <div class="dia-numero">✗</div>
+                        </div>
                         <span>Não estudou</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px; color: #adb5bd; font-size: 0.85rem; font-weight: 500;">
-                        <div style="width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #FFD700, #FFA500); border: 2px solid rgba(255, 215, 0, 0.7);"></div>
+                ''', unsafe_allow_html=True)
+                
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-hoje" style="margin-right: 0;">
+                            <div class="dia-numero">H</div>
+                        </div>
                         <span>Hoje</span>
                     </div>
-                </div>
-            ''', unsafe_allow_html=True)
+                ''', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
             
-            # Fechar a div da seção de constância
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
-            # --- RESTANTE DO CÓDIGO ORIGINAL DA HOME (PAINEL DE DISCIPLINAS, METAS, ETC.) ---
+            # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
             
             if not df.empty:
@@ -1165,7 +1366,7 @@ else:
                 df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
                 df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
                 
-                # Criar tabela HTML
+                # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
                 # Criar DataFrame para display
@@ -1302,11 +1503,11 @@ else:
                 </div>
                 ''', unsafe_allow_html=True)
 
-    # --- ABA: REVISÕES (mantida original) ---
+    # --- ABA: REVISÕES ---
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
-        # Filtros
+        # CORREÇÃO: Filtros organizados corretamente
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             filtro_rev = st.segmented_control(
@@ -1316,6 +1517,7 @@ else:
                 key="filtro_rev"
             )
         with c2:
+            # CORREÇÃO: Ordem corrigida para mostrar Fácil ao lado de Médio
             filtro_dif = st.segmented_control(
                 "Dificuldade:", 
                 ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], 
@@ -1323,6 +1525,7 @@ else:
                 key="filtro_dif"
             )
     
+        # Usar função com cache para melhor performance
         pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
         
         if not pend: 
@@ -1334,6 +1537,7 @@ else:
             st.markdown("##### 📊 Resumo de Revisões Pendentes")
             col_res1, col_res2, col_res3 = st.columns(3)
             
+            # Contar por dificuldade
             dif_count = len([p for p in pend if p['dificuldade'] == "🔴 Difícil"])
             med_count = len([p for p in pend if p['dificuldade'] == "🟡 Médio"])
             fac_count = len([p for p in pend if p['dificuldade'] == "🟢 Fácil"])
@@ -1358,6 +1562,7 @@ else:
                         badge_class = "badge-red" if p['atraso'] > 0 else "badge-green" if p['atraso'] == 0 else "badge-gray"
                         status_text = f"⚠️ {p['atraso']}d atraso" if p['atraso'] > 0 else "🎯 Vence hoje" if p['atraso'] == 0 else "📅 Futura"
                         
+                        # Mostrar dificuldade e recomendação de tempo
                         tempo_rec, desc = tempo_recomendado_rev24h(p['dificuldade'])
                         
                         st.markdown(f"""
@@ -1386,15 +1591,26 @@ else:
                         st.write("") # Alinhamento
                         if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             try:
-                                # Simulação de atualização
-                                st.success("✅ Revisão concluída!")
-                                time.sleep(1)
-                                st.rerun()
+                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
+                                if res_db.data:
+                                    n_ac = res_db.data[0]['acertos'] + acr_rev
+                                    n_to = res_db.data[0]['total'] + tor_rev
+                                    supabase.table("registros_estudos").update({
+                                        p['col']: True, 
+                                        "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
+                                        "acertos": n_ac, "total": n_to, 
+                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
+                                    }).eq("id", p['id']).execute()
+                                    st.success("✅ Revisão concluída!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Erro ao buscar dados do registro.")
                             except Exception as e:
                                 st.error(f"❌ Erro ao concluir revisão: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: REGISTRAR (mantida original) ---
+    # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
         st.markdown('<h2 class="main-title">📝 Novo Registro de Estudo</h2>', unsafe_allow_html=True)
         mats = list(dados.get('materias', {}).keys())
@@ -1420,6 +1636,7 @@ else:
                     ac_reg = ca_reg.number_input("Questões Acertadas", 0)
                     to_reg = ct_reg.number_input("Total de Questões", 1)
                     
+                    # NOVO: Classificação de Dificuldade
                     st.markdown("##### 🎯 Como foi esse assunto?")
                     dif_reg = st.segmented_control(
                         "Classificação:",
@@ -1427,6 +1644,7 @@ else:
                         default="🟡 Médio"
                     )
                     
+                    # Mostrar recomendação baseada na dificuldade
                     tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
                     st.info(f"💡 **{dif_reg}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
                     
@@ -1441,7 +1659,23 @@ else:
                             t_b = formatar_tempo_para_bigint(tm_reg)
                             taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
                             
-                            # Simulação de salvamento
+                            payload = {
+                                "concurso": missao, 
+                                "materia": mat_reg, 
+                                "assunto": ass_reg, 
+                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
+                                "acertos": ac_reg, 
+                                "total": to_reg, 
+                                "taxa": taxa,
+                                "dificuldade": dif_reg,  # Novo campo
+                                "comentarios": com_reg, 
+                                "tempo": t_b, 
+                                "rev_24h": False, 
+                                "rev_07d": False, 
+                                "rev_15d": False, 
+                                "rev_30d": False
+                            }
+                            supabase.table("registros_estudos").insert(payload).execute()
                             st.success("✅ Registro salvo com sucesso!")
                             time.sleep(1)
                             st.rerun()
@@ -1449,7 +1683,7 @@ else:
                             st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD (mantida original) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
@@ -1461,6 +1695,7 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             horas = df['tempo'].sum()/60
         
+        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
         m1, m2, m3 = st.columns(3)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
@@ -1468,9 +1703,11 @@ else:
         
         st.divider()
 
+        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
         if not df.empty:
             st.subheader("📈 Evolução de Acertos")
             try:
+                # Agrupa pela coluna certa: 'data_estudo'
                 df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
                 st.line_chart(df_evo.set_index('data_estudo'))
             except Exception as e:
@@ -1478,7 +1715,9 @@ else:
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
+        # 4. GRÁFICOS PLOTLY (se houver dados)
         if not df.empty:
+            # Gráficos
             c_g1, c_g2 = st.columns(2)
             with c_g1:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -1503,6 +1742,7 @@ else:
                 st.plotly_chart(fig_line, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
+            # Detalhamento por Matéria
             st.markdown("### 📁 Detalhamento por Disciplina")
             df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
             
@@ -1520,7 +1760,7 @@ else:
                                 </div>
                             """, unsafe_allow_html=True)
 
-    # --- ABA: HISTÓRICO (mantida original) ---
+    # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
         st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
         
@@ -1530,29 +1770,33 @@ else:
             
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             
+            # Filtros
             col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
                 mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
             with col_f2:
                 ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], key="ord_hist")
             with col_f3:
-                st.write("")
+                st.write("")  # Espaçamento
             
+            # Aplicar filtros
             df_filtered = df_h.copy()
             if mat_filter != "Todas":
                 df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
             
+            # Aplicar ordenação
             if ordem == "Mais Recente":
                 df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
             elif ordem == "Mais Antigo":
                 df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
             elif ordem == "Maior Taxa":
                 df_filtered = df_filtered.sort_values('taxa', ascending=False)
-            else:
+            else:  # Menor Taxa
                 df_filtered = df_filtered.sort_values('taxa', ascending=True)
             
             st.divider()
             
+            # Resumo
             total_registros = len(df_filtered)
             taxa_media = df_filtered['taxa'].mean()
             tempo_total = df_filtered['tempo'].sum() / 60
@@ -1564,6 +1808,7 @@ else:
             
             st.divider()
             
+            # --- MODAL DE EDIÇÃO ---
             if st.session_state.edit_id is not None:
                 registro_edit = df[df['id'] == st.session_state.edit_id].iloc[0]
                 
@@ -1604,6 +1849,7 @@ else:
                     ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
                     to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=1, key="to_edit")
                     
+                    # Dificuldade
                     st.markdown("##### 🎯 Classificação de Dificuldade")
                     dif_edit = st.segmented_control(
                         "Classificação:",
@@ -1628,6 +1874,21 @@ else:
                     
                     if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
                         try:
+                            t_b = formatar_tempo_para_bigint(tm_edit)
+                            taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
+                            
+                            supabase.table("registros_estudos").update({
+                                "data_estudo": dt_edit.strftime('%Y-%m-%d'),
+                                "materia": mat_edit,
+                                "assunto": ass_edit,
+                                "acertos": ac_edit,
+                                "total": to_edit,
+                                "taxa": taxa,
+                                "dificuldade": dif_edit,
+                                "comentarios": com_edit,
+                                "tempo": t_b
+                            }).eq("id", st.session_state.edit_id).execute()
+                            
                             st.success("✅ Registro atualizado com sucesso!")
                             time.sleep(1)
                             st.session_state.edit_id = None
@@ -1642,6 +1903,7 @@ else:
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.divider()
             
+            # --- LISTA DE REGISTROS ---
             st.markdown("##### 📝 Gerenciar Registros")
             
             if len(df_filtered) == 0:
@@ -1651,9 +1913,11 @@ else:
                     with st.container():
                         st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                         
+                        # Layout principal
                         info_col, metrics_col, action_col = st.columns([3, 1.5, 1.2])
                         
                         with info_col:
+                            # Informações do Registro
                             taxa_color = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 60 else "#FF4B4B"
                             
                             st.markdown(f"""
@@ -1670,11 +1934,13 @@ else:
                                 <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
                             """, unsafe_allow_html=True)
                             
+                            # Anotações
                             if row.get('comentarios'):
                                 with st.expander("📝 Ver Anotações", expanded=False):
                                     st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
                         
                         with metrics_col:
+                            # Métricas
                             st.markdown(f"""
                                 <div style="text-align: right;">
                                     <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
@@ -1690,13 +1956,17 @@ else:
                         with action_col:
                             col_a1, col_a2 = st.columns(2, gap="small")
                             
+                            # Botão Editar
                             if col_a1.button("✏️", key=f"edit_{row['id']}", help="Editar registro", use_container_width=True):
                                 st.session_state.edit_id = row['id']
                                 st.rerun()
                             
+                            # Botão Excluir com confirmação
                             if col_a2.button("🗑️", key=f"del_{row['id']}", help="Excluir registro", use_container_width=True):
                                 try:
+                                    # Confirmação via dialog
                                     if st.session_state.get(f"confirm_delete_{row['id']}", False):
+                                        supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
                                         st.toast("✅ Registro excluído com sucesso!", icon="✅")
                                         time.sleep(0.5)
                                         st.session_state[f"confirm_delete_{row['id']}"] = False
@@ -1707,6 +1977,7 @@ else:
                                 except Exception as e:
                                     st.error(f"❌ Erro ao excluir: {e}")
                             
+                            # Confirmação visual
                             if st.session_state.get(f"confirm_delete_{row['id']}", False):
                                 st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar exclusão", icon="⚠️")
                         
@@ -1716,34 +1987,110 @@ else:
         else:
             st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
 
-    # --- ABA: CONFIGURAR (mantida original) ---
+    # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
         st.markdown('<h2 class="main-title">⚙️ Configurar Missão</h2>', unsafe_allow_html=True)
         st.markdown('<p class="section-subtitle">Editar dados do edital ativo</p>', unsafe_allow_html=True)
+
+        # Mostrar data atual se existir
+        try:
+            data_prova_atual = pd.to_datetime(data_prova_direta).date() if data_prova_direta else None
+        except Exception:
+            data_prova_atual = None
 
         with st.container():
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             st.markdown('### Dados do Edital', unsafe_allow_html=True)
             st.write(f"**Concurso:** {missao}")
             st.write(f"**Cargo:** {dados.get('cargo', '—')}")
-            st.write(f"**Data da Prova (atual):** —")
+            st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
+        # Formulário para editar data da prova
         with st.form("form_editar_edital"):
-                st.markdown("### 📅 Ajustar Data da Prova")
-                
-                nova_data_escolhida = st.date_input(
-                    "Selecione a data da prova", 
-                    value=datetime.date.today()
-                )
-                
-                remover = st.checkbox("Remover data da prova (deixar em branco)")
+            st.markdown("### 📅 Ajustar Data da Prova")
+            
+            nova_data_escolhida = st.date_input(
+                "Selecione a data da prova", 
+                value=(data_prova_atual or datetime.date.today())
+            )
+            
+            remover = st.checkbox("Remover data da prova (deixar em branco)")
 
-                submitted = st.form_submit_button("Salvar alterações", use_container_width=True)
-                
-                if submitted:
-                    try:
+            submitted = st.form_submit_button("Salvar alterações", use_container_width=True, type="primary")
+            
+            if submitted:
+                try:
+                    valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
+                    
+                    # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
+                    res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
+                    
+                    if res.data:
+                        # 2. LIMPA A MEMÓRIA DO APP
+                        st.cache_data.clear() 
+                        
+                        # 3. ATUALIZA O ESTADO PARA FORÇAR RECARREGAMENTO
+                        st.session_state.missao_ativa = missao
+                        
                         st.success(f"✅ Data atualizada no banco! Recarregando...")
                         time.sleep(1)
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao salvar: {e}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao salvar: {e}")
+
+        # Seção para adicionar/gerenciar matérias
+        st.divider()
+        st.markdown("### 📚 Gerenciar Matérias")
+        
+        with st.container():
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            
+            # Mostrar matérias atuais
+            if 'materias' in dados and dados['materias']:
+                st.markdown("**Matérias cadastradas:**")
+                for materia, topicos in dados['materias'].items():
+                    with st.expander(f"📖 {materia}"):
+                        st.markdown(f"**Tópicos:** {', '.join(topicos)}")
+            else:
+                st.info("Nenhuma matéria cadastrada ainda.")
+            
+            # Formulário para adicionar nova matéria
+            with st.form("form_nova_materia"):
+                st.markdown("#### Adicionar Nova Matéria")
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    nova_materia = st.text_input("Nome da Matéria", placeholder="Ex: Direito Constitucional")
+                
+                with col2:
+                    st.write("")  # Espaçamento
+                    st.write("")  # Espaçamento
+                    if st.form_submit_button("➕ Adicionar", use_container_width=True):
+                        if nova_materia:
+                            # Aqui você precisaria implementar a lógica para salvar no banco
+                            st.success(f"Matéria '{nova_materia}' adicionada (lógica de banco a implementar)")
+                            time.sleep(1)
+                            st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Botão para excluir o concurso
+        st.divider()
+        st.markdown("### ⚠️ Zona de Perigo")
+        
+        with st.container():
+            st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
+            
+            st.warning("Esta ação é irreversível!")
+            if st.button("🗑️ Excluir Missão Completa", type="secondary", use_container_width=True):
+                # Confirmação adicional
+                confirmacao = st.checkbox("Confirmo que quero excluir TODOS os dados desta missão")
+                if confirmacao:
+                    if excluir_concurso_completo(supabase, missao):  # Função do logic.py
+                        st.error("Missão excluída! Redirecionando...")
+                        st.session_state.missao_ativa = None
+                        time.sleep(2)
+                        st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
