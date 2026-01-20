@@ -453,20 +453,20 @@ st.markdown("""
     
     /* Números de 1 a 31 em linha horizontal ÚNICA - MANTIDO */
     .numeros-mes-container {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin: 15px 0;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        width: 100%;
-        max-height: 500px;
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 75, 75, 0.3) rgba(255, 255, 255, 0.05);
-    }
+    display: flex;
+    flex-direction: column; /* Alinha os itens verticalmente */
+    gap: 8px;                /* Espaço entre as bolinhas */
+    margin: 15px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    width: 100%;             /* Força a largura total do contêiner */
+    overflow-y: auto;        /* Permite rolagem vertical, caso necessário */
+    max-height: 500px;       /* Limita a altura do contêiner */
+    box-sizing: border-box;  /* Para garantir que o padding não afete a largura */
+}
+
     
     .numeros-mes-container::-webkit-scrollbar {
         height: 6px;
@@ -487,21 +487,22 @@ st.markdown("""
     }
     
     .numero-dia {
-        flex-shrink: 0;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: #fff;
-        background: rgba(255, 255, 255, 0.1);
-        transition: all 0.3s;
-        position: relative;
-        border: 2px solid transparent;
-    }
+    flex-shrink: 0; /* Impede o encolhimento */
+    width: 40px;    /* Tamanho fixo das bolinhas */
+    height: 40px;   /* Tamanho fixo das bolinhas */
+    border-radius: 50%; /* Forma redonda */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    transition: all 0.3s;
+    position: relative;
+    border: 2px solid transparent;
+}
+
     
     .numero-dia.hoje {
         background: linear-gradient(135deg, #FFD700, #FFA500);
@@ -1104,20 +1105,10 @@ else:
             st.markdown('<div class="numeros-mes-container">', unsafe_allow_html=True)
             
             for num_info in numeros_mes:
-                if num_info['hoje']:
-                    classe = "numero-dia hoje"
-                    tooltip = f"HOJE - {num_info['numero']}/{datetime.date.today().month}"
-                elif num_info['estudou']:
-                    classe = "numero-dia estudou"
-                    tooltip = f"✓ Dia {num_info['numero']} - Estudou"
-                else:
-                    classe = "numero-dia"
-                    tooltip = f"✗ Dia {num_info['numero']} - Não estudou"
                 
-                st.markdown(f'''
-                <div class="{classe}">
+                 st.markdown(f'''
+                <div class="numero-dia">
                     {num_info['numero']}
-                    <div class="numero-tooltip">{tooltip}</div>
                 </div>
                 ''', unsafe_allow_html=True)
             
