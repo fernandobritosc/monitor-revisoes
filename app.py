@@ -1,3 +1,5 @@
+# app.py (atualizado)
+
 import streamlit as st
 import pandas as pd
 import datetime
@@ -8,12 +10,68 @@ import time
 from streamlit_option_menu import option_menu
 import calendar
 
+# --- NOVA FUNÇÃO: Cartões de métricas estilo da imagem ---
+def render_metric_card_simple(label, value, help_text=None):
+    """Renderiza cartões de métricas no estilo da imagem (simples e limpo)"""
+    st.markdown(f"""
+        <div style="
+            text-align: center; 
+            padding: 20px 15px; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 12px;
+            background: rgba(26, 28, 35, 0.8);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        ">
+            <div style="
+                color: #adb5bd; 
+                font-size: 0.85rem; 
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 10px;
+                font-weight: 600;
+            ">{label}</div>
+            <div style="
+                font-size: 2.2rem; 
+                font-weight: 800; 
+                color: #fff;
+                line-height: 1;
+                margin-bottom: 5px;
+            ">{value}</div>
+            {"<div style='color: #6c757d; font-size: 0.75rem; margin-top: 5px;'>" + help_text + "</div>" if help_text else ""}
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO ORIGINAL MANTIDA PARA COMPATIBILIDADE ---
 def render_metric_card(label, value, icon="📊"):
     st.markdown(f"""
         <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;">
             <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
             <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
             <div style="font-size: 1.8rem; font-weight: 700;">{value}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- ADICIONAR FUNÇÃO PARA BARRA DE PROGRESSO SIMPLES ---
+def render_progress_bar(percentage, height=8):
+    """Renderiza uma barra de progresso simples"""
+    st.markdown(f"""
+        <div style="
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            height: {height}px;
+            margin: 8px 0;
+            overflow: hidden;
+        ">
+            <div style="
+                height: 100%;
+                border-radius: 10px;
+                background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
+                width: {percentage}%;
+            "></div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -59,7 +117,7 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno
+# CSS Customizado para Layout Moderno (ATUALIZADO)
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -118,6 +176,17 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         margin-bottom: 1rem;
     }
+    
+    /* NOVO: Título estilo da imagem */
+    .visao-mes-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
     .section-subtitle {
         color: #adb5bd;
         font-size: 0.9rem;
@@ -170,7 +239,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
     
-    /* Menu Lateral Personalizado */
+    /* Menu Lateral Personalizado (ATUALIZADO para corresponder à imagem) */
     .sidebar-menu {
         background: transparent;
         margin-top: 20px;
@@ -182,47 +251,84 @@ st.markdown("""
     
     .sidebar-menu .stRadio > div {
         flex-direction: column;
-        gap: 10px;
+        gap: 5px;
     }
     
     .sidebar-menu .stRadio > div > label {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
-        padding: 16px 20px !important;
-        margin-bottom: 10px;
-        border-left: 4px solid transparent;
+        background: transparent;
+        border-radius: 8px;
+        padding: 12px 15px !important;
+        margin-bottom: 5px;
+        border-left: 0px solid transparent;
         transition: all 0.3s;
-        min-height: 60px;
+        min-height: 50px;
         display: flex;
         align-items: center;
     }
     
     .sidebar-menu .stRadio > div > label:hover {
         background: rgba(255, 75, 75, 0.1);
-        border-left: 4px solid rgba(255, 75, 75, 0.5);
+        border-left: 0px solid rgba(255, 75, 75, 0.5);
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 12px;
         color: #adb5bd;
         font-weight: 500;
-        font-size: 16px !important;
+        font-size: 15px !important;
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child span {
-        font-size: 20px !important;
+        font-size: 18px !important;
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] {
         background: rgba(255, 75, 75, 0.15);
-        border-left: 4px solid #FF4B4B;
+        border-left: 0px solid #FF4B4B;
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] div:first-child {
         color: #FF4B4B;
         font-weight: 600;
+    }
+    
+    /* NOVO: Navegação por páginas estilo da imagem */
+    .page-navigation {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .page-number {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        color: #adb5bd;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .page-number:hover {
+        background-color: rgba(255, 75, 75, 0.2);
+        color: #FF4B4B;
+        border-color: rgba(255, 75, 75, 0.3);
+    }
+    
+    .page-number.active {
+        background-color: rgba(255, 75, 75, 0.25);
+        color: #FF4B4B;
+        border-color: rgba(255, 75, 75, 0.5);
     }
     
     /* Tabela de Disciplinas */
@@ -1090,7 +1196,7 @@ else:
         
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
-        # Menu personalizado usando st.radio
+        # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
         opcoes_menu = [
             "🏠 Home",
             "🔄 Revisões", 
@@ -1110,6 +1216,12 @@ else:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Navegação por páginas (como na imagem)
+        st.markdown('<div class="page-navigation">', unsafe_allow_html=True)
+        for i in range(1, 7):
+            st.markdown(f'<div class="page-number {"active" if i == 1 else ""}">{i}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # Extrair o nome real do menu (remover ícone)
         if "🏠 Home" in menu_selecionado:
             menu = "Home"
@@ -1126,93 +1238,49 @@ else:
         else:
             menu = "Home"
 
-    # --- ABA: HOME (PAINEL GERAL) ---
+    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO conforme imagem ---
     if menu == "Home":
-        st.markdown('<h2 class="main-title">🏠 Home — Painel Geral</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Visão completa do seu desempenho e progresso</p>', unsafe_allow_html=True)
-
+        # Título principal
+        st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:#adb5bd; font-size:1rem; margin-bottom:2rem;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+        
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # --- MÉTRICAS RÁPIDAS NO TOPO ---
-            st.markdown('<h3 style="margin-top:1rem; color:#fff;">⚡ MÉTRICAS RÁPIDAS</h3>', unsafe_allow_html=True)
+            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
+            st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
+            # Calcular métricas
             t_q = df['total'].sum()
             a_q = df['acertos'].sum()
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
             minutos_totais = int(df['tempo'].sum())
             
+            # Formatar tempo como na imagem (3h45min)
+            tempo_formatado = formatar_minutos(minutos_totais)
+            
+            # Dias para a prova
+            dias_restantes = None
+            if data_prova_direta:
+                try:
+                    dt_prova = pd.to_datetime(data_prova_direta).date()
+                    dias_restantes = (dt_prova - datetime.date.today()).days
+                except Exception:
+                    dias_restantes = None
+            
+            # 4 cartões de métricas (como na imagem)
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             with c1:
-                render_metric_card("Tempo Total", formatar_minutos(minutos_totais), "⏱️")
+                render_metric_card_simple("TEMPO TOTAL", tempo_formatado)
             with c2:
-                render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+                render_metric_card_simple("PRECISÃO", f"{precisao:.1f}%")
             with c3:
-                render_metric_card("Questões", f"{int(t_q)}", "📝")
+                render_metric_card_simple("QUESTÕES", f"{int(t_q)}")
             with c4:
-                dias_restantes = None
-                if data_prova_direta:
-                    try:
-                        dt_prova = pd.to_datetime(data_prova_direta).date()
-                        dias_restantes = (dt_prova - datetime.date.today()).days
-                    except Exception:
-                        dias_restantes = None
-                
                 if dias_restantes is not None:
-                    render_metric_card("Dias para a Prova", f"{dias_restantes}", "📅")
+                    render_metric_card_simple("DIAS PARA A PROVA", f"{dias_restantes}")
                 else:
-                    render_metric_card("Data da Prova", "—", "📅")
-            
-            st.divider()
-
-            # --- CORREÇÃO: NÚMEROS DE 1 A 31 NA HORIZONTAL (ÚNICA LINHA) ---
-            st.markdown('<h3 style="margin-top:1rem; color:#fff;">📅 VISÃO DO MÊS ATUAL</h3>', unsafe_allow_html=True)
-            
-            # Gerar números do mês atual
-            numeros_mes = gerar_numeros_mes(df)
-            
-            # Criar container com rolagem horizontal
-            st.markdown('<div class="numeros-mes-container">', unsafe_allow_html=True)
-            
-            for num in numeros_mes:
-                classes = "numero-dia"
-                tooltip_text = f"Dia {num['numero']}"
-                
-                if num['hoje']:
-                    classes += " hoje"
-                    tooltip_text += " - HOJE"
-                elif num['estudou']:
-                    classes += " estudou"
-                    tooltip_text += " - ✓ Estudou"
-                else:
-                    tooltip_text += " - Não estudou"
-                
-                # Emoji para exibição
-                emoji = ""
-                if num['hoje']:
-                    emoji = "H"
-                elif num['estudou']:
-                    emoji = "✓"
-                
-                st.markdown(f'''
-                    <div class="{classes}">
-                        {emoji if emoji else num['numero']}
-                        <div class="numero-tooltip">{tooltip_text}</div>
-                    </div>
-                ''', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Legenda compacta
-            col_l1, col_l2, col_l3 = st.columns(3)
-            with col_l1:
-                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: linear-gradient(135deg, #00FF00, #00CC00); border-radius: 50%; border: 2px solid rgba(0, 255, 0, 0.7); margin-right: 8px;"></div>✓ Estudou</div>', unsafe_allow_html=True)
-            with col_l2:
-                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: linear-gradient(135deg, #FFD700, #FFA500); border-radius: 50%; border: 2px solid rgba(255, 215, 0, 0.7); margin-right: 8px;"></div>Hoje</div>', unsafe_allow_html=True)
-            with col_l3:
-                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.2); margin-right: 8px;"></div>Dia do mês</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div style="text-align: center; color: #FF8E8E; font-size: 0.75rem; margin-top: 5px; font-style: italic;">Role horizontalmente para ver todos os dias →</div>', unsafe_allow_html=True)
+                    render_metric_card_simple("DIAS PARA A PROVA", "—")
             
             st.divider()
 
