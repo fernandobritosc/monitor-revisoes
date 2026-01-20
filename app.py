@@ -370,12 +370,11 @@ else:
     except: df = pd.DataFrame()
     
     # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
-    # Isso corrige o problema da data não aparecer no Home
+    # Agora busca da tabela correta: editais_materias
     try:
-        # Busca a data da prova diretamente da tabela materia_text
-        res_data_prova = supabase.table("materia_text").select("data_prova_date").eq("concurso_text", missao).limit(1).execute()
+        res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
         if res_data_prova.data and len(res_data_prova.data) > 0:
-            data_prova_direta = res_data_prova.data[0].get('data_prova_date')
+            data_prova_direta = res_data_prova.data[0].get('data_prova')
         else:
             data_prova_direta = None
     except:
@@ -425,7 +424,7 @@ else:
             with c3:
                 render_metric_card("Streak", f"{streak} 🔥", "🔥")
             with c4:
-                # Countdown da prova - AGORA USA A DATA DIRETA DO BANCO
+                # Countdown da prova - AGORA USA A DATA DA TABELA CORRETA
                 dias_restantes = None
                 if data_prova_direta:
                     try:
@@ -1015,8 +1014,8 @@ else:
                     try:
                         valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
                         
-                        # 1. SALVA NO BANCO - Atualiza a tabela materia_text
-                        res = supabase.table("materia_text").update({"data_prova_date": valor_final}).eq("concurso_text", missao).execute()
+                        # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
+                        res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
                         
                         if res.data:
                             # 2. LIMPA A MEMÓRIA DO APP (MUITO IMPORTANTE)
