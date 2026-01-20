@@ -117,7 +117,7 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno (ATUALIZADO)
+# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS dos números da sidebar)
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -294,42 +294,7 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* NOVO: Navegação por páginas estilo da imagem */
-    .page-navigation {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 30px;
-        padding-top: 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .page-number {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        color: #adb5bd;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .page-number:hover {
-        background-color: rgba(255, 75, 75, 0.2);
-        color: #FF4B4B;
-        border-color: rgba(255, 75, 75, 0.3);
-    }
-    
-    .page-number.active {
-        background-color: rgba(255, 75, 75, 0.25);
-        color: #FF4B4B;
-        border-color: rgba(255, 75, 75, 0.5);
-    }
+    /* REMOVIDO: Navegação por páginas estilo da imagem (1-6) */
     
     /* Tabela de Disciplinas */
     .disciplina-table {
@@ -405,25 +370,6 @@ st.markdown("""
         color: #FF8E8E;
         font-size: 0.9rem;
         margin-top: 10px;
-    }
-    
-    .meta-edit-btn {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        background: rgba(255, 75, 75, 0.1);
-        border: 1px solid rgba(255, 75, 75, 0.3);
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: #FF8E8E;
-        cursor: pointer;
-        font-size: 0.8rem;
-        transition: all 0.3s;
-    }
-    
-    .meta-edit-btn:hover {
-        background: rgba(255, 75, 75, 0.2);
-        border-color: rgba(255, 75, 75, 0.5);
     }
     
     /* Modal de Configuração de Metas */
@@ -1190,7 +1136,8 @@ else:
         st.markdown(f"<h2 style='color:#FF4B4B; margin-bottom:0;'>{missao}</h2>", unsafe_allow_html=True)
         st.markdown(f"<p style='color:#adb5bd; font-size:0.9rem; margin-bottom:20px;'>{dados.get('cargo', '')}</p>", unsafe_allow_html=True)
         
-        if st.button("← Voltar à Central", use_container_width=True): 
+        # Botão com seta como na imagem
+        if st.button("◀ Voltar à Central", use_container_width=True): 
             st.session_state.missao_ativa = None
             st.rerun()
         
@@ -1216,11 +1163,7 @@ else:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Navegação por páginas (como na imagem)
-        st.markdown('<div class="page-navigation">', unsafe_allow_html=True)
-        for i in range(1, 7):
-            st.markdown(f'<div class="page-number {"active" if i == 1 else ""}">{i}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # REMOVIDO: Navegação por páginas (1-6) - Conforme solicitado
         
         # Extrair o nome real do menu (remover ícone)
         if "🏠 Home" in menu_selecionado:
@@ -1295,28 +1238,28 @@ else:
             st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
             st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
             
-            # Indicador de performance
+            # Indicador de performance (como na imagem)
             performance = "🟢 Excelente" if streak >= 7 else "🟡 Bom" if streak >= 3 else "🔴 Precisa melhorar"
             st.markdown(f'<div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Stats de constância
+            # Stats de constância em 3 colunas
             col_s1, col_s2, col_s3 = st.columns(3)
             
             with col_s1:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 75, 75, 0.1); border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.2);">
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 75, 75, 0.1); border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.2);">
                         <div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">STREAK ATUAL</div>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #FF4B4B;">{streak}</div>
+                        <div style="font-size: 2.8rem; font-weight: 800; color: #FF4B4B; margin: 10px 0;">{streak}</div>
                         <div style="color: #adb5bd; font-size: 0.8rem;">dias consecutivos</div>
                     </div>
                 ''', unsafe_allow_html=True)
             
             with col_s2:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 15px; background: rgba(0, 255, 0, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 0, 0.2);">
+                    <div style="text-align: center; padding: 20px; background: rgba(0, 255, 0, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 0, 0.2);">
                         <div style="color: #00FF00; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">SEU RECORDE</div>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #00FF00;">{recorde}</div>
+                        <div style="font-size: 2.8rem; font-weight: 800; color: #00FF00; margin: 10px 0;">{recorde}</div>
                         <div style="color: #adb5bd; font-size: 0.8rem;">dias seguidos</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -1329,9 +1272,9 @@ else:
                 percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
                 
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.2);">
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.2);">
                         <div style="color: #FFD700; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">MÊS ATUAL</div>
-                        <div style="font-size: 2rem; font-weight: 800; color: #FFD700;">{dias_estudados_mes}/{dias_no_mes}</div>
+                        <div style="font-size: 2.2rem; font-weight: 800; color: #FFD700; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
                         <div style="color: #adb5bd; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
                     </div>
                 ''', unsafe_allow_html=True)
@@ -1341,7 +1284,7 @@ else:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
-            # Calendário de bolinhas
+            # Calendário de bolinhas - ÚLTIMOS 31 DIAS
             if calendario:
                 st.markdown('<div class="calendario-container">', unsafe_allow_html=True)
                 st.markdown('<div class="calendario-title">ÚLTIMOS 31 DIAS</div>', unsafe_allow_html=True)
