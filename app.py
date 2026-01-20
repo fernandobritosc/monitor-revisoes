@@ -455,7 +455,6 @@ st.markdown("""
     .numeros-mes-container {
         display: flex;
         flex-direction: column;
-        overflow-x: hidden;
         gap: 8px;
         margin: 15px 0;
         padding: 15px;
