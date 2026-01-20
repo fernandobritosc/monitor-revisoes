@@ -32,7 +32,7 @@ def formatar_tempo_para_bigint(tempo_str):
             minutos = int(tempo_str[1:])
             return horas * 60 + minutos
         else:
-            return int(tempo_str)  # Já em minutos
+            return int(tempo_str)
     except:
         return 0
 
@@ -42,6 +42,12 @@ if 'missao_ativa' not in st.session_state:
 
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
+
+# Inicializar metas semanais
+if 'meta_horas' not in st.session_state:
+    st.session_state.meta_horas = 22
+if 'meta_questoes' not in st.session_state:
+    st.session_state.meta_questoes = 350
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
@@ -59,7 +65,7 @@ if 'pomodoro_seconds' not in st.session_state:
 if 'pomodoro_active' not in st.session_state:
     st.session_state.pomodoro_active = False
 if 'pomodoro_mode' not in st.session_state:
-    st.session_state.pomodoro_mode = "Foco" # Foco ou Pausa
+    st.session_state.pomodoro_mode = "Foco"
 
 # CSS Customizado para Layout Moderno
 st.markdown("""
@@ -154,6 +160,85 @@ st.markdown("""
         font-variant-numeric: tabular-nums;
         text-shadow: 0 0 20px rgba(255, 75, 75, 0.3);
     }
+    
+    /* Tabela de Disciplinas */
+    .disciplina-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+    }
+    .disciplina-table th {
+        color: #adb5bd;
+        font-size: 0.85rem;
+        text-align: left;
+        padding: 12px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .disciplina-table td {
+        color: #fff;
+        padding: 12px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 0.9rem;
+    }
+    .disciplina-table tr:hover {
+        background-color: rgba(255, 75, 75, 0.05);
+    }
+    .disciplina-table .percent-cell {
+        text-align: center;
+        font-weight: 700;
+    }
+    .disciplina-table .percent-high {
+        color: #00FF00;
+    }
+    .disciplina-table .percent-medium {
+        color: #FFD700;
+    }
+    .disciplina-table .percent-low {
+        color: #FF4B4B;
+    }
+    
+    /* Streak Display */
+    .streak-container {
+        background: linear-gradient(135deg, rgba(255,75,75,0.1), rgba(255,142,142,0.05));
+        border: 1px solid rgba(255,75,75,0.2);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .streak-number {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #FF4B4B;
+        margin: 10px 0;
+    }
+    .streak-label {
+        color: #adb5bd;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Progresso Semanal */
+    .weekly-progress-container {
+        background: rgba(26, 28, 35, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 15px 0;
+    }
+    .weekly-progress-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 5px 0;
+    }
+    .weekly-progress-label {
+        color: #adb5bd;
+        font-size: 0.85rem;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -165,18 +250,28 @@ def calcular_countdown(data_str):
         cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
         return dias, cor
     except: return None, "#adb5bd"
-# Formata minutos em '2h 15m'
+
 def formatar_minutos(minutos_totais):
+    """Formata minutos para 'Xh Ymin' ou 'Zmin'."""
     try:
         minutos = int(minutos_totais)
     except Exception:
-        return "0m"
+        return "0min"
     horas = minutos // 60
     minutos_rest = minutos % 60
     if horas > 0:
-        return f"{horas}h {minutos_rest}m"
-    return f"{minutos_rest}m"
+        return f"{horas}h{minutos_rest:02d}min"
+    return f"{minutos_rest}min"
 
+def formatar_horas_minutos(minutos_totais):
+    """Formata minutos para 'Xh Ymin' (sempre mostra horas mesmo se zero)."""
+    try:
+        minutos = int(minutos_totais)
+    except Exception:
+        return "0h00min"
+    horas = minutos // 60
+    minutos_rest = minutos % 60
+    return f"{horas}h{minutos_rest:02d}min"
 
 def get_badge_cor(taxa):
     """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
@@ -189,7 +284,6 @@ def get_badge_cor(taxa):
     if t >= 60:
         return "badge-gray"
     return "badge-red"
-
 
 def calcular_streak(df):
     """Calcula dias consecutivos até hoje baseado na coluna 'data_estudo'."""
@@ -209,6 +303,66 @@ def calcular_streak(df):
         streak += 1
         alvo = alvo - datetime.timedelta(days=1)
     return streak
+
+def calcular_record_streak(df):
+    """Calcula o maior streak (recorde) de dias consecutivos."""
+    if df is None or df.empty:
+        return 0
+    if 'data_estudo' not in df.columns:
+        return 0
+    try:
+        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
+        datas = sorted(datas)
+    except Exception:
+        return 0
+    
+    if len(datas) == 0:
+        return 0
+    
+    max_streak = 1
+    current_streak = 1
+    
+    for i in range(1, len(datas)):
+        diff = (datas[i] - datas[i-1]).days
+        if diff == 1:
+            current_streak += 1
+        else:
+            if current_streak > max_streak:
+                max_streak = current_streak
+            current_streak = 1
+    
+    if current_streak > max_streak:
+        max_streak = current_streak
+    
+    return max_streak
+
+def calcular_progresso_semanal(df, meta_horas=22, meta_questoes=350):
+    """Calcula o progresso da semana atual."""
+    hoje = datetime.date.today()
+    # Encontra o início da semana (segunda-feira)
+    inicio_semana = hoje - timedelta(days=hoje.weekday())
+    fim_semana = inicio_semana + timedelta(days=6)
+    
+    if df.empty:
+        return 0, 0, 0, 0
+    
+    # Filtra registros da semana atual
+    df_semana = df.copy()
+    df_semana['data_estudo_date'] = pd.to_datetime(df_semana['data_estudo']).dt.date
+    df_semana = df_semana[(df_semana['data_estudo_date'] >= inicio_semana) & 
+                          (df_semana['data_estudo_date'] <= fim_semana)]
+    
+    if df_semana.empty:
+        return 0, 0, 0, 0
+    
+    tempo_semana_min = df_semana['tempo'].sum()
+    tempo_semana_horas = tempo_semana_min / 60
+    questoes_semana = df_semana['total'].sum()
+    
+    progresso_horas = min((tempo_semana_horas / meta_horas) * 100, 100) if meta_horas > 0 else 0
+    progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
+    
+    return tempo_semana_horas, questoes_semana, progresso_horas, progresso_questoes
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -290,6 +444,120 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
     
     return pend
 
+# --- FUNÇÃO: Renderizar tabela de disciplinas (ESTILO DA IMAGEM) ---
+def render_tabela_disciplinas(df):
+    """Renderiza a tabela de disciplinas no estilo da imagem."""
+    if df.empty:
+        return
+    
+    # Agrupa dados por disciplina
+    df_disciplinas = df.groupby('materia').agg({
+        'tempo': 'sum',
+        'acertos': 'sum',
+        'total': 'sum'
+    }).reset_index()
+    
+    # Calcula métricas adicionais
+    df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
+    df_disciplinas['percentual'] = (df_disciplinas['acertos'] / df_disciplinas['total'] * 100).round(0)
+    
+    # Ordena por tempo (descrescente)
+    df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
+    
+    # Cria a tabela HTML estilizada
+    html_table = """
+    <div style="margin: 20px 0; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1);">
+        <table class="disciplina-table">
+            <thead>
+                <tr>
+                    <th style="width: 40%; text-align: left;">Disciplinas</th>
+                    <th style="width: 15%; text-align: center;">Tempo</th>
+                    <th style="width: 8%; text-align: center;">✓</th>
+                    <th style="width: 8%; text-align: center;">✗</th>
+                    <th style="width: 8%; text-align: center;">😐</th>
+                    <th style="width: 8%; text-align: center;">%</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    for _, row in df_disciplinas.iterrows():
+        # Determina classe de cor baseada no percentual
+        percent_class = "percent-high" if row['percentual'] >= 80 else "percent-medium" if row['percentual'] >= 60 else "percent-low"
+        
+        html_table += f"""
+                <tr>
+                    <td style="color: #fff; font-weight: 500;">{row['materia']}</td>
+                    <td style="text-align: center; color: #adb5bd;">{formatar_horas_minutos(row['tempo'])}</td>
+                    <td style="text-align: center; color: #00FF00;">{int(row['acertos'])}</td>
+                    <td style="text-align: center; color: #FF4B4B;">{int(row['erros'])}</td>
+                    <td style="text-align: center; color: #FFD700;">{int(row['total'])}</td>
+                    <td class="percent-cell {percent_class}">{int(row['percentual'])}</td>
+                </tr>
+        """
+    
+    html_table += """
+            </tbody>
+        </table>
+    </div>
+    """
+    
+    st.markdown(html_table, unsafe_allow_html=True)
+
+# --- FUNÇÃO: Renderizar streak display ---
+def render_streak_display(streak_atual, record_streak):
+    """Renderiza o display de streak no estilo da imagem."""
+    hoje = datetime.date.today()
+    inicio_periodo = hoje - timedelta(days=streak_atual - 1)
+    
+    # Formata datas
+    data_inicio = inicio_periodo.strftime("%d/%m")
+    data_fim = hoje.strftime("%d/%m")
+    
+    st.markdown(f"""
+    <div class="streak-container">
+        <div class="streak-label">CONSTÂNCIA NOS ESTUDOS</div>
+        <div class="streak-number">{streak_atual} dias</div>
+        <div style="color: #adb5bd; font-size: 0.9rem; margin-bottom: 15px;">
+            Você está há <strong>{streak_atual} dias</strong> sem falhar! Seu recorde é de <strong>{record_streak} dias.</strong>
+        </div>
+        <div style="display: flex; justify-content: center; align-items: center; color: #FF4B4B; font-weight: 600; font-size: 0.9rem;">
+            <span style="margin-right: 10px;">◀</span>
+            <span>{data_inicio} ~ {data_fim}</span>
+            <span style="margin-left: 10px;">▶</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO: Renderizar metas semanais ---
+def render_metas_semanais(tempo_semana_horas, questoes_semana, meta_horas, meta_questoes):
+    """Renderiza as metas semanais no estilo da imagem."""
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        progresso_horas = min((tempo_semana_horas / meta_horas) * 100, 100) if meta_horas > 0 else 0
+        st.markdown(f"""
+        <div class="weekly-progress-container">
+            <div class="weekly-progress-label">Horas de Estudo</div>
+            <div class="weekly-progress-value">{tempo_semana_horas:.1f}h / {meta_horas}h</div>
+            <div class="modern-progress-container">
+                <div class="modern-progress-fill" style="width: {progresso_horas}%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
+        st.markdown(f"""
+        <div class="weekly-progress-container">
+            <div class="weekly-progress-label">Questões</div>
+            <div class="weekly-progress-value">{int(questoes_semana)} / {meta_questoes}</div>
+            <div class="modern-progress-container">
+                <div class="modern-progress-fill" style="width: {progresso_questoes}%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
     st.markdown('<h1 class="main-title">🎯 Central de Comando</h1>', unsafe_allow_html=True)
@@ -369,8 +637,7 @@ else:
         df = pd.DataFrame(res.data)
     except: df = pd.DataFrame()
     
-    # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
-    # Agora busca da tabela correta: editais_materias
+    # Busca a data da prova diretamente da tabela editais_materias
     try:
         res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
         if res_data_prova.data and len(res_data_prova.data) > 0:
@@ -401,20 +668,20 @@ else:
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
 
-    # --- ABA: HOME (PAINEL GERAL) ---
+    # --- ABA: HOME (PAINEL GERAL) - MODIFICADA COM NOVAS FUNCIONALIDADES ---
     if menu == "Home":
         st.markdown('<h2 class="main-title">🏠 Home — Painel Geral</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Visão rápida: tempo, precisão, streak e contagem regressiva</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Visão completa do seu desempenho e constância nos estudos</p>', unsafe_allow_html=True)
 
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # Métricas principais
+            # --- SEÇÃO 1: MÉTRICAS PRINCIPAIS (4 CARTÕES) ---
             t_q = df['total'].sum()
             a_q = df['acertos'].sum()
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
             minutos_totais = int(df['tempo'].sum())
-            streak = calcular_streak(df)
+            streak_atual = calcular_streak(df)
 
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             with c1:
@@ -422,9 +689,9 @@ else:
             with c2:
                 render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
             with c3:
-                render_metric_card("Streak", f"{streak} 🔥", "🔥")
+                render_metric_card("Streak", f"{streak_atual} 🔥", "🔥")
             with c4:
-                # Countdown da prova - AGORA USA A DATA DA TABELA CORRETA
+                # Countdown da prova
                 dias_restantes = None
                 if data_prova_direta:
                     try:
@@ -439,28 +706,64 @@ else:
                     render_metric_card("Dias para a Prova", "—", "📅")
 
             st.divider()
+            
+            # --- SEÇÃO 2: CONSTÂNCIA NOS ESTUDOS (STREAK) ---
+            record_streak = calcular_record_streak(df)
+            render_streak_display(streak_atual, record_streak)
+            
+            st.divider()
+            
+            # --- SEÇÃO 3: PAINEL DE DISCIPLINAS (TABELA) ---
+            st.markdown('<h3 style="color:#fff; margin-bottom:15px;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
+            render_tabela_disciplinas(df)
+            
+            st.divider()
+            
+            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
+            st.markdown('<h3 style="color:#fff; margin-bottom:15px;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
+            
+            # Calcula progresso da semana
+            tempo_semana_horas, questoes_semana, _, _ = calcular_progresso_semanal(
+                df, 
+                st.session_state.meta_horas, 
+                st.session_state.meta_questoes
+            )
+            
+            # Renderiza as metas
+            render_metas_semanais(
+                tempo_semana_horas, 
+                questoes_semana, 
+                st.session_state.meta_horas, 
+                st.session_state.meta_questoes
+            )
+            
+            # Configuração das metas (em um expander)
+            with st.expander("⚙️ Configurar Metas Semanais"):
+                col_meta1, col_meta2 = st.columns(2)
+                with col_meta1:
+                    nova_meta_horas = st.number_input(
+                        "Meta de Horas", 
+                        min_value=1, 
+                        max_value=100, 
+                        value=st.session_state.meta_horas,
+                        step=1
+                    )
+                with col_meta2:
+                    nova_meta_questoes = st.number_input(
+                        "Meta de Questões", 
+                        min_value=10, 
+                        max_value=1000, 
+                        value=st.session_state.meta_questoes,
+                        step=10
+                    )
+                
+                if st.button("💾 Salvar Metas", use_container_width=True):
+                    st.session_state.meta_horas = nova_meta_horas
+                    st.session_state.meta_questoes = nova_meta_questoes
+                    st.success("Metas atualizadas com sucesso!")
+                    st.rerun()
 
-            # Status por disciplina (barras de progresso)
-            st.markdown('<h3 style="margin-top:1rem; color:#fff;">Status por Disciplina</h3>', unsafe_allow_html=True)
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean', 'tempo': 'sum'}).reset_index()
-            for _, row in df_mat.iterrows():
-                pct = float(row['taxa']) if not pd.isna(row['taxa']) else 0
-                tempo_mat = int(row['tempo'])
-                badge = get_badge_cor(pct)
-                st.markdown(f"<div class='modern-card' style='padding:12px;'>", unsafe_allow_html=True)
-                cols = st.columns([4, 1])
-                with cols[0]:
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; align-items:center;'><strong style='color:#fff;'>{row['materia']}</strong><span class='{badge}' style='font-size:0.85rem;padding:4px 8px;border-radius:8px;'>{pct:.1f}%</span></div>", unsafe_allow_html=True)
-                    st.markdown(f"""
-                        <div class="modern-progress-container" style="margin-top:8px;">
-                            <div class="modern-progress-fill" style="width: {pct}%;"></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with cols[1]:
-                    st.markdown(f"<div style='text-align:right; color:#adb5bd;'>{formatar_minutos(tempo_mat)}</div>", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- ABA: REVISÕES ---
+    # --- ABA: REVISÕES (mantida igual) ---
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
