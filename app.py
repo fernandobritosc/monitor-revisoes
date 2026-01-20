@@ -338,6 +338,11 @@ st.markdown("""
         margin-top: 5px;
     }
     
+    /* Estilo para os filtros do Radar de Revisões */
+    .stSegmentedControl {
+        margin-bottom: 10px;
+    }
+    
     </style>
 """, unsafe_allow_html=True)
 
@@ -737,47 +742,45 @@ else:
                 df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
                 df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
                 
-                # Criar tabela HTML CORRIGIDA
-                tabela_html = """
-                <table class="disciplina-table">
-                    <thead>
-                        <tr>
-                            <th>DISCIPLINAS</th>
-                            <th>TEMPO</th>
-                            <th>✓</th>
-                            <th>✗</th>
-                            <th>🎉</th>
-                            <th>%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                """
-                
-                for _, row in df_disciplinas.iterrows():
-                    # Determinar cor da taxa
-                    taxa = int(row['taxa_formatada'])
-                    if taxa >= 80:
-                        taxa_cor = "#00FF00"
-                    elif taxa >= 70:
-                        taxa_cor = "#FFD700"
-                    else:
-                        taxa_cor = "#FF4B4B"
-                    
-                    tabela_html += f"""
-                        <tr>
-                            <td><strong>{row['materia']}</strong></td>
-                            <td>{row['tempo_formatado']}</td>
-                            <td>{int(row['acertos'])}</td>
-                            <td>{int(row['erros'])}</td>
-                            <td>{int(row['total'])}</td>
-                            <td style="color: {taxa_cor}; font-weight: 700;">{taxa}</td>
-                        </tr>
-                    """
-                
-                tabela_html += "</tbody></table>"
-                
+                # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown(tabela_html, unsafe_allow_html=True)
+                
+                # Criar DataFrame para display
+                display_df = pd.DataFrame({
+                    'DISCIPLINAS': df_disciplinas['materia'],
+                    'TEMPO': df_disciplinas['tempo_formatado'],
+                    '✓': df_disciplinas['acertos'].astype(int),
+                    '✗': df_disciplinas['erros'].astype(int),
+                    '🎉': df_disciplinas['total'].astype(int),
+                    '%': df_disciplinas['taxa_formatada']
+                })
+                
+                # Exibir tabela usando st.dataframe com formatação condicional
+                def color_taxa(val):
+                    if val >= 80:
+                        return 'color: #00FF00; font-weight: 700;'
+                    elif val >= 70:
+                        return 'color: #FFD700; font-weight: 700;'
+                    else:
+                        return 'color: #FF4B4B; font-weight: 700;'
+                
+                styled_df = display_df.style.applymap(color_taxa, subset=['%'])
+                
+                # Mostrar tabela
+                st.dataframe(
+                    styled_df,
+                    column_config={
+                        "DISCIPLINAS": st.column_config.Column(width="large"),
+                        "TEMPO": st.column_config.Column(width="medium"),
+                        "✓": st.column_config.Column(width="small"),
+                        "✗": st.column_config.Column(width="small"),
+                        "🎉": st.column_config.Column(width="small"),
+                        "%": st.column_config.Column(width="small")
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
                 st.markdown('</div>', unsafe_allow_html=True)
             
             # --- SEÇÃO 3: METAS DE ESTUDO SEMANAL ---
@@ -907,11 +910,23 @@ else:
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
+        # CORREÇÃO: Filtros organizados corretamente
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
-            filtro_rev = st.segmented_control("Visualizar:", ["Pendentes/Hoje", "Todas (incluindo futuras)"], default="Pendentes/Hoje")
+            filtro_rev = st.segmented_control(
+                "Visualizar:", 
+                ["Pendentes/Hoje", "Todas (incluindo futuras)"], 
+                default="Pendentes/Hoje",
+                key="filtro_rev"
+            )
         with c2:
-            filtro_dif = st.segmented_control("Dificuldade:", ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], default="Todas")
+            # CORREÇÃO: Ordem corrigida para mostrar Fácil ao lado de Médio
+            filtro_dif = st.segmented_control(
+                "Dificuldade:", 
+                ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], 
+                default="Todas",
+                key="filtro_dif"
+            )
     
         # Usar função com cache para melhor performance
         pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
@@ -922,17 +937,25 @@ else:
             pend = sorted(pend, key=lambda x: (x['dificuldade'] != "🔴 Difícil", x['data_prevista']))
             
             # 📊 Resumo rápido
+            st.markdown("##### 📊 Resumo de Revisões Pendentes")
             col_res1, col_res2, col_res3 = st.columns(3)
+            
+            # Contar por dificuldade
             dif_count = len([p for p in pend if p['dificuldade'] == "🔴 Difícil"])
             med_count = len([p for p in pend if p['dificuldade'] == "🟡 Médio"])
             fac_count = len([p for p in pend if p['dificuldade'] == "🟢 Fácil"])
             
-            col_res1.metric("🔴 Difícil", dif_count)
-            col_res2.metric("🟡 Médio", med_count)
-            col_res3.metric("🟢 Fácil", fac_count)
+            with col_res1:
+                st.metric("🔴 Difícil", dif_count)
+            with col_res2:
+                st.metric("🟡 Médio", med_count)
+            with col_res3:
+                st.metric("🟢 Fácil", fac_count)
             
             st.divider()
             
+            # Listar revisões pendentes
+            st.markdown("##### 📋 Lista de Revisões")
             for p in pend:
                 with st.container():
                     st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -961,23 +984,33 @@ else:
                                 st.info(p['coment'])
                     
                     with c_input:
+                        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
                         ci1, ci2 = st.columns(2)
-                        acr_rev = ci1.number_input("Acertos", 0, key=f"ac_{p['id']}_{p['col']}")
-                        tor_rev = ci2.number_input("Total", 0, key=f"to_{p['id']}_{p['col']}")
+                        acr_rev = ci1.number_input("Acertos", 0, key=f"ac_{p['id']}_{p['col']}", help="Acertos na revisão")
+                        tor_rev = ci2.number_input("Total", 0, key=f"to_{p['id']}_{p['col']}", help="Total de questões na revisão")
+                        st.markdown('</div>', unsafe_allow_html=True)
                     
                     with c_action:
                         st.write("") # Alinhamento
                         if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
-                            res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
-                            n_ac = res_db.data[0]['acertos'] + acr_rev
-                            n_to = res_db.data[0]['total'] + tor_rev
-                            supabase.table("registros_estudos").update({
-                                p['col']: True, 
-                                "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
-                                "acertos": n_ac, "total": n_to, 
-                                "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
-                            }).eq("id", p['id']).execute()
-                            st.rerun()
+                            try:
+                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
+                                if res_db.data:
+                                    n_ac = res_db.data[0]['acertos'] + acr_rev
+                                    n_to = res_db.data[0]['total'] + tor_rev
+                                    supabase.table("registros_estudos").update({
+                                        p['col']: True, 
+                                        "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
+                                        "acertos": n_ac, "total": n_to, 
+                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
+                                    }).eq("id", p['id']).execute()
+                                    st.success("✅ Revisão concluída!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Erro ao buscar dados do registro.")
+                            except Exception as e:
+                                st.error(f"❌ Erro ao concluir revisão: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: REGISTRAR ---
