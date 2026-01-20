@@ -67,6 +67,25 @@ st.markdown("""
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
+    
+    /* AJUSTE 1: Conteúdo principal expande quando sidebar encolhe */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Quando a sidebar está recolhida, expandir mais o conteúdo */
+    [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* Quando a sidebar está expandida, manter padding normal */
+    [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+        padding-left: 5rem !important;
+        padding-right: 5rem !important;
+    }
 
     /* Estilo dos Cards (Glassmorphism) */
     .modern-card {
@@ -302,45 +321,164 @@ st.markdown("""
         margin-top: 20px;
     }
     
-    /* Streak Card */
+    /* Streak Card REVISADO */
     .streak-card {
         background: rgba(26, 28, 35, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 25px;
-        text-align: center;
         margin: 20px 0;
     }
     
     .streak-title {
         color: #adb5bd;
         font-size: 1.2rem;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
+        font-weight: 600;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .streak-value-container {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        margin: 20px 0;
+        gap: 20px;
+    }
+    
+    .streak-value-box {
+        flex: 1;
+        text-align: center;
+        padding: 15px;
+        background: rgba(255, 75, 75, 0.1);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 75, 75, 0.2);
+    }
+    
+    .streak-value-label {
+        color: #FF8E8E;
+        font-size: 1rem;
+        margin-bottom: 8px;
         font-weight: 600;
     }
     
-    .streak-value {
-        font-size: 3rem;
+    .streak-value-number {
+        font-size: 2.5rem;
         font-weight: 800;
         color: #FF4B4B;
-        margin: 10px 0;
-    }
-    
-    .streak-subtitle {
-        color: #FF8E8E;
-        font-size: 1rem;
-        margin-top: 10px;
+        margin: 5px 0;
     }
     
     .streak-period {
         color: #adb5bd;
         font-size: 0.9rem;
         margin-top: 5px;
+        text-align: center;
+    }
+    
+    /* Calendário de estudos - BOLINHAS */
+    .calendario-container {
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .calendario-title {
+        color: #adb5bd;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .calendario-grid {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .dia-calendario {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .dia-estudado {
+        background: rgba(0, 255, 0, 0.2);
+        border: 2px solid rgba(0, 255, 0, 0.5);
+        color: #00FF00;
+    }
+    
+    .dia-nao-estudado {
+        background: rgba(255, 75, 75, 0.1);
+        border: 2px solid rgba(255, 75, 75, 0.3);
+        color: #FF4B4B;
+    }
+    
+    .dia-hoje {
+        background: rgba(255, 215, 0, 0.2);
+        border: 2px solid rgba(255, 215, 0, 0.5);
+        color: #FFD700;
+    }
+    
+    .dia-calendario:hover {
+        transform: scale(1.2);
+        box-shadow: 0 0 10px rgba(255, 75, 75, 0.5);
+    }
+    
+    .dia-numero {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .dia-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s;
+        z-index: 1000;
+    }
+    
+    .dia-calendario:hover .dia-tooltip {
+        opacity: 1;
+        visibility: visible;
     }
     
     /* Estilo para os filtros do Radar de Revisões */
     .stSegmentedControl {
         margin-bottom: 10px;
+    }
+    
+    /* Ajuste de responsividade */
+    @media (max-width: 768px) {
+        .streak-value-container {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .streak-value-box {
+            width: 100%;
+        }
     }
     
     </style>
@@ -481,6 +619,37 @@ def calcular_estudos_semana(df):
         return horas_semana, questoes_semana
     except Exception:
         return 0, 0
+
+# --- NOVA FUNÇÃO: Calendário de estudos com bolinhas ---
+def gerar_calendario_estudos(df, dias=30):
+    """Gera um calendário dos últimos dias com indicação de estudo."""
+    if df is None or df.empty:
+        return []
+    
+    hoje = datetime.date.today()
+    calendario = []
+    
+    try:
+        # Converte datas de estudo para conjunto de datas
+        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
+        
+        # Gera os últimos X dias
+        for i in range(dias-1, -1, -1):
+            data = hoje - datetime.timedelta(days=i)
+            estudou = data in datas_estudo
+            
+            calendario.append({
+                'data': data,
+                'dia': data.day,
+                'dia_semana': data.strftime('%a'),
+                'mes_ano': data.strftime('%b/%y'),
+                'estudou': estudou,
+                'hoje': data == hoje
+            })
+    except Exception:
+        pass
+    
+    return calendario
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -708,24 +877,117 @@ else:
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # --- SEÇÃO 1: CONSTÂNCIA NOS ESTUDOS ---
+            # --- AJUSTE 2: MÉTRICAS RÁPIDAS NO TOPO ---
+            st.markdown('<h3 style="margin-top:1rem; color:#fff;">⚡ MÉTRICAS RÁPIDAS</h3>', unsafe_allow_html=True)
+            
+            t_q = df['total'].sum()
+            a_q = df['acertos'].sum()
+            precisao = (a_q / t_q * 100) if t_q > 0 else 0
+            minutos_totais = int(df['tempo'].sum())
+            
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            with c1:
+                render_metric_card("Tempo Total", formatar_minutos(minutos_totais), "⏱️")
+            with c2:
+                render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+            with c3:
+                render_metric_card("Questões", f"{int(t_q)}", "📝")
+            with c4:
+                dias_restantes = None
+                if data_prova_direta:
+                    try:
+                        dt_prova = pd.to_datetime(data_prova_direta).date()
+                        dias_restantes = (dt_prova - datetime.date.today()).days
+                    except Exception:
+                        dias_restantes = None
+                
+                if dias_restantes is not None:
+                    render_metric_card("Dias para a Prova", f"{dias_restantes}", "📅")
+                else:
+                    render_metric_card("Data da Prova", "—", "📅")
+            
+            st.divider()
+
+            # --- AJUSTE 3: CONSTÂNCIA NOS ESTUDOS COM BOLINHAS ---
             st.markdown('<div class="streak-card">', unsafe_allow_html=True)
             
             streak = calcular_streak(df)
             recorde = calcular_recorde_streak(df)
             inicio_streak, fim_streak = calcular_datas_streak(df)
+            calendario = gerar_calendario_estudos(df, dias=30)
             
             st.markdown('<div class="streak-title">CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="streak-value">Você está há <strong>{streak} dias</strong> sem falhar!</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="streak-subtitle">Seu recorde é de <strong>{recorde} dias</strong>.</div>', unsafe_allow_html=True)
             
+            # Duas frases com tamanho igual e proporcional
+            st.markdown('<div class="streak-value-container">', unsafe_allow_html=True)
+            
+            # Box 1: Streak atual
+            st.markdown('''
+            <div class="streak-value-box">
+                <div class="streak-value-label">STREAK ATUAL</div>
+                <div class="streak-value-number">{}</div>
+                <div style="color: #FF8E8E; font-size: 0.9rem;">dias sem falhar</div>
+            </div>
+            '''.format(streak), unsafe_allow_html=True)
+            
+            # Box 2: Recorde
+            st.markdown('''
+            <div class="streak-value-box">
+                <div class="streak-value-label">SEU RECORDE</div>
+                <div class="streak-value-number">{}</div>
+                <div style="color: #FF8E8E; font-size: 0.9rem;">dias consecutivos</div>
+            </div>
+            '''.format(recorde), unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Período do streak atual
             if inicio_streak and fim_streak:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} ~ {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div class="streak-period">{data_formatada}</div>', unsafe_allow_html=True)
             
+            # Calendário de bolinhas
+            if calendario:
+                st.markdown('<div class="calendario-container">', unsafe_allow_html=True)
+                st.markdown('<div class="calendario-title">Últimos 30 dias</div>', unsafe_allow_html=True)
+                
+                # Criar grid de bolinhas
+                st.markdown('<div class="calendario-grid">', unsafe_allow_html=True)
+                
+                for dia in calendario:
+                    if dia['hoje']:
+                        classe_dia = "dia-hoje"
+                        tooltip = f"HOJE - {dia['dia']}/{dia['mes_ano']}"
+                    elif dia['estudou']:
+                        classe_dia = "dia-estudado"
+                        tooltip = f"✓ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Estudou"
+                    else:
+                        classe_dia = "dia-nao-estudado"
+                        tooltip = f"✗ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Não estudou"
+                    
+                    st.markdown(f'''
+                    <div class="dia-calendario {classe_dia}">
+                        <div class="dia-numero">{dia['dia']}</div>
+                        <div class="dia-tooltip">{tooltip}</div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Legenda
+                col_leg1, col_leg2, col_leg3 = st.columns(3)
+                with col_leg1:
+                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-estudado" style="margin-right: 8px;"><div class="dia-numero">✓</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Estudou</span></div>', unsafe_allow_html=True)
+                with col_leg2:
+                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-nao-estudado" style="margin-right: 8px;"><div class="dia-numero">✗</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Não estudou</span></div>', unsafe_allow_html=True)
+                with col_leg3:
+                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-hoje" style="margin-right: 8px;"><div class="dia-numero">H</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Hoje</span></div>', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- SEÇÃO 2: PAINEL DE DISCIPLINAS ---
+            # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
             
             if not df.empty:
@@ -783,7 +1045,7 @@ else:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # --- SEÇÃO 3: METAS DE ESTUDO SEMANAL ---
+            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
             
             # Estado para controlar a edição das metas
@@ -876,35 +1138,6 @@ else:
                     <div class="meta-subtitle">{int(questoes_semana)} de {meta_questoes} questões</div>
                 </div>
                 ''', unsafe_allow_html=True)
-
-            # --- SEÇÃO 4: MÉTRICAS RÁPIDAS ---
-            st.markdown('<h3 style="margin-top:2rem; color:#fff;">⚡ MÉTRICAS RÁPIDAS</h3>', unsafe_allow_html=True)
-            
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
-            precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df['tempo'].sum())
-            
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-            with c1:
-                render_metric_card("Tempo Total", formatar_minutos(minutos_totais), "⏱️")
-            with c2:
-                render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-            with c3:
-                render_metric_card("Questões", f"{int(t_q)}", "📝")
-            with c4:
-                dias_restantes = None
-                if data_prova_direta:
-                    try:
-                        dt_prova = pd.to_datetime(data_prova_direta).date()
-                        dias_restantes = (dt_prova - datetime.date.today()).days
-                    except Exception:
-                        dias_restantes = None
-                
-                if dias_restantes is not None:
-                    render_metric_card("Dias para a Prova", f"{dias_restantes}", "📅")
-                else:
-                    render_metric_card("Data da Prova", "—", "📅")
 
     # --- ABA: REVISÕES ---
     elif menu == "Revisões":
