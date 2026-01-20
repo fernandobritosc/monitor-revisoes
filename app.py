@@ -1,4 +1,4 @@
-# app.py (corrigido e completo)
+# app.py (sem bolinhas, apenas números horizontais)
 
 import streamlit as st
 import pandas as pd
@@ -117,7 +117,7 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS dos números da sidebar)
+# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS das bolinhas)
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -446,119 +446,12 @@ st.markdown("""
         display: inline-block;
     }
     
-    .calendario-grid {
-        display: flex !important;
-        flex-direction: row !important; /* FORÇA ficar na horizontal */
-        flex-wrap: wrap !important;     /* Permite pular linha se acabar o espaço */
-        justify-content: center !important;
-        gap: 6px !important;
-        margin-top: 10px;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        width: 100%;
-    }
-    
-    .dia-estudado {
-        background: linear-gradient(135deg, #00FF00, #00CC00);
-        border: 2px solid rgba(0, 255, 0, 0.7);
-        color: #fff;
-    }
-    
-    .dia-nao-estudado {
-        background: linear-gradient(135deg, #FF4B4B, #CC0000);
-        border: 2px solid rgba(255, 75, 75, 0.7);
-        color: #fff;
-    }
-    
-    .dia-hoje {
-        background: linear-gradient(135deg, #FFD700, #FFA500);
-        border: 2px solid rgba(255, 215, 0, 0.7);
-        color: #000;
-        animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
-        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
-        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
-    }
-    
-    .dia-calendario:hover {
-        transform: scale(1.15);
-        box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
-        z-index: 10;
-    }
-    
-    .dia-numero {
-        font-size: 0.85rem;
-        font-weight: 700;
-    }
-    
-    .dia-tooltip {
-        position: absolute;
-        bottom: calc(100% + 10px);
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.95);
-        color: white;
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 0.8rem;
-        white-space: nowrap;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s, visibility 0.3s;
-        z-index: 1000;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-    
-    .dia-tooltip::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
-    }
-    
-    .dia-calendario:hover .dia-tooltip {
-        opacity: 1;
-        visibility: visible;
-    }
-    
-    /* Legenda do calendário */
-    .legenda-calendario {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 25px;
-        margin-top: 20px;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .legenda-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: #adb5bd;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-    
     /* Estilo para os filtros do Radar de Revisões */
     .stSegmentedControl {
         margin-bottom: 10px;
     }
     
-    /* Números de 1 a 31 em linha horizontal ÚNICA - CORRIGIDO */
+    /* Números de 1 a 31 em linha horizontal ÚNICA - MANTIDO */
     .numeros-mes-container {
         display: flex;
         flex-wrap: nowrap;
@@ -689,20 +582,6 @@ st.markdown("""
         
         .streak-value-box {
             width: 100%;
-        }
-        
-        .calendario-grid {
-            gap: 5px;
-        }
-        
-        .dia-calendario {
-            width: 35px;
-            height: 35px;
-        }
-        
-        .legenda-calendario {
-            flex-direction: row;
-            gap: 15px;
         }
         
         .numero-dia {
@@ -851,48 +730,9 @@ def calcular_estudos_semana(df):
     except Exception:
         return 0, 0
 
-# --- FUNÇÃO MELHORADA: Calendário de estudos com bolinhas ---
-def gerar_calendario_estudos(df, dias=31):
-    """Gera um calendário dos últimos dias com indicação de estudo."""
-    if df is None or df.empty:
-        return []
-    
-    hoje = datetime.date.today()
-    calendario = []
-    
-    try:
-        # Converte datas de estudo para conjunto de datas
-        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
-        
-        # Gera os últimos X dias
-        for i in range(dias-1, -1, -1):
-            data = hoje - datetime.timedelta(days=i)
-            estudou = data in datas_estudo
-            
-            calendario.append({
-                'data': data,
-                'dia': data.day,
-                'dia_semana': data.strftime('%a'),
-                'mes_ano': data.strftime('%b/%y'),
-                'estudou': estudou,
-                'hoje': data == hoje
-            })
-    except Exception:
-        # Se houver erro, gera calendário vazio
-        for i in range(31):
-            data = datetime.date.today() - datetime.timedelta(days=30-i)
-            calendario.append({
-                'data': data,
-                'dia': data.day,
-                'dia_semana': data.strftime('%a'),
-                'mes_ano': data.strftime('%b/%y'),
-                'estudou': False,
-                'hoje': data == hoje
-            })
-    
-    return calendario
+# --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
 
-# --- FUNÇÃO CORRIGIDA: Gerar números de 1 a 31 para visualização ---
+# --- FUNÇÃO MANTIDA: Gerar números de 1 a 31 para visualização horizontal ---
 def gerar_numeros_mes(df):
     """Gera os números de 1 a 31 com indicação visual."""
     hoje = datetime.date.today()
@@ -1150,7 +990,7 @@ else:
         else:
             menu = "Home"
 
-    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO conforme imagem ---
+    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO sem bolinhas ---
     if menu == "Home":
         # Título principal
         st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
@@ -1196,13 +1036,12 @@ else:
             
             st.divider()
 
-            # --- SEÇÃO DE CONSTÂNCIA MELHORADA ---
+            # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM BOLINHAS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
             streak = calcular_streak(df)
             recorde = calcular_recorde_streak(df)
             inicio_streak, fim_streak = calcular_datas_streak(df)
-            calendario = gerar_calendario_estudos(df, dias=31)
             
             st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
             st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
@@ -1253,38 +1092,57 @@ else:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
-            # Calendário de bolinhas - ÚLTIMOS 31 DIAS
-            if calendario:
-                st.markdown('<div class="calendario-container">', unsafe_allow_html=True)
-                st.markdown('<div class="calendario-title">ÚLTIMOS 31 DIAS</div>', unsafe_allow_html=True)
+            # --- LINHA HORIZONTAL COM NÚMEROS DO MÊS (1-31) ---
+            st.markdown('<div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%;">', unsafe_allow_html=True)
+            st.markdown('<div style="color: #adb5bd; font-size: 0.9rem; margin-bottom: 15px; text-align: center; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">DIAS DO MÊS ATUAL</div>', unsafe_allow_html=True)
+            
+            # Gerar números do mês
+            numeros_mes = gerar_numeros_mes(df)
+            
+            # Mostrar os números em linha horizontal
+            st.markdown('<div class="numeros-mes-container">', unsafe_allow_html=True)
+            
+            for num_info in numeros_mes:
+                if num_info['hoje']:
+                    classe = "numero-dia hoje"
+                    tooltip = f"HOJE - {num_info['numero']}/{datetime.date.today().month}"
+                elif num_info['estudou']:
+                    classe = "numero-dia estudou"
+                    tooltip = f"✓ Dia {num_info['numero']} - Estudou"
+                else:
+                    classe = "numero-dia"
+                    tooltip = f"✗ Dia {num_info['numero']} - Não estudou"
                 
-                # Criar grid de bolinhas
-                st.markdown('<div class="calendario-grid">', unsafe_allow_html=True)
-                
-                for dia in calendario:
-                    if dia['hoje']:
-                        classe_dia = "dia-hoje"
-                        tooltip = f"HOJE - {dia['dia']}/{dia['mes_ano']}"
-                        emoji = "H"
-                    elif dia['estudou']:
-                        classe_dia = "dia-estudado"
-                        tooltip = f"✓ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Estudou"
-                        emoji = "✓"
-                    else:
-                        classe_dia = "dia-nao-estudado"
-                        tooltip = f"✗ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Não estudou"
-                        emoji = "✗"
-                    
-                    st.markdown(f'''
-                    <div class="dia-calendario {classe_dia}">
-                        <div class="dia-numero">{emoji}</div>
-                        <div class="dia-tooltip">{tooltip}</div>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                
+                st.markdown(f'''
+                <div class="{classe}">
+                    {num_info['numero']}
+                    <div class="numero-tooltip">{tooltip}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Legenda simplificada
+            st.markdown('''
+            <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 15px; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <div style="display: flex; align-items: center; gap: 8px; color: #adb5bd; font-size: 0.8rem;">
+                    <div class="numero-dia estudou" style="width: 20px; height: 20px; font-size: 10px;">✓</div>
+                    <span>Estudou</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; color: #adb5bd; font-size: 0.8rem;">
+                    <div class="numero-dia" style="width: 20px; height: 20px; font-size: 10px;">✗</div>
+                    <span>Não estudou</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; color: #adb5bd; font-size: 0.8rem;">
+                    <div class="numero-dia hoje" style="width: 20px; height: 20px; font-size: 10px;">H</div>
+                    <span>Hoje</span>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)  # Fecha container números
+            
+            st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
