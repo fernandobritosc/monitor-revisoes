@@ -41,6 +41,13 @@ if 'missao_ativa' not in st.session_state:
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
+# Inicializar estados das metas semanais
+if 'meta_horas_semana' not in st.session_state:
+    st.session_state.meta_horas_semana = 22  # Valor padrão
+
+if 'meta_questoes_semana' not in st.session_state:
+    st.session_state.meta_questoes_semana = 350  # Valor padrão
+
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
@@ -191,35 +198,44 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* Tabela de Disciplinas */
+    /* Tabela de Disciplinas - CORRIGIDA */
     .disciplina-table {
         width: 100%;
         border-collapse: collapse;
         margin: 20px 0;
+        background: rgba(26, 28, 35, 0.3);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .disciplina-table thead {
+        background: rgba(255, 75, 75, 0.1);
     }
     
     .disciplina-table th {
         text-align: left;
-        padding: 15px;
+        padding: 18px 15px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        color: #adb5bd;
-        font-weight: 600;
+        color: #FF8E8E;
+        font-weight: 700;
         text-transform: uppercase;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
+        letter-spacing: 1px;
     }
     
     .disciplina-table td {
-        padding: 15px;
+        padding: 16px 15px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         color: #fff;
+        font-size: 0.95rem;
     }
     
     .disciplina-table tr:hover {
         background-color: rgba(255, 75, 75, 0.05);
     }
     
-    .disciplina-table .progress-cell {
-        width: 200px;
+    .disciplina-table tr:last-child td {
+        border-bottom: none;
     }
     
     /* Metas Cards */
@@ -230,6 +246,7 @@ st.markdown("""
         padding: 25px;
         text-align: center;
         height: 100%;
+        position: relative;
     }
     
     .meta-title {
@@ -255,6 +272,34 @@ st.markdown("""
         color: #FF8E8E;
         font-size: 0.9rem;
         margin-top: 10px;
+    }
+    
+    .meta-edit-btn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(255, 75, 75, 0.1);
+        border: 1px solid rgba(255, 75, 75, 0.3);
+        border-radius: 6px;
+        padding: 6px 10px;
+        color: #FF8E8E;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.3s;
+    }
+    
+    .meta-edit-btn:hover {
+        background: rgba(255, 75, 75, 0.2);
+        border-color: rgba(255, 75, 75, 0.5);
+    }
+    
+    /* Modal de Configuração de Metas */
+    .meta-modal {
+        background: rgba(26, 28, 35, 0.95);
+        border: 1px solid rgba(255, 75, 75, 0.3);
+        border-radius: 12px;
+        padding: 25px;
+        margin-top: 20px;
     }
     
     /* Streak Card */
@@ -415,7 +460,7 @@ def calcular_datas_streak(df):
 def calcular_estudos_semana(df):
     """Calcula o total de horas e questões da semana atual."""
     if df is None or df.empty:
-        return 0, 0, 0
+        return 0, 0
     
     hoje = datetime.date.today()
     inicio_semana = hoje - datetime.timedelta(days=hoje.weekday())  # Segunda-feira
@@ -428,13 +473,9 @@ def calcular_estudos_semana(df):
         horas_semana = df_semana['tempo'].sum() / 60
         questoes_semana = df_semana['total'].sum()
         
-        # Meta: 22 horas e 350 questões (valores das imagens)
-        meta_horas = 22
-        meta_questoes = 350
-        
-        return horas_semana, questoes_semana, meta_horas, meta_questoes
+        return horas_semana, questoes_semana
     except Exception:
-        return 0, 0, 22, 350
+        return 0, 0
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -696,13 +737,13 @@ else:
                 df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
                 df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
                 
-                # Criar tabela HTML
+                # Criar tabela HTML CORRIGIDA
                 tabela_html = """
                 <table class="disciplina-table">
                     <thead>
                         <tr>
-                            <th>Disciplinas</th>
-                            <th>Tempo</th>
+                            <th>DISCIPLINAS</th>
+                            <th>TEMPO</th>
                             <th>✓</th>
                             <th>✗</th>
                             <th>🎉</th>
@@ -714,7 +755,13 @@ else:
                 
                 for _, row in df_disciplinas.iterrows():
                     # Determinar cor da taxa
-                    taxa_cor = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 70 else "#FF4B4B"
+                    taxa = int(row['taxa_formatada'])
+                    if taxa >= 80:
+                        taxa_cor = "#00FF00"
+                    elif taxa >= 70:
+                        taxa_cor = "#FFD700"
+                    else:
+                        taxa_cor = "#FF4B4B"
                     
                     tabela_html += f"""
                         <tr>
@@ -723,7 +770,7 @@ else:
                             <td>{int(row['acertos'])}</td>
                             <td>{int(row['erros'])}</td>
                             <td>{int(row['total'])}</td>
-                            <td style="color: {taxa_cor}; font-weight: 700;">{int(row['taxa_formatada'])}</td>
+                            <td style="color: {taxa_cor}; font-weight: 700;">{taxa}</td>
                         </tr>
                     """
                 
@@ -736,8 +783,65 @@ else:
             # --- SEÇÃO 3: METAS DE ESTUDO SEMANAL ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
             
-            horas_semana, questoes_semana, meta_horas, meta_questoes = calcular_estudos_semana(df)
+            # Estado para controlar a edição das metas
+            if 'editando_metas' not in st.session_state:
+                st.session_state.editando_metas = False
             
+            horas_semana, questoes_semana = calcular_estudos_semana(df)
+            meta_horas = st.session_state.meta_horas_semana
+            meta_questoes = st.session_state.meta_questoes_semana
+            
+            # Botão para editar metas
+            if st.button("⚙️ Configurar Metas", key="btn_config_metas"):
+                st.session_state.editando_metas = not st.session_state.editando_metas
+                st.rerun()
+            
+            # Modal de edição de metas
+            if st.session_state.editando_metas:
+                with st.container():
+                    st.markdown('<div class="meta-modal">', unsafe_allow_html=True)
+                    st.markdown("##### 📝 Configurar Metas Semanais")
+                    
+                    with st.form("form_metas_semanais"):
+                        col_meta1, col_meta2 = st.columns(2)
+                        
+                        with col_meta1:
+                            nova_meta_horas = st.number_input(
+                                "Horas de estudo semanais",
+                                min_value=1,
+                                max_value=100,
+                                value=meta_horas,
+                                step=1,
+                                help="Meta de horas de estudo por semana"
+                            )
+                        
+                        with col_meta2:
+                            nova_meta_questoes = st.number_input(
+                                "Questões semanais",
+                                min_value=1,
+                                max_value=1000,
+                                value=meta_questoes,
+                                step=10,
+                                help="Meta de questões resolvidas por semana"
+                            )
+                        
+                        col_btn1, col_btn2 = st.columns(2)
+                        
+                        if col_btn1.form_submit_button("💾 Salvar Metas", use_container_width=True, type="primary"):
+                            st.session_state.meta_horas_semana = nova_meta_horas
+                            st.session_state.meta_questoes_semana = nova_meta_questoes
+                            st.session_state.editando_metas = False
+                            st.success("✅ Metas atualizadas com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                        
+                        if col_btn2.form_submit_button("❌ Cancelar", use_container_width=True, type="secondary"):
+                            st.session_state.editando_metas = False
+                            st.rerun()
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Cartões de metas
             col_meta1, col_meta2 = st.columns(2)
             
             with col_meta1:
@@ -745,7 +849,7 @@ else:
                 st.markdown(f'''
                 <div class="meta-card">
                     <div class="meta-title">Horas de Estudo</div>
-                    <div class="meta-value">{horas_semana:.0f}h/{meta_horas}h</div>
+                    <div class="meta-value">{horas_semana:.1f}h/{meta_horas}h</div>
                     <div class="meta-progress">
                         <div class="modern-progress-container">
                             <div class="modern-progress-fill" style="width: {progresso_horas}%;"></div>
@@ -949,7 +1053,7 @@ else:
                             st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD (REMOVIDA A DATA DA PROVA) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
