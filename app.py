@@ -321,7 +321,7 @@ st.markdown("""
         margin-top: 20px;
     }
     
-    /* Streak Card REVISADO */
+    /* Streak Card REVISADO E MELHORADO */
     .streak-card {
         background: rgba(26, 28, 35, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -351,117 +351,177 @@ st.markdown("""
     .streak-value-box {
         flex: 1;
         text-align: center;
-        padding: 15px;
-        background: rgba(255, 75, 75, 0.1);
-        border-radius: 10px;
+        padding: 20px;
+        background: linear-gradient(135deg, rgba(255, 75, 75, 0.15), rgba(255, 75, 75, 0.05));
+        border-radius: 12px;
         border: 1px solid rgba(255, 75, 75, 0.2);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     
     .streak-value-label {
         color: #FF8E8E;
         font-size: 1rem;
-        margin-bottom: 8px;
-        font-weight: 600;
+        margin-bottom: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     .streak-value-number {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: 800;
         color: #FF4B4B;
-        margin: 5px 0;
+        margin: 10px 0;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
     
     .streak-period {
         color: #adb5bd;
         font-size: 0.9rem;
-        margin-top: 5px;
+        margin-top: 15px;
         text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 8px 15px;
+        border-radius: 8px;
+        display: inline-block;
     }
     
-    /* Calendário de estudos - BOLINHAS */
+    /* Calendário de estudos - BOLINHAS MELHORADO */
     .calendario-container {
         margin-top: 25px;
         padding-top: 20px;
         border-top: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
     }
     
     .calendario-title {
         color: #adb5bd;
         font-size: 0.9rem;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
         text-align: center;
         text-transform: uppercase;
         letter-spacing: 1px;
+        font-weight: 600;
     }
     
     .calendario-grid {
         display: flex;
-        justify-content: center;
         flex-wrap: wrap;
-        gap: 8px;
+        justify-content: center;
+        gap: 6px;
         margin-top: 10px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
     
     .dia-calendario {
-        width: 30px;
-        height: 30px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
         cursor: pointer;
-        transition: all 0.3s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 600;
+        font-size: 0.9rem;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
     
     .dia-estudado {
-        background: rgba(0, 255, 0, 0.2);
-        border: 2px solid rgba(0, 255, 0, 0.5);
-        color: #00FF00;
+        background: linear-gradient(135deg, #00FF00, #00CC00);
+        border: 2px solid rgba(0, 255, 0, 0.7);
+        color: #fff;
     }
     
     .dia-nao-estudado {
-        background: rgba(255, 75, 75, 0.1);
-        border: 2px solid rgba(255, 75, 75, 0.3);
-        color: #FF4B4B;
+        background: linear-gradient(135deg, #FF4B4B, #CC0000);
+        border: 2px solid rgba(255, 75, 75, 0.7);
+        color: #fff;
     }
     
     .dia-hoje {
-        background: rgba(255, 215, 0, 0.2);
-        border: 2px solid rgba(255, 215, 0, 0.5);
-        color: #FFD700;
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        border: 2px solid rgba(255, 215, 0, 0.7);
+        color: #000;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
     }
     
     .dia-calendario:hover {
-        transform: scale(1.2);
-        box-shadow: 0 0 10px rgba(255, 75, 75, 0.5);
+        transform: scale(1.15);
+        box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
+        z-index: 10;
     }
     
     .dia-numero {
-        font-size: 0.8rem;
-        font-weight: 600;
+        font-size: 0.85rem;
+        font-weight: 700;
     }
     
     .dia-tooltip {
         position: absolute;
-        bottom: 100%;
+        bottom: calc(100% + 10px);
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.95);
         color: white;
-        padding: 5px 10px;
-        border-radius: 5px;
+        padding: 8px 12px;
+        border-radius: 8px;
         font-size: 0.8rem;
         white-space: nowrap;
         opacity: 0;
         visibility: hidden;
-        transition: opacity 0.3s;
+        transition: opacity 0.3s, visibility 0.3s;
         z-index: 1000;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .dia-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
     }
     
     .dia-calendario:hover .dia-tooltip {
         opacity: 1;
         visibility: visible;
+    }
+    
+    /* Legenda do calendário */
+    .legenda-calendario {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 25px;
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .legenda-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #adb5bd;
+        font-size: 0.85rem;
+        font-weight: 500;
     }
     
     /* Estilo para os filtros do Radar de Revisões */
@@ -473,11 +533,112 @@ st.markdown("""
     @media (max-width: 768px) {
         .streak-value-container {
             flex-direction: column;
-            gap: 10px;
+            gap: 15px;
         }
         
         .streak-value-box {
             width: 100%;
+        }
+        
+        .calendario-grid {
+            gap: 5px;
+        }
+        
+        .dia-calendario {
+            width: 35px;
+            height: 35px;
+        }
+        
+        .legenda-calendario {
+            flex-direction: column;
+            gap: 15px;
+        }
+    }
+    
+    /* Seção de Constância Melhorada */
+    .constancia-section {
+        margin-top: 30px;
+        padding: 25px;
+        background: linear-gradient(135deg, rgba(26, 28, 35, 0.9), rgba(26, 28, 35, 0.7));
+        border-radius: 15px;
+        border: 1px solid rgba(255, 75, 75, 0.2);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    
+    .constancia-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .constancia-title {
+        color: #fff;
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    /* Números de 1 a 31 em linha horizontal */
+    .numeros-mes-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 15px 0;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .numero-dia {
+        width: 35px;
+        height: 35px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #adb5bd;
+        background: rgba(255, 255, 255, 0.05);
+        transition: all 0.3s;
+    }
+    
+    .numero-dia.hoje {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        font-weight: 700;
+        border: 2px solid rgba(255, 215, 0, 0.7);
+    }
+    
+    .numero-dia.estudado {
+        background: rgba(0, 255, 0, 0.15);
+        color: #00FF00;
+        border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+    
+    .numero-dia:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Ajustes para responsividade dos números */
+    @media (max-width: 768px) {
+        .numeros-mes-container {
+            gap: 5px;
+        }
+        
+        .numero-dia {
+            width: 30px;
+            height: 30px;
+            font-size: 0.8rem;
         }
     }
     
@@ -620,8 +781,8 @@ def calcular_estudos_semana(df):
     except Exception:
         return 0, 0
 
-# --- NOVA FUNÇÃO: Calendário de estudos com bolinhas ---
-def gerar_calendario_estudos(df, dias=30):
+# --- FUNÇÃO MELHORADA: Calendário de estudos com bolinhas ---
+def gerar_calendario_estudos(df, dias=31):
     """Gera um calendário dos últimos dias com indicação de estudo."""
     if df is None or df.empty:
         return []
@@ -647,9 +808,54 @@ def gerar_calendario_estudos(df, dias=30):
                 'hoje': data == hoje
             })
     except Exception:
-        pass
+        # Se houver erro, gera calendário vazio
+        for i in range(31):
+            data = datetime.date.today() - datetime.timedelta(days=30-i)
+            calendario.append({
+                'data': data,
+                'dia': data.day,
+                'dia_semana': data.strftime('%a'),
+                'mes_ano': data.strftime('%b/%y'),
+                'estudou': False,
+                'hoje': data == hoje
+            })
     
     return calendario
+
+# --- NOVA FUNÇÃO: Gerar números de 1 a 31 para visualização ---
+def gerar_numeros_mes(df):
+    """Gera os números de 1 a 31 com indicação visual."""
+    hoje = datetime.date.today()
+    dia_hoje = hoje.day
+    numeros = []
+    
+    try:
+        # Converte datas de estudo para conjunto de datas
+        datas_estudo = set(pd.to_datetime(df['data_estudo']).dt.date.unique())
+        
+        # Gera os números de 1 a 31
+        for dia in range(1, 32):
+            # Verifica se este dia do mês atual foi estudado
+            estudou = any(
+                data.day == dia and data.month == hoje.month and data.year == hoje.year 
+                for data in datas_estudo
+            )
+            
+            numeros.append({
+                'numero': dia,
+                'estudou': estudou,
+                'hoje': dia == dia_hoje
+            })
+    except Exception:
+        # Em caso de erro, gera números básicos
+        for dia in range(1, 32):
+            numeros.append({
+                'numero': dia,
+                'estudou': False,
+                'hoje': dia == dia_hoje
+            })
+    
+    return numeros
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -908,48 +1114,99 @@ else:
             
             st.divider()
 
-            # --- AJUSTE 3: CONSTÂNCIA NOS ESTUDOS COM BOLINHAS ---
-            st.markdown('<div class="streak-card">', unsafe_allow_html=True)
+            # --- SEÇÃO DE NÚMEROS DE 1 A 31 NA HORIZONTAL ---
+            st.markdown('<h3 style="margin-top:1rem; color:#fff;">📅 VISÃO DO MÊS ATUAL</h3>', unsafe_allow_html=True)
+            
+            # Gerar números de 1 a 31
+            numeros_mes = gerar_numeros_mes(df)
+            
+            st.markdown('<div class="numeros-mes-container">', unsafe_allow_html=True)
+            for num in numeros_mes:
+                classes = "numero-dia"
+                if num['hoje']:
+                    classes += " hoje"
+                elif num['estudou']:
+                    classes += " estudado"
+                
+                st.markdown(f'''
+                    <div class="{classes}">
+                        {num['numero']}
+                    </div>
+                ''', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Legenda simples
+            col_l1, col_l2, col_l3 = st.columns(3)
+            with col_l1:
+                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: rgba(0, 255, 0, 0.15); border: 1px solid rgba(0, 255, 0, 0.3); border-radius: 2px; margin-right: 8px;"></div>Estudou hoje</div>', unsafe_allow_html=True)
+            with col_l2:
+                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: linear-gradient(135deg, #FFD700, #FFA500); border: 1px solid rgba(255, 215, 0, 0.7); border-radius: 2px; margin-right: 8px;"></div>Hoje</div>', unsafe_allow_html=True)
+            with col_l3:
+                st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; color: #adb5bd; font-size: 0.8rem;"><div style="width: 12px; height: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 2px; margin-right: 8px;"></div>Dia do mês</div>', unsafe_allow_html=True)
+            
+            st.divider()
+
+            # --- SEÇÃO DE CONSTÂNCIA MELHORADA ---
+            st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
             streak = calcular_streak(df)
             recorde = calcular_recorde_streak(df)
             inicio_streak, fim_streak = calcular_datas_streak(df)
-            calendario = gerar_calendario_estudos(df, dias=30)
+            calendario = gerar_calendario_estudos(df, dias=31)
             
-            st.markdown('<div class="streak-title">CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
+            st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
             
-            # Duas frases com tamanho igual e proporcional
-            st.markdown('<div class="streak-value-container">', unsafe_allow_html=True)
-            
-            # Box 1: Streak atual
-            st.markdown('''
-            <div class="streak-value-box">
-                <div class="streak-value-label">STREAK ATUAL</div>
-                <div class="streak-value-number">{}</div>
-                <div style="color: #FF8E8E; font-size: 0.9rem;">dias sem falhar</div>
-            </div>
-            '''.format(streak), unsafe_allow_html=True)
-            
-            # Box 2: Recorde
-            st.markdown('''
-            <div class="streak-value-box">
-                <div class="streak-value-label">SEU RECORDE</div>
-                <div class="streak-value-number">{}</div>
-                <div style="color: #FF8E8E; font-size: 0.9rem;">dias consecutivos</div>
-            </div>
-            '''.format(recorde), unsafe_allow_html=True)
-            
+            # Indicador de performance
+            performance = "🟢 Excelente" if streak >= 7 else "🟡 Bom" if streak >= 3 else "🔴 Precisa melhorar"
+            st.markdown(f'<div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Stats de constância
+            col_s1, col_s2, col_s3 = st.columns(3)
+            
+            with col_s1:
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 15px; background: rgba(255, 75, 75, 0.1); border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.2);">
+                        <div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">STREAK ATUAL</div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #FF4B4B;">{streak}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias consecutivos</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col_s2:
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 15px; background: rgba(0, 255, 0, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 0, 0.2);">
+                        <div style="color: #00FF00; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">SEU RECORDE</div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #00FF00;">{recorde}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias seguidos</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col_s3:
+                # Calcular dias estudados no mês
+                hoje = datetime.date.today()
+                dias_no_mes = 31  # Assumindo mês completo
+                dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
+                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
+                
+                st.markdown(f'''
+                    <div style="text-align: center; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.2);">
+                        <div style="color: #FFD700; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">MÊS ATUAL</div>
+                        <div style="font-size: 2rem; font-weight: 800; color: #FFD700;">{dias_estudados_mes}/{dias_no_mes}</div>
+                        <div style="color: #adb5bd; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
+                    </div>
+                ''', unsafe_allow_html=True)
             
             # Período do streak atual
             if inicio_streak and fim_streak:
-                data_formatada = f"{inicio_streak.strftime('%d/%m')} ~ {fim_streak.strftime('%d/%m')}"
-                st.markdown(f'<div class="streak-period">{data_formatada}</div>', unsafe_allow_html=True)
+                data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
+                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
-            # Calendário de bolinhas
+            # Calendário de bolinhas MELHORADO
             if calendario:
                 st.markdown('<div class="calendario-container">', unsafe_allow_html=True)
-                st.markdown('<div class="calendario-title">Últimos 30 dias</div>', unsafe_allow_html=True)
+                st.markdown('<div class="calendario-title">ÚLTIMOS 31 DIAS</div>', unsafe_allow_html=True)
                 
                 # Criar grid de bolinhas
                 st.markdown('<div class="calendario-grid">', unsafe_allow_html=True)
@@ -958,34 +1215,58 @@ else:
                     if dia['hoje']:
                         classe_dia = "dia-hoje"
                         tooltip = f"HOJE - {dia['dia']}/{dia['mes_ano']}"
+                        emoji = "H"
                     elif dia['estudou']:
                         classe_dia = "dia-estudado"
                         tooltip = f"✓ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Estudou"
+                        emoji = "✓"
                     else:
                         classe_dia = "dia-nao-estudado"
                         tooltip = f"✗ {dia['dia_semana']}, {dia['dia']}/{dia['mes_ano']} - Não estudou"
+                        emoji = "✗"
                     
                     st.markdown(f'''
                     <div class="dia-calendario {classe_dia}">
-                        <div class="dia-numero">{dia['dia']}</div>
+                        <div class="dia-numero">{emoji}</div>
                         <div class="dia-tooltip">{tooltip}</div>
                     </div>
                     ''', unsafe_allow_html=True)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Legenda
-                col_leg1, col_leg2, col_leg3 = st.columns(3)
-                with col_leg1:
-                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-estudado" style="margin-right: 8px;"><div class="dia-numero">✓</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Estudou</span></div>', unsafe_allow_html=True)
-                with col_leg2:
-                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-nao-estudado" style="margin-right: 8px;"><div class="dia-numero">✗</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Não estudou</span></div>', unsafe_allow_html=True)
-                with col_leg3:
-                    st.markdown('<div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;"><div class="dia-calendario dia-hoje" style="margin-right: 8px;"><div class="dia-numero">H</div></div><span style="color: #adb5bd; font-size: 0.8rem;">Hoje</span></div>', unsafe_allow_html=True)
+                # Legenda melhorada
+                st.markdown('<div class="legenda-calendario">', unsafe_allow_html=True)
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-estudado" style="margin-right: 0;">
+                            <div class="dia-numero">✓</div>
+                        </div>
+                        <span>Estudou</span>
+                    </div>
+                ''', unsafe_allow_html=True)
+                
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-nao-estudado" style="margin-right: 0;">
+                            <div class="dia-numero">✗</div>
+                        </div>
+                        <span>Não estudou</span>
+                    </div>
+                ''', unsafe_allow_html=True)
+                
+                st.markdown('''
+                    <div class="legenda-item">
+                        <div class="dia-calendario dia-hoje" style="margin-right: 0;">
+                            <div class="dia-numero">H</div>
+                        </div>
+                        <span>Hoje</span>
+                    </div>
+                ''', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
@@ -1057,9 +1338,11 @@ else:
             meta_questoes = st.session_state.meta_questoes_semana
             
             # Botão para editar metas
-            if st.button("⚙️ Configurar Metas", key="btn_config_metas"):
-                st.session_state.editando_metas = not st.session_state.editando_metas
-                st.rerun()
+            col_btn1, col_btn2, col_btn3 = st.columns([4, 1, 1])
+            with col_btn2:
+                if st.button("⚙️ Configurar Metas", key="btn_config_metas", use_container_width=True):
+                    st.session_state.editando_metas = not st.session_state.editando_metas
+                    st.rerun()
             
             # Modal de edição de metas
             if st.session_state.editando_metas:
@@ -1120,7 +1403,7 @@ else:
                             <div class="modern-progress-fill" style="width: {progresso_horas}%;"></div>
                         </div>
                     </div>
-                    <div class="meta-subtitle">{horas_semana:.1f}h de {meta_horas}h planejadas</div>
+                    <div class="meta-subtitle">{progresso_horas:.0f}% da meta alcançada</div>
                 </div>
                 ''', unsafe_allow_html=True)
             
@@ -1135,7 +1418,7 @@ else:
                             <div class="modern-progress-fill" style="width: {progresso_questoes}%;"></div>
                         </div>
                     </div>
-                    <div class="meta-subtitle">{int(questoes_semana)} de {meta_questoes} questões</div>
+                    <div class="meta-subtitle">{progresso_questoes:.0f}% da meta alcançada</div>
                 </div>
                 ''', unsafe_allow_html=True)
 
