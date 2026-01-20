@@ -3,20 +3,10 @@ import pandas as pd
 import datetime
 from datetime import timedelta
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 import time
 from streamlit_option_menu import option_menu
-
-# ... seus imports (streamlit, pandas, etc)
-
-def render_metric_card(label, value, icon="📊"):
-    st.markdown(f"""
-        <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;">
-            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
-            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
-            <div style="font-size: 1.8rem; font-weight: 700;">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
 
 # --- FUNÇÃO ADICIONADA: Conversor de tempo ---
 def formatar_tempo_para_bigint(tempo_str):
@@ -32,7 +22,7 @@ def formatar_tempo_para_bigint(tempo_str):
             minutos = int(tempo_str[1:])
             return horas * 60 + minutos
         else:
-            return int(tempo_str)
+            return int(tempo_str)  # Já em minutos
     except:
         return 0
 
@@ -43,21 +33,17 @@ if 'missao_ativa' not in st.session_state:
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
-# Inicializar metas semanais
-if 'meta_horas' not in st.session_state:
-    st.session_state.meta_horas = 22
-if 'meta_questoes' not in st.session_state:
-    st.session_state.meta_questoes = 350
-
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
-from database import supabase
-from logic import get_editais, excluir_concurso_completo
-from styles import apply_styles
-
-# Aplicar estilos base
-apply_styles()
+# Importações dos seus módulos (ajuste conforme necessário)
+try:
+    from database import supabase
+    from logic import get_editais, excluir_concurso_completo
+    from styles import apply_styles
+    apply_styles()
+except:
+    st.warning("Algumas importações podem estar faltando. Verifique os módulos.")
 
 # Inicializar estados do Pomodoro
 if 'pomodoro_seconds' not in st.session_state:
@@ -65,9 +51,9 @@ if 'pomodoro_seconds' not in st.session_state:
 if 'pomodoro_active' not in st.session_state:
     st.session_state.pomodoro_active = False
 if 'pomodoro_mode' not in st.session_state:
-    st.session_state.pomodoro_mode = "Foco"
+    st.session_state.pomodoro_mode = "Foco" # Foco ou Pausa
 
-# CSS Customizado para Layout Moderno
+# CSS Customizado para Layout Moderno + Painel de Desempenho
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -161,88 +147,79 @@ st.markdown("""
         text-shadow: 0 0 20px rgba(255, 75, 75, 0.3);
     }
     
-    /* Tabela de Disciplinas */
-    .disciplina-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 15px 0;
-    }
-    .disciplina-table th {
-        color: #adb5bd;
-        font-size: 0.85rem;
-        text-align: left;
-        padding: 12px 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    .disciplina-table td {
-        color: #fff;
-        padding: 12px 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        font-size: 0.9rem;
-    }
-    .disciplina-table tr:hover {
-        background-color: rgba(255, 75, 75, 0.05);
-    }
-    .disciplina-table .percent-cell {
+    /* ===== ESTILOS DO PAINEL DE DESEMPENHO ===== */
+    .summary-card {
+        background: rgba(15, 52, 96, 0.8);
+        padding: 1.5rem;
+        border-radius: 12px;
         text-align: center;
-        font-weight: 700;
+        border: 1px solid rgba(0, 173, 181, 0.3);
+        height: 100%;
+        transition: all 0.3s ease;
     }
-    .disciplina-table .percent-high {
-        color: #00FF00;
-    }
-    .disciplina-table .percent-medium {
-        color: #FFD700;
-    }
-    .disciplina-table .percent-low {
-        color: #FF4B4B;
+    .summary-card:hover {
+        border: 1px solid rgba(0, 173, 181, 0.6);
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0, 173, 181, 0.2);
     }
     
-    /* Streak Display */
-    .streak-container {
-        background: linear-gradient(135deg, rgba(255,75,75,0.1), rgba(255,142,142,0.05));
-        border: 1px solid rgba(255,75,75,0.2);
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin: 20px 0;
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
     }
-    .streak-number {
-        font-size: 3rem;
-        font-weight: 800;
-        color: #FF4B4B;
-        margin: 10px 0;
-    }
-    .streak-label {
-        color: #adb5bd;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        margin-right: 10px;
     }
     
-    /* Progresso Semanal */
-    .weekly-progress-container {
-        background: rgba(26, 28, 35, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 15px 0;
+    /* Cards para melhor/pior disciplina */
+    .highlight-card {
+        background: rgba(0, 173, 181, 0.1);
+        padding: 1rem;
+        border-radius: 10px;
+        margin-top: 1rem;
+        border-left: 4px solid;
     }
-    .weekly-progress-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #fff;
-        margin: 5px 0;
+    .highlight-good {
+        border-left-color: #00ff00;
     }
-    .weekly-progress-label {
-        color: #adb5bd;
-        font-size: 0.85rem;
+    .highlight-bad {
+        border-left-color: #ff4b4b;
     }
+    
+    /* Ajustes para tabelas */
+    .dataframe th {
+        background-color: #0f3460 !important;
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        text-align: center !important;
+    }
+    .dataframe td {
+        text-align: center !important;
+    }
+    
+    /* Esconder elementos padrão do Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
 # --- 2. FUNÇÕES AUXILIARES ---
+def render_metric_card(label, value, icon="📊"):
+    """Renderiza um cartão de métrica."""
+    st.markdown(f"""
+        <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(15, 52, 96, 0.5);">
+            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
+            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
+            <div style="font-size: 1.8rem; font-weight: 700;">{value}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
 def calcular_countdown(data_str):
     if not data_str: return None, "#adb5bd"
     try:
@@ -251,27 +228,17 @@ def calcular_countdown(data_str):
         return dias, cor
     except: return None, "#adb5bd"
 
+# Formata minutos em '2h 15m'
 def formatar_minutos(minutos_totais):
-    """Formata minutos para 'Xh Ymin' ou 'Zmin'."""
     try:
         minutos = int(minutos_totais)
     except Exception:
-        return "0min"
+        return "0m"
     horas = minutos // 60
     minutos_rest = minutos % 60
     if horas > 0:
-        return f"{horas}h{minutos_rest:02d}min"
-    return f"{minutos_rest}min"
-
-def formatar_horas_minutos(minutos_totais):
-    """Formata minutos para 'Xh Ymin' (sempre mostra horas mesmo se zero)."""
-    try:
-        minutos = int(minutos_totais)
-    except Exception:
-        return "0h00min"
-    horas = minutos // 60
-    minutos_rest = minutos % 60
-    return f"{horas}h{minutos_rest:02d}min"
+        return f"{horas}h {minutos_rest}m"
+    return f"{minutos_rest}m"
 
 def get_badge_cor(taxa):
     """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
@@ -303,66 +270,6 @@ def calcular_streak(df):
         streak += 1
         alvo = alvo - datetime.timedelta(days=1)
     return streak
-
-def calcular_record_streak(df):
-    """Calcula o maior streak (recorde) de dias consecutivos."""
-    if df is None or df.empty:
-        return 0
-    if 'data_estudo' not in df.columns:
-        return 0
-    try:
-        datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
-        datas = sorted(datas)
-    except Exception:
-        return 0
-    
-    if len(datas) == 0:
-        return 0
-    
-    max_streak = 1
-    current_streak = 1
-    
-    for i in range(1, len(datas)):
-        diff = (datas[i] - datas[i-1]).days
-        if diff == 1:
-            current_streak += 1
-        else:
-            if current_streak > max_streak:
-                max_streak = current_streak
-            current_streak = 1
-    
-    if current_streak > max_streak:
-        max_streak = current_streak
-    
-    return max_streak
-
-def calcular_progresso_semanal(df, meta_horas=22, meta_questoes=350):
-    """Calcula o progresso da semana atual."""
-    hoje = datetime.date.today()
-    # Encontra o início da semana (segunda-feira)
-    inicio_semana = hoje - timedelta(days=hoje.weekday())
-    fim_semana = inicio_semana + timedelta(days=6)
-    
-    if df.empty:
-        return 0, 0, 0, 0
-    
-    # Filtra registros da semana atual
-    df_semana = df.copy()
-    df_semana['data_estudo_date'] = pd.to_datetime(df_semana['data_estudo']).dt.date
-    df_semana = df_semana[(df_semana['data_estudo_date'] >= inicio_semana) & 
-                          (df_semana['data_estudo_date'] <= fim_semana)]
-    
-    if df_semana.empty:
-        return 0, 0, 0, 0
-    
-    tempo_semana_min = df_semana['tempo'].sum()
-    tempo_semana_horas = tempo_semana_min / 60
-    questoes_semana = df_semana['total'].sum()
-    
-    progresso_horas = min((tempo_semana_horas / meta_horas) * 100, 100) if meta_horas > 0 else 0
-    progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
-    
-    return tempo_semana_horas, questoes_semana, progresso_horas, progresso_questoes
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -444,119 +351,315 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
     
     return pend
 
-# --- FUNÇÃO: Renderizar tabela de disciplinas (ESTILO DA IMAGEM) ---
-def render_tabela_disciplinas(df):
-    """Renderiza a tabela de disciplinas no estilo da imagem."""
+# --- FUNÇÃO DO PAINEL DE DESEMPENHO AVANÇADO ---
+def render_painel_desempenho(df, missao):
+    """Renderiza o painel de desempenho avançado."""
     if df.empty:
+        st.info("📚 Ainda não há dados para exibir o painel.")
         return
     
-    # Agrupa dados por disciplina
-    df_disciplinas = df.groupby('materia').agg({
+    # --- CÁLCULO DOS DADOS ---
+    # Agrupa por disciplina
+    df_agg = df.groupby('materia').agg({
         'tempo': 'sum',
         'acertos': 'sum',
-        'total': 'sum'
+        'total': 'sum',
+        'taxa': 'mean'
     }).reset_index()
     
-    # Calcula métricas adicionais
-    df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
-    df_disciplinas['percentual'] = (df_disciplinas['acertos'] / df_disciplinas['total'] * 100).round(0)
+    # Calcula totais
+    total_corretas = int(df['acertos'].sum())
+    total_erradas = int(df['total'].sum() - total_corretas)
+    total_percentual = df['taxa'].mean() if not df['taxa'].empty else 0
+    total_tempo = int(df['tempo'].sum())
     
-    # Ordena por tempo (descrescente)
-    df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
+    # Determina melhor e pior disciplina
+    if not df_agg.empty:
+        melhor_idx = df_agg['taxa'].idxmax()
+        pior_idx = df_agg['taxa'].idxmin()
+        melhor_disciplina = df_agg.loc[melhor_idx, 'materia']
+        melhor_taxa = df_agg.loc[melhor_idx, 'taxa']
+        pior_disciplina = df_agg.loc[pior_idx, 'materia']
+        pior_taxa = df_agg.loc[pior_idx, 'taxa']
     
-    # Cria a tabela HTML estilizada
-    html_table = """
-    <div style="margin: 20px 0; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1);">
-        <table class="disciplina-table">
-            <thead>
-                <tr>
-                    <th style="width: 40%; text-align: left;">Disciplinas</th>
-                    <th style="width: 15%; text-align: center;">Tempo</th>
-                    <th style="width: 8%; text-align: center;">✓</th>
-                    <th style="width: 8%; text-align: center;">✗</th>
-                    <th style="width: 8%; text-align: center;">😐</th>
-                    <th style="width: 8%; text-align: center;">%</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
+    # --- LAYOUT PRINCIPAL ---
+    st.markdown('<h2 class="main-title">📊 Dashboard de Performance Avançado</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="section-subtitle">Análise detalhada do seu desempenho por disciplina</p>', unsafe_allow_html=True)
     
-    for _, row in df_disciplinas.iterrows():
-        # Determina classe de cor baseada no percentual
-        percent_class = "percent-high" if row['percentual'] >= 80 else "percent-medium" if row['percentual'] >= 60 else "percent-low"
-        
-        html_table += f"""
-                <tr>
-                    <td style="color: #fff; font-weight: 500;">{row['materia']}</td>
-                    <td style="text-align: center; color: #adb5bd;">{formatar_horas_minutos(row['tempo'])}</td>
-                    <td style="text-align: center; color: #00FF00;">{int(row['acertos'])}</td>
-                    <td style="text-align: center; color: #FF4B4B;">{int(row['erros'])}</td>
-                    <td style="text-align: center; color: #FFD700;">{int(row['total'])}</td>
-                    <td class="percent-cell {percent_class}">{int(row['percentual'])}</td>
-                </tr>
-        """
-    
-    html_table += """
-            </tbody>
-        </table>
-    </div>
-    """
-    
-    st.markdown(html_table, unsafe_allow_html=True)
-
-# --- FUNÇÃO: Renderizar streak display ---
-def render_streak_display(streak_atual, record_streak):
-    """Renderiza o display de streak no estilo da imagem."""
-    hoje = datetime.date.today()
-    inicio_periodo = hoje - timedelta(days=streak_atual - 1)
-    
-    # Formata datas
-    data_inicio = inicio_periodo.strftime("%d/%m")
-    data_fim = hoje.strftime("%d/%m")
-    
-    st.markdown(f"""
-    <div class="streak-container">
-        <div class="streak-label">CONSTÂNCIA NOS ESTUDOS</div>
-        <div class="streak-number">{streak_atual} dias</div>
-        <div style="color: #adb5bd; font-size: 0.9rem; margin-bottom: 15px;">
-            Você está há <strong>{streak_atual} dias</strong> sem falhar! Seu recorde é de <strong>{record_streak} dias.</strong>
-        </div>
-        <div style="display: flex; justify-content: center; align-items: center; color: #FF4B4B; font-weight: 600; font-size: 0.9rem;">
-            <span style="margin-right: 10px;">◀</span>
-            <span>{data_inicio} ~ {data_fim}</span>
-            <span style="margin-left: 10px;">▶</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- FUNÇÃO: Renderizar metas semanais ---
-def render_metas_semanais(tempo_semana_horas, questoes_semana, meta_horas, meta_questoes):
-    """Renderiza as metas semanais no estilo da imagem."""
-    col1, col2 = st.columns(2)
+    # --- CARDS DE RESUMO ---
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        progresso_horas = min((tempo_semana_horas / meta_horas) * 100, 100) if meta_horas > 0 else 0
         st.markdown(f"""
-        <div class="weekly-progress-container">
-            <div class="weekly-progress-label">Horas de Estudo</div>
-            <div class="weekly-progress-value">{tempo_semana_horas:.1f}h / {meta_horas}h</div>
-            <div class="modern-progress-container">
-                <div class="modern-progress-fill" style="width: {progresso_horas}%;"></div>
+            <div class="summary-card">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #00ff00;">{total_corretas}</div>
+                <div style="color: #adb5bd; font-size: 0.9rem;">Total de Acertos</div>
             </div>
-        </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
         st.markdown(f"""
-        <div class="weekly-progress-container">
-            <div class="weekly-progress-label">Questões</div>
-            <div class="weekly-progress-value">{int(questoes_semana)} / {meta_questoes}</div>
-            <div class="modern-progress-container">
-                <div class="modern-progress-fill" style="width: {progresso_questoes}%;"></div>
+            <div class="summary-card">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #ff4b4b;">{total_erradas}</div>
+                <div style="color: #adb5bd; font-size: 0.9rem;">Total de Erros</div>
             </div>
-        </div>
         """, unsafe_allow_html=True)
+    
+    with col3:
+        # Determinar cor do percentual médio
+        if total_percentual >= 70:
+            percent_color = "#00ff00"
+        elif total_percentual >= 50:
+            percent_color = "#ffd700"
+        else:
+            percent_color = "#ff4b4b"
+            
+        st.markdown(f"""
+            <div class="summary-card">
+                <div style="font-size: 2.5rem; font-weight: 700; color: {percent_color};">{total_percentual:.1f}%</div>
+                <div style="color: #adb5bd; font-size: 0.9rem;">Média Geral</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        horas = total_tempo // 60
+        minutos = total_tempo % 60
+        st.markdown(f"""
+            <div class="summary-card">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #00adb5;">{horas}h {minutos}m</div>
+                <div style="color: #adb5bd; font-size: 0.9rem;">Tempo Total</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # --- TABELA PRINCIPAL E GRÁFICOS ---
+    col_main, col_side = st.columns([2, 1])
+    
+    with col_main:
+        # Tabela de desempenho
+        st.markdown("### 📋 Desempenho por Disciplina")
+        
+        # Preparar dados para tabela
+        df_display = df_agg.copy()
+        df_display['tempo_formatado'] = df_display['tempo'].apply(lambda x: f"{x//60}h {x%60}m")
+        df_display['taxa_formatada'] = df_display['taxa'].apply(lambda x: f"{x:.1f}%")
+        df_display['neutras'] = 0  # Placeholder se não tiver coluna
+        
+        # Reordenar colunas
+        df_display = df_display[['materia', 'tempo_formatado', 'acertos', 'total', 'taxa_formatada']]
+        
+        # Exibir tabela
+        st.dataframe(
+            df_display,
+            column_config={
+                "materia": "Disciplina",
+                "tempo_formatado": "Tempo",
+                "acertos": st.column_config.NumberColumn("✓", format="%d"),
+                "total": st.column_config.NumberColumn("Total", format="%d"),
+                "taxa_formatada": "%"
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        # Gráfico de barras
+        st.markdown("### 📈 Percentual de Acerto por Disciplina")
+        
+        fig = go.Figure()
+        
+        for _, row in df_agg.iterrows():
+            color = "#00ff00" if row['taxa'] >= 70 else "#ffd700" if row['taxa'] >= 50 else "#ff4b4b"
+            
+            fig.add_trace(go.Bar(
+                x=[row['materia']],
+                y=[row['taxa']],
+                name=row['materia'],
+                marker_color=color,
+                text=[f"{row['taxa']:.1f}%"],
+                textposition='auto',
+                hovertemplate=f"<b>{row['materia']}</b><br>Percentual: {row['taxa']:.1f}%<br>Acertos: {row['acertos']}/{row['total']}<br>Tempo: {row['tempo']//60}h{row['tempo']%60}m<extra></extra>"
+            ))
+        
+        fig.update_layout(
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font_color='white',
+            xaxis_title="Disciplinas",
+            yaxis_title="Percentual (%)",
+            yaxis_range=[0, 100],
+            showlegend=False,
+            bargap=0.3,
+            margin=dict(t=20, b=0, l=0, r=0)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col_side:
+        # Destaques
+        st.markdown("### 🏆 Destaques")
+        
+        if not df_agg.empty:
+            # Melhor disciplina
+            st.markdown(f"""
+                <div class="highlight-card highlight-good">
+                    <div style="font-weight: 600; color: white; font-size: 1rem;">🎖️ Melhor Desempenho</div>
+                    <div style="color: #adb5bd; font-size: 0.9rem; margin-top: 5px;">{melhor_disciplina}</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #00ff00; margin-top: 10px;">{melhor_taxa:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Pior disciplina
+            st.markdown(f"""
+                <div class="highlight-card highlight-bad">
+                    <div style="font-weight: 600; color: white; font-size: 1rem;">📚 Precisa de Revisão</div>
+                    <div style="color: #adb5bd; font-size: 0.9rem; margin-top: 5px;">{pior_disciplina}</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #ff4b4b; margin-top: 10px;">{pior_taxa:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Legenda
+        st.markdown("### 📝 Legenda")
+        
+        col_leg1, col_leg2 = st.columns(2)
+        
+        with col_leg1:
+            st.markdown("""
+                <div style="margin-top: 10px;">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #00ff00;"></div>
+                        <span style="color: white;">✓ Acertos</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffd700;"></div>
+                        <span style="color: white;">🟡 Médio</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_leg2:
+            st.markdown("""
+                <div style="margin-top: 10px;">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff4b4b;"></div>
+                        <span style="color: white;">X Erros</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #00adb5, #0097a7);"></div>
+                        <span style="color: white;">⏱️ Tempo</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Distribuição por dificuldade
+        st.markdown("### 🎯 Distribuição por Dificuldade")
+        
+        if 'dificuldade' in df.columns:
+            df_dificuldade = df['dificuldade'].value_counts().reset_index()
+            df_dificuldade.columns = ['Dificuldade', 'Contagem']
+            
+            fig_pie = px.pie(
+                df_dificuldade, 
+                values='Contagem', 
+                names='Dificuldade',
+                color='Dificuldade',
+                color_discrete_map={
+                    '🟢 Fácil': '#00ff00',
+                    '🟡 Médio': '#ffd700',
+                    '🔴 Difícil': '#ff4b4b'
+                },
+                hole=0.4
+            )
+            
+            fig_pie.update_layout(
+                height=250,
+                margin=dict(t=0, b=0, l=0, r=0),
+                showlegend=True,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color="#fff", size=12)
+            )
+            
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("ℹ️ Adicione classificação de dificuldade nos registros.")
+    
+    st.divider()
+    
+    # --- EVOLUÇÃO TEMPORAL ---
+    st.markdown("### 📈 Evolução da Precisão")
+    
+    if not df.empty:
+        try:
+            df['data_estudo'] = pd.to_datetime(df['data_estudo'])
+            df_evo = df.groupby('data_estudo')['taxa'].mean().reset_index()
+            
+            fig_line = px.line(
+                df_evo, 
+                x='data_estudo', 
+                y='taxa', 
+                markers=True,
+                line_shape='spline'
+            )
+            
+            fig_line.update_traces(
+                line_color='#FF4B4B', 
+                line_width=3,
+                marker=dict(size=8, color='#FF8E8E')
+            )
+            
+            fig_line.update_layout(
+                height=300,
+                margin=dict(t=20, b=0, l=0, r=0),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color="#fff"),
+                xaxis_title=None,
+                yaxis_title="Taxa %",
+                yaxis_range=[0, 100]
+            )
+            
+            st.plotly_chart(fig_line, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Não foi possível gerar gráfico de evolução: {e}")
+    
+    # --- DETALHAMENTO POR ASSUNTO ---
+    st.markdown("### 📚 Detalhamento por Assunto")
+    
+    materia_selecionada = st.selectbox(
+        "Selecione uma disciplina para detalhar:",
+        options=["Todas"] + list(df['materia'].unique()),
+        key="detalhe_materia"
+    )
+    
+    if materia_selecionada != "Todas":
+        df_filtrado = df[df['materia'] == materia_selecionada]
+        
+        if not df_filtrado.empty:
+            df_assuntos = df_filtrado.groupby('assunto').agg({
+                'acertos': 'sum',
+                'total': 'sum',
+                'taxa': 'mean'
+            }).reset_index().sort_values('taxa', ascending=False)
+            
+            for _, assunto in df_assuntos.iterrows():
+                with st.expander(f"{assunto['assunto']} — {assunto['taxa']:.1f}%", expanded=False):
+                    col_a1, col_a2, col_a3 = st.columns(3)
+                    
+                    col_a1.metric("Acertos", int(assunto['acertos']))
+                    col_a2.metric("Total", int(assunto['total']))
+                    col_a3.metric("Taxa", f"{assunto['taxa']:.1f}%")
+                    
+                    st.markdown(f"""
+                        <div class="modern-progress-container" style="margin-top: 10px;">
+                            <div class="modern-progress-fill" style="width: {assunto['taxa']}%;"></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info(f"Não há registros para {materia_selecionada}.")
+    else:
+        st.info("Selecione uma disciplina para ver o detalhamento por assunto.")
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
@@ -637,7 +740,7 @@ else:
         df = pd.DataFrame(res.data)
     except: df = pd.DataFrame()
     
-    # Busca a data da prova diretamente da tabela editais_materias
+    # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
     try:
         res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
         if res_data_prova.data and len(res_data_prova.data) > 0:
@@ -668,20 +771,20 @@ else:
                                "nav-link-selected": {"background-color": "rgba(255,75,75,0.2)", "border-left": "3px solid #FF4B4B"}
                            })
 
-    # --- ABA: HOME (PAINEL GERAL) - MODIFICADA COM NOVAS FUNCIONALIDADES ---
+    # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
         st.markdown('<h2 class="main-title">🏠 Home — Painel Geral</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Visão completa do seu desempenho e constância nos estudos</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Visão rápida: tempo, precisão, streak e contagem regressiva</p>', unsafe_allow_html=True)
 
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # --- SEÇÃO 1: MÉTRICAS PRINCIPAIS (4 CARTÕES) ---
+            # Métricas principais
             t_q = df['total'].sum()
             a_q = df['acertos'].sum()
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
             minutos_totais = int(df['tempo'].sum())
-            streak_atual = calcular_streak(df)
+            streak = calcular_streak(df)
 
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             with c1:
@@ -689,9 +792,9 @@ else:
             with c2:
                 render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
             with c3:
-                render_metric_card("Streak", f"{streak_atual} 🔥", "🔥")
+                render_metric_card("Streak", f"{streak} 🔥", "🔥")
             with c4:
-                # Countdown da prova
+                # Countdown da prova - AGORA USA A DATA DA TABELA CORRETA
                 dias_restantes = None
                 if data_prova_direta:
                     try:
@@ -706,64 +809,28 @@ else:
                     render_metric_card("Dias para a Prova", "—", "📅")
 
             st.divider()
-            
-            # --- SEÇÃO 2: CONSTÂNCIA NOS ESTUDOS (STREAK) ---
-            record_streak = calcular_record_streak(df)
-            render_streak_display(streak_atual, record_streak)
-            
-            st.divider()
-            
-            # --- SEÇÃO 3: PAINEL DE DISCIPLINAS (TABELA) ---
-            st.markdown('<h3 style="color:#fff; margin-bottom:15px;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
-            render_tabela_disciplinas(df)
-            
-            st.divider()
-            
-            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
-            st.markdown('<h3 style="color:#fff; margin-bottom:15px;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
-            
-            # Calcula progresso da semana
-            tempo_semana_horas, questoes_semana, _, _ = calcular_progresso_semanal(
-                df, 
-                st.session_state.meta_horas, 
-                st.session_state.meta_questoes
-            )
-            
-            # Renderiza as metas
-            render_metas_semanais(
-                tempo_semana_horas, 
-                questoes_semana, 
-                st.session_state.meta_horas, 
-                st.session_state.meta_questoes
-            )
-            
-            # Configuração das metas (em um expander)
-            with st.expander("⚙️ Configurar Metas Semanais"):
-                col_meta1, col_meta2 = st.columns(2)
-                with col_meta1:
-                    nova_meta_horas = st.number_input(
-                        "Meta de Horas", 
-                        min_value=1, 
-                        max_value=100, 
-                        value=st.session_state.meta_horas,
-                        step=1
-                    )
-                with col_meta2:
-                    nova_meta_questoes = st.number_input(
-                        "Meta de Questões", 
-                        min_value=10, 
-                        max_value=1000, 
-                        value=st.session_state.meta_questoes,
-                        step=10
-                    )
-                
-                if st.button("💾 Salvar Metas", use_container_width=True):
-                    st.session_state.meta_horas = nova_meta_horas
-                    st.session_state.meta_questoes = nova_meta_questoes
-                    st.success("Metas atualizadas com sucesso!")
-                    st.rerun()
 
-    # --- ABA: REVISÕES (mantida igual) ---
+            # Status por disciplina (barras de progresso)
+            st.markdown('<h3 style="margin-top:1rem; color:#fff;">Status por Disciplina</h3>', unsafe_allow_html=True)
+            df_mat = df.groupby('materia').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean', 'tempo': 'sum'}).reset_index()
+            for _, row in df_mat.iterrows():
+                pct = float(row['taxa']) if not pd.isna(row['taxa']) else 0
+                tempo_mat = int(row['tempo'])
+                badge = get_badge_cor(pct)
+                st.markdown(f"<div class='modern-card' style='padding:12px;'>", unsafe_allow_html=True)
+                cols = st.columns([4, 1])
+                with cols[0]:
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; align-items:center;'><strong style='color:#fff;'>{row['materia']}</strong><span class='{badge}' style='font-size:0.85rem;padding:4px 8px;border-radius:8px;'>{pct:.1f}%</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div class="modern-progress-container" style="margin-top:8px;">
+                            <div class="modern-progress-fill" style="width: {pct}%;"></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with cols[1]:
+                    st.markdown(f"<div style='text-align:right; color:#adb5bd;'>{formatar_minutos(tempo_mat)}</div>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- ABA: REVISÕES ---
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
@@ -979,82 +1046,10 @@ else:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD (REMOVIDA A DATA DA PROVA) ---
+    # --- ABA: DASHBOARD (PAINEL AVANÇADO) ---
     elif menu == "Dashboard":
-        st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
-        
-        if df.empty:
-            t_q, precisao, horas = 0, 0, 0
-        else:
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
-            precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            horas = df['tempo'].sum()/60
-        
-        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
-        m1, m2, m3 = st.columns(3)
-        with m1: render_metric_card("Questões", int(t_q), "📝")
-        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        
-        st.divider()
-
-        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
-        if not df.empty:
-            st.subheader("📈 Evolução de Acertos")
-            try:
-                # Agrupa pela coluna certa: 'data_estudo'
-                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
-                st.line_chart(df_evo.set_index('data_estudo'))
-            except Exception as e:
-                st.error(f"Erro ao gerar gráfico: {e}")
-        else:
-            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
-
-        # 4. GRÁFICOS PLOTLY (se houver dados)
-        if not df.empty:
-            # Gráficos
-            c_g1, c_g2 = st.columns(2)
-            with c_g1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Distribuição por Matéria")
-                fig_pie = px.pie(df, values='total', names='materia', hole=0.6, 
-                                color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True, 
-                                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                     font=dict(color="#fff"))
-                st.plotly_chart(fig_pie, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            with c_g2:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Evolução de Precisão")
-                df_ev = df.groupby('data_estudo')['taxa'].mean().reset_index()
-                fig_line = px.line(df_ev, x='data_estudo', y='taxa', markers=True)
-                fig_line.update_traces(line_color='#FF4B4B', marker=dict(size=8))
-                fig_line.update_layout(margin=dict(t=20, b=0, l=0, r=0), 
-                                      paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                      font=dict(color="#fff"), xaxis_title=None, yaxis_title="Taxa %")
-                st.plotly_chart(fig_line, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            # Detalhamento por Matéria
-            st.markdown("### 📁 Detalhamento por Disciplina")
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-            
-            for _, m in df_mat.iterrows():
-                with st.expander(f"{m['materia'].upper()} — {m['taxa']:.1f}% de Precisão"):
-                    with st.container(border=True):
-                        df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                        for _, a in df_ass.iterrows():
-                            ca1, ca2 = st.columns([4, 1])
-                            ca1.markdown(f"<span style='color:#fff; font-size:0.9rem; font-weight:600;'>{a['assunto']}</span>", unsafe_allow_html=True)
-                            ca2.markdown(f"<p style='text-align: right; color:#adb5bd; font-size: 0.8rem;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                            st.markdown(f"""
-                                <div class="modern-progress-container" style="margin-top: 5px; margin-bottom: 15px;">
-                                    <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
-                                </div>
-                            """, unsafe_allow_html=True)
+        # Chama a função do painel de desempenho
+        render_painel_desempenho(df, missao)
 
     # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
