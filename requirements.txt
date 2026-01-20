@@ -8,5 +8,4 @@ docling-core
 pymupdf
 notion-client
 python-dotenv>=1.0.0
-calendar
-timedelta
+
