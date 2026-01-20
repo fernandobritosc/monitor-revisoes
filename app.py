@@ -653,29 +653,46 @@ else:
     # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
-
-        # 1. MOSTRAR OS NOMES DAS COLUNAS (Para a gente parar de adivinhar)
-        if not df.empty:
-            st.warning("🕵️‍♂️ MODO DIAGNÓSTICO ATIVADO")
-            st.write("O Python encontrou estas colunas na sua tabela:")
-            
-            # ISSO AQUI VAI MOSTRAR A LISTA DE NOMES NA TELA:
-            st.code(list(df.columns))
-            
-            st.write("---")
-            st.write("Copie a lista acima e cole no chat para eu ajustar o gráfico.")
         
-        # 2. SEÇÃO DE CARTÕES (Mantivemos porque já estava funcionando)
+        # 1. BUSCA DATA DA PROVA (Isso aqui não está dando erro)
+        dias_prova = None
         try:
-            ed = get_editais(supabase).get(missao, {})
-            dt_str = ed.get('data_prova')
-            dias = (pd.to_datetime(dt_str).date() - datetime.date.today()).days if dt_str else None
+            ed_dados = get_editais(supabase).get(missao, {})
+            data_prova_str = ed_dados.get('data_prova')
+            if data_prova_str:
+                dt_p = pd.to_datetime(data_prova_str).date()
+                dias_prova = (dt_p - datetime.date.today()).days
         except:
-            dias = None
+            pass
 
-        m1, m2 = st.columns(2)
-        with m1: render_metric_card("Total Questões", df['total'].sum() if not df.empty else 0, "📝")
-        with m2: render_metric_card("Prova em", f"{dias} dias" if dias is not None else "---", "📅")
+        # 2. CARTÕES (Isso também funciona)
+        if df.empty:
+            t_q, precisao, horas = 0, 0, 0
+        else:
+            t_q = df['total'].sum()
+            a_q = df['acertos'].sum()
+            precisao = (a_q/t_q*100 if t_q > 0 else 0)
+            horas = df['tempo'].sum()/60
+        
+        # Exibe os cartões
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: render_metric_card("Questões", int(t_q), "📝")
+        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
+        with m4: 
+            txt_dias = f"{dias_prova} dias" if dias_prova is not None else "---"
+            render_metric_card("Prova em", txt_dias, "📅")
+        
+        st.divider()
+
+        # 3. AQUI ESTAVA O ERRO -> REMOVI O GRÁFICO
+        # Em vez do gráfico, vamos mostrar os nomes das colunas para sabermos o certo:
+        if not df.empty:
+            st.info("⬇️ Veja abaixo os nomes exatos das suas colunas:")
+            st.code(list(df.columns))
+            st.warning("Me mande essa lista acima para eu criar o gráfico com o nome certo!")
+        else:
+            st.info("Sem dados para mostrar colunas.")
 
         # 4. GRÁFICO DE EVOLUÇÃO (Corrigido para usar 'data_estudo')
         if not df.empty:
