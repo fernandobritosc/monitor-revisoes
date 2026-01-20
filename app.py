@@ -368,6 +368,19 @@ else:
         res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
         df = pd.DataFrame(res.data)
     except: df = pd.DataFrame()
+    
+    # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
+    # Isso corrige o problema da data não aparecer no Home
+    try:
+        # Busca a data da prova diretamente da tabela materia_text
+        res_data_prova = supabase.table("materia_text").select("data_prova_date").eq("concurso_text", missao).limit(1).execute()
+        if res_data_prova.data and len(res_data_prova.data) > 0:
+            data_prova_direta = res_data_prova.data[0].get('data_prova_date')
+        else:
+            data_prova_direta = None
+    except:
+        data_prova_direta = None
+    
     dados = get_editais(supabase).get(missao, {})
 
     with st.sidebar:
@@ -412,15 +425,15 @@ else:
             with c3:
                 render_metric_card("Streak", f"{streak} 🔥", "🔥")
             with c4:
-                # Countdown da prova (se disponível em dados)
-                data_prova_raw = dados.get('data_prova') if isinstance(dados, dict) else None
+                # Countdown da prova - AGORA USA A DATA DIRETA DO BANCO
                 dias_restantes = None
-                if data_prova_raw:
+                if data_prova_direta:
                     try:
-                        dt_prova = pd.to_datetime(data_prova_raw).date()
+                        dt_prova = pd.to_datetime(data_prova_direta).date()
                         dias_restantes = (dt_prova - datetime.date.today()).days
                     except Exception:
                         dias_restantes = None
+                
                 if dias_restantes is not None:
                     render_metric_card("Dias para a Prova", f"{dias_restantes} dias", "📅")
                 else:
@@ -664,22 +677,10 @@ else:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD ---
+    # --- ABA: DASHBOARD (REMOVIDA A DATA DA PROVA) ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. BUSCA DATA DA PROVA
-        dias_prova = None
-        try:
-            ed_dados = get_editais(supabase).get(missao, {})
-            data_prova_str = ed_dados.get('data_prova')
-            if data_prova_str:
-                dt_p = pd.to_datetime(data_prova_str).date()
-                dias_prova = (dt_p - datetime.date.today()).days
-        except:
-            pass
-
-        # 2. CARTÕES
         if df.empty:
             t_q, precisao, horas = 0, 0, 0
         else:
@@ -688,14 +689,11 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             horas = df['tempo'].sum()/60
         
-        # Exibe os cartões
-        m1, m2, m3, m4 = st.columns(4)
+        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
+        m1, m2, m3 = st.columns(3)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
         with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with m4: 
-            txt_dias = f"{dias_prova} dias" if dias_prova is not None else "---"
-            render_metric_card("Prova em", txt_dias, "📅")
         
         st.divider()
 
@@ -989,9 +987,8 @@ else:
         st.markdown('<p class="section-subtitle">Editar dados do edital ativo</p>', unsafe_allow_html=True)
 
         # mostrar data atual se existir
-        data_prova_raw = dados.get('data_prova') if isinstance(dados, dict) else None
         try:
-            data_prova_atual = pd.to_datetime(data_prova_raw).date() if data_prova_raw else None
+            data_prova_atual = pd.to_datetime(data_prova_direta).date() if data_prova_direta else None
         except Exception:
             data_prova_atual = None
 
@@ -1018,8 +1015,8 @@ else:
                     try:
                         valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
                         
-                        # 1. SALVA NO BANCO
-                        res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
+                        # 1. SALVA NO BANCO - Atualiza a tabela materia_text
+                        res = supabase.table("materia_text").update({"data_prova_date": valor_final}).eq("concurso_text", missao).execute()
                         
                         if res.data:
                             # 2. LIMPA A MEMÓRIA DO APP (MUITO IMPORTANTE)
