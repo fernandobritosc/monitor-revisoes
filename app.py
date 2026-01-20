@@ -18,20 +18,30 @@ def render_metric_card(label, value, icon="📊"):
         </div>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque tudo aqui no topo) ---
+# --- FUNÇÃO ADICIONADA: Conversor de tempo ---
+def formatar_tempo_para_bigint(tempo_str):
+    """Converte string HHMM para minutos inteiros."""
+    try:
+        tempo_str = str(tempo_str).strip()
+        if len(tempo_str) == 4:
+            horas = int(tempo_str[:2])
+            minutos = int(tempo_str[2:])
+            return horas * 60 + minutos
+        elif len(tempo_str) == 3:
+            horas = int(tempo_str[0])
+            minutos = int(tempo_str[1:])
+            return horas * 60 + minutos
+        else:
+            return int(tempo_str)  # Já em minutos
+    except:
+        return 0
+
+# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA - sem duplicação) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
-
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
-st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
-# ... resto do código
-
-# --- INICIALIZAÇÃO OBRIGATÓRIA (Coloque logo no topo, após os imports) ---
-if 'missao_ativa' not in st.session_state:
-    st.session_state.missao_ativa = None
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
@@ -207,7 +217,7 @@ def calcular_proximo_intervalo(dificuldade, taxa_acerto):
     
     Fácil:   → 15 ou 20 dias (aproveita ciclos longos)
     Médio:   → 7 dias (padrão confiável)
-    Difícil: → 3 dias se acerto < 70%, senão 7
+    Difícil: → 3 dias se acerto < 70%, senão 5
     """
     if dificuldade == "🟢 Fácil":
         return 15 if taxa_acerto > 80 else 7
@@ -224,6 +234,61 @@ def tempo_recomendado_rev24h(dificuldade):
         "🔴 Difícil": (18, "Active Recall completo + questões-chave")
     }
     return tempos.get(dificuldade, (5, "Padrão"))
+
+# --- FUNÇÃO COM CACHE PARA PERFORMANCE ---
+@st.cache_data(ttl=300)
+def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
+    """Calcula revisões pendentes com cache para melhor performance."""
+    hoje = datetime.date.today()
+    pend = []
+    
+    if df.empty:
+        return pend
+        
+    for _, row in df.iterrows():
+        dt_est = pd.to_datetime(row['data_estudo']).date()
+        dias = (hoje - dt_est).days
+        tx = row.get('taxa', 0)
+        dif = row.get('dificuldade', '🟡 Médio')
+        
+        # Lógica de Revisão 24h
+        if not row.get('rev_24h', False):
+            dt_prev = dt_est + timedelta(days=1)
+            if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                atraso = (hoje - dt_prev).days
+                pend.append({
+                    "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                    "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
+                    "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
+                    "dificuldade": dif, "taxa": tx
+                })
+        
+        # Lógica de Ciclos Longos (ADAPTATIVA)
+        elif row.get('rev_24h', True):
+            intervalo = calcular_proximo_intervalo(dif, tx)
+            
+            # Determinar qual coluna atualizar
+            if intervalo <= 7:
+                col_alv, lbl = "rev_07d", f"Revisão {intervalo}d"
+            else:  # 15+ dias
+                col_alv, lbl = "rev_15d", f"Revisão {intervalo}d"
+            
+            if not row.get(col_alv, False):
+                dt_prev = dt_est + timedelta(days=intervalo)
+                if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
+                    atraso = (hoje - dt_prev).days
+                    pend.append({
+                        "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                        "tipo": lbl, "col": col_alv, "atraso": atraso, 
+                        "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
+                        "dificuldade": dif, "taxa": tx
+                    })
+    
+    # Filtrar por dificuldade
+    if filtro_dif != "Todas":
+        pend = [p for p in pend if p['dificuldade'] == filtro_dif]
+    
+    return pend
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 if st.session_state.missao_ativa is None:
@@ -256,7 +321,6 @@ if st.session_state.missao_ativa is None:
         with st.form("form_novo_concurso", clear_on_submit=True):
             nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
             cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
-            # Opcional: permitir informar a data da prova ao criar o edital
             informar_data_prova = st.checkbox("Informar data da prova (opcional)")
             if informar_data_prova:
                 data_prova_input = st.date_input("Data da Prova")
@@ -385,7 +449,7 @@ else:
                 st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: REVISÕES ---
-    if menu == "Revisões":
+    elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns([2, 1, 1])
@@ -394,58 +458,8 @@ else:
         with c2:
             filtro_dif = st.segmented_control("Dificuldade:", ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], default="Todas")
     
-        hoje = datetime.date.today()
-        pend = []
-        if not df.empty:
-            for _, row in df.iterrows():
-                dt_est = pd.to_datetime(row['data_estudo']).date()
-                dias = (hoje - dt_est).days
-                tx = row.get('taxa', 0)
-                dif = row.get('dificuldade', '🟡 Médio')  # 🆕 Ler dificuldade
-                
-                # Lógica de Revisão 24h
-                if not row.get('rev_24h', False):
-                    dt_prev = dt_est + timedelta(days=1)
-                    if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
-                        atraso = (hoje - dt_prev).days
-                        pend.append({
-                            "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
-                            "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
-                            "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                            "dificuldade": dif,  # 🆕 Adicionar dificuldade
-                            "taxa": tx
-                        })
-                
-                # Lógica de Ciclos Longos (AGORA ADAPTATIVA)
-                elif row.get('rev_24h', True):
-                    # 🆕 Usar intervalo adaptativo baseado em dificuldade
-                    intervalo = calcular_proximo_intervalo(dif, tx)
-                    
-                    # Determinar qual coluna atualizar (simplificado)
-                    if intervalo == 3:
-                        col_alv, lbl = "rev_07d", f"Revisão Curta (3d)"
-                    elif intervalo == 5:
-                        col_alv, lbl = "rev_07d", f"Revisão Média (5d)"
-                    elif intervalo == 7:
-                        col_alv, lbl = "rev_07d", "Revisão 7d"
-                    else:  # 15+ dias
-                        col_alv, lbl = "rev_15d", "Revisão Longa (15d+)"
-                    
-                    if not row.get(col_alv, False):
-                        dt_prev = dt_est + timedelta(days=intervalo)
-                        if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
-                            atraso = (hoje - dt_prev).days
-                            pend.append({
-                                "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
-                                "tipo": lbl, "col": col_alv, "atraso": atraso, 
-                                "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                                "dificuldade": dif,  # 🆕 Adicionar dificuldade
-                                "taxa": tx
-                            })
-        
-        # 🆕 Filtrar por dificuldade
-        if filtro_dif != "Todas":
-            pend = [p for p in pend if p['dificuldade'] == filtro_dif]
+        # Usar função com cache para melhor performance
+        pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
         
         if not pend: 
             st.success("✨ Tudo em dia! Aproveite para avançar no conteúdo.")
@@ -473,7 +487,7 @@ else:
                         badge_class = "badge-red" if p['atraso'] > 0 else "badge-green" if p['atraso'] == 0 else "badge-gray"
                         status_text = f"⚠️ {p['atraso']}d atraso" if p['atraso'] > 0 else "🎯 Vence hoje" if p['atraso'] == 0 else "📅 Futura"
                         
-                        # 🆕 Mostrar dificuldade e recomendação de tempo
+                        # Mostrar dificuldade e recomendação de tempo
                         tempo_rec, desc = tempo_recomendado_rev24h(p['dificuldade'])
                         
                         st.markdown(f"""
@@ -511,7 +525,7 @@ else:
                             st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: REGISTRAR (MODIFICADA) ---
+    # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
         st.markdown('<h2 class="main-title">📝 Novo Registro de Estudo</h2>', unsafe_allow_html=True)
         mats = list(dados.get('materias', {}).keys())
@@ -537,7 +551,7 @@ else:
                     ac_reg = ca_reg.number_input("Questões Acertadas", 0)
                     to_reg = ct_reg.number_input("Total de Questões", 1)
                     
-                    # 🆕 NOVO: Classificação de Dificuldade
+                    # NOVO: Classificação de Dificuldade
                     st.markdown("##### 🎯 Como foi esse assunto?")
                     dif_reg = st.segmented_control(
                         "Classificação:",
@@ -568,7 +582,7 @@ else:
                                 "acertos": ac_reg, 
                                 "total": to_reg, 
                                 "taxa": taxa,
-                                "dificuldade": dif_reg,  # 🆕 Novo campo
+                                "dificuldade": dif_reg,  # Novo campo
                                 "comentarios": com_reg, 
                                 "tempo": t_b, 
                                 "rev_24h": False, 
@@ -654,7 +668,7 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # 1. BUSCA DATA DA PROVA (Isso aqui não está dando erro)
+        # 1. BUSCA DATA DA PROVA
         dias_prova = None
         try:
             ed_dados = get_editais(supabase).get(missao, {})
@@ -665,7 +679,7 @@ else:
         except:
             pass
 
-        # 2. CARTÕES (Isso também funciona)
+        # 2. CARTÕES
         if df.empty:
             t_q, precisao, horas = 0, 0, 0
         else:
@@ -685,16 +699,7 @@ else:
         
         st.divider()
 
-        # 3. AQUI ESTAVA O ERRO -> REMOVI O GRÁFICO
-        # Em vez do gráfico, vamos mostrar os nomes das colunas para sabermos o certo:
-        if not df.empty:
-            st.info("⬇️ Veja abaixo os nomes exatos das suas colunas:")
-            st.code(list(df.columns))
-            st.warning("Me mande essa lista acima para eu criar o gráfico com o nome certo!")
-        else:
-            st.info("Sem dados para mostrar colunas.")
-
-        # 4. GRÁFICO DE EVOLUÇÃO (Corrigido para usar 'data_estudo')
+        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
         if not df.empty:
             st.subheader("📈 Evolução de Acertos")
             try:
@@ -706,32 +711,8 @@ else:
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
-        # 4. DESCOBRIR O NOME DA COLUNA (DEBUG)
+        # 4. GRÁFICOS PLOTLY (se houver dados)
         if not df.empty:
-            st.warning("⚠️ O gráfico foi pausado porque precisamos saber o nome da coluna de data.")
-            st.write("Aqui estão os nomes das colunas da sua tabela:")
-            st.write(list(df.columns)) # <--- ISSO VAI MOSTRAR OS NOMES NA TELA
-            
-            # Quando descobrirmos o nome, voltamos com o gráfico!
-        else:
-            st.info("📚 Registre estudos para ver os dados detalhados.")
-
-        # 4. PARTE DOS GRÁFICOS
-        if df.empty:
-            st.info("📚 Quando você registrar seus estudos, os gráficos aparecerão aqui!")
-        else:
-            # Exemplo de gráfico de evolução (se quiser adicionar agora)
-            st.subheader("📈 Evolução de Acertos")
-            df_evo = df.groupby('data')['acertos'].sum().reset_index()
-            st.line_chart(df_evo.set_index('data'))
-
-        # 4. Só mostra os gráficos se houver dados
-        if df.empty:
-            st.info("📚 Os gráficos aparecerão aqui assim que registares o teu primeiro estudo!")
-        else:
-            # Aqui continuaria o teu código de gráficos (se tiveres)
-            pass
-            
             # Gráficos
             c_g1, c_g2 = st.columns(2)
             with c_g1:
@@ -775,7 +756,7 @@ else:
                                 </div>
                             """, unsafe_allow_html=True)
 
-    # --- ABA: HISTÓRICO (MODIFICADA COMPLETAMENTE) ---
+    # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
         st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
         
@@ -1052,4 +1033,3 @@ else:
                             st.rerun()
                     except Exception as e:
                         st.error(f"❌ Erro ao salvar: {e}")
-# ...existing code... (resto do arquivo)
