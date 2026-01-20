@@ -446,49 +446,18 @@ st.markdown("""
         display: inline-block;
     }
     
-    /* Calendário de estudos - BOLINHAS */
-    .calendario-container {
-        margin-top: 25px;
-        padding-top: 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        width: 100%;
-    }
-    
-    .calendario-title {
-        color: #adb5bd;
-        font-size: 0.9rem;
-        margin-bottom: 20px;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 600;
-    }
-    
     .calendario-grid {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 6px;
+        display: flex !important;
+        flex-direction: row !important; /* FORÇA ficar na horizontal */
+        flex-wrap: wrap !important;     /* Permite pular linha se acabar o espaço */
+        justify-content: center !important;
+        gap: 6px !important;
         margin-top: 10px;
         padding: 15px;
         background: rgba(255, 255, 255, 0.03);
         border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .dia-calendario {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        font-weight: 600;
-        font-size: 0.9rem;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        width: 100%;
     }
     
     .dia-estudado {
@@ -732,7 +701,7 @@ st.markdown("""
         }
         
         .legenda-calendario {
-            flex-direction: column;
+            flex-direction: row;
             gap: 15px;
         }
         
@@ -1315,39 +1284,7 @@ else:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Legenda
-                st.markdown('<div class="legenda-calendario">', unsafe_allow_html=True)
-                st.markdown('''
-                    <div class="legenda-item">
-                        <div class="dia-calendario dia-estudado" style="margin-right: 0;">
-                            <div class="dia-numero">✓</div>
-                        </div>
-                        <span>Estudou</span>
-                    </div>
-                ''', unsafe_allow_html=True)
                 
-                st.markdown('''
-                    <div class="legenda-item">
-                        <div class="dia-calendario dia-nao-estudado" style="margin-right: 0;">
-                            <div class="dia-numero">✗</div>
-                        </div>
-                        <span>Não estudou</span>
-                    </div>
-                ''', unsafe_allow_html=True)
-                
-                st.markdown('''
-                    <div class="legenda-item">
-                        <div class="dia-calendario dia-hoje" style="margin-right: 0;">
-                            <div class="dia-numero">H</div>
-                        </div>
-                        <span>Hoje</span>
-                    </div>
-                ''', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
