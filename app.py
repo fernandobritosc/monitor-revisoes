@@ -200,34 +200,41 @@ def formatar_tempo_para_bigint(tempo_str):
     except (ValueError, TypeError, AttributeError):
         return 0
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA - sem duplicação) ---
-if 'missao_ativa' not in st.session_state:
-    st.session_state.missao_ativa = None
-
-if 'edit_id' not in st.session_state:
-    st.session_state.edit_id = None
-
-# Inicializar estados das metas semanais
-if 'meta_horas_semana' not in st.session_state:
-    st.session_state.meta_horas_semana = 22  # Valor padrão
-
-if 'meta_questoes_semana' not in st.session_state:
-    st.session_state.meta_questoes_semana = 350  # Valor padrão
-
-# Inicializar estados para renomear matérias
-if 'editando_metas' not in st.session_state:
-    st.session_state.editando_metas = False
-
-# Inicializar estados para controle de edição de matérias
-if 'renomear_materia' not in st.session_state:
-    st.session_state.renomear_materia = {}
-
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
 from database import supabase
 from logic import get_editais, excluir_concurso_completo
 from styles import apply_styles
+
+# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
+if 'missao_ativa' not in st.session_state:
+    # Padrão Automático: tenta carregar a primeira missão disponível
+    try:
+        ed = get_editais(supabase)
+        if ed:
+            st.session_state.missao_ativa = list(ed.keys())[0]
+        else:
+            st.session_state.missao_ativa = None
+    except Exception:
+        st.session_state.missao_ativa = None
+
+if 'edit_id' not in st.session_state:
+    st.session_state.edit_id = None
+
+# Inicializar estados das metas semanais
+if 'meta_horas_semana' not in st.session_state:
+    st.session_state.meta_horas_semana = 22
+
+if 'meta_questoes_semana' not in st.session_state:
+    st.session_state.meta_questoes_semana = 350
+
+# Inicializar estados para controle de interface
+if 'editando_metas' not in st.session_state:
+    st.session_state.editando_metas = False
+
+if 'renomear_materia' not in st.session_state:
+    st.session_state.renomear_materia = {}
 
 # Aplicar estilos base
 apply_styles()
@@ -1090,14 +1097,6 @@ else:
     dados = get_editais(supabase).get(missao, {})
 
     with st.sidebar:
-        st.markdown(f"<h2 style='background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom:0;'>{missao}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color:#94A3B8; font-size:0.9rem; margin-bottom:20px;'>{dados.get('cargo', '')}</p>", unsafe_allow_html=True)
-        
-        # Botão com seta como na imagem
-        if st.button("◀ Voltar à Central", use_container_width=True): 
-            st.session_state.missao_ativa = None
-            st.rerun()
-        
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
         # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
@@ -1140,9 +1139,20 @@ else:
 
     # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
-        # Título principal com gradiente
-        st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
-        st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:2rem;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+        # Header compacto com título e botão de trocar missão
+        col_titulo, col_btn = st.columns([5, 1])
+        
+        with col_titulo:
+            st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+        
+        with col_btn:
+            st.write("")  # Espaçamento vertical
+            if st.button("🔄 Trocar", key="btn_trocar_missao", help="Voltar à Central de Comando para selecionar outra missão", use_container_width=True):
+                st.session_state.missao_ativa = None
+                st.rerun()
+        
+        st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
         
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
@@ -1925,8 +1935,42 @@ else:
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
-        st.markdown('<h2 class="main-title">⚙️ Configurar Missão</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Editar dados do edital ativo</p>', unsafe_allow_html=True)
+        st.markdown('<h2 class="main-title">⚙️ Configurações</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="section-subtitle">Gerenciar missões e preferências globais</p>', unsafe_allow_html=True)
+
+        # SEÇÃO: TROCAR MISSÃO (Conforme Plano de Profissionalização)
+        with st.container():
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown('### 📌 Seleção de Missão Foco', unsafe_allow_html=True)
+            
+            ed = get_editais(supabase)
+            if ed:
+                nomes_missoes = list(ed.keys())
+                try:
+                    indice_atual = nomes_missoes.index(missao) if missao in nomes_missoes else 0
+                except (ValueError, IndexError):
+                    indice_atual = 0
+                
+                nova_missao = st.selectbox(
+                    "Selecione o concurso que deseja focar agora:",
+                    options=nomes_missoes,
+                    index=indice_atual,
+                    help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida."
+                )
+                
+                if nova_missao != missao:
+                    st.session_state.missao_ativa = nova_missao
+                    st.success(f"✅ Missão alterada para: {nova_missao}")
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                st.warning("Nenhuma missão cadastrada encontrada.")
+                if st.button("➕ Cadastrar Nova Missão"):
+                    st.session_state.missao_ativa = None
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.divider()
 
         # Mostrar data atual se existir
         try:
