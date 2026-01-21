@@ -3,9 +3,6 @@ pandas>=2.0.0
 plotly>=5.17.0
 streamlit-option-menu>=0.3.0
 supabase>=2.0.0
-docling
-docling-core
-pymupdf
-notion-client
-python-dotenv>=1.0.0
-
+numpy
+scipy
+python-dotenv
