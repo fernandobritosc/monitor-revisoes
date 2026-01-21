@@ -1,4 +1,4 @@
-# app.py (sem bolinhas, apenas números horizontais)
+# app.py (com correção para exclusão em massa)
 
 import streamlit as st
 import pandas as pd
@@ -1747,21 +1747,40 @@ else:
                                     contador_registros = 0
                                     
                                     for mat in materias_selecionadas:
-                                        # Excluir a matéria da tabela editais_materias
-                                        supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
-                                        contador_exclusoes += 1
+                                        # Primeiro, contar registros de estudos associados a esta matéria
+                                        try:
+                                            res_contagem = supabase.table("registros_estudos")\
+                                                .select("id", count="exact")\
+                                                .eq("concurso", missao)\
+                                                .eq("materia", mat['materia'])\
+                                                .execute()
+                                            
+                                            # CORREÇÃO: Verificar se count existe e não é None
+                                            if hasattr(res_contagem, 'count') and res_contagem.count is not None:
+                                                contador_registros += res_contagem.count
+                                        except Exception:
+                                            # Se não conseguir contar, continuar mesmo assim
+                                            pass
                                         
                                         # Excluir registros de estudos dessa matéria
-                                        res_registros = supabase.table("registros_estudos").delete()\
-                                            .eq("concurso", missao)\
-                                            .eq("materia", mat['materia'])\
-                                            .execute()
+                                        try:
+                                            supabase.table("registros_estudos").delete()\
+                                                .eq("concurso", missao)\
+                                                .eq("materia", mat['materia'])\
+                                                .execute()
+                                        except Exception as e:
+                                            st.warning(f"Aviso: Não foi possível excluir todos os registros de '{mat['materia']}': {e}")
                                         
-                                        if hasattr(res_registros, 'count'):
-                                            contador_registros += res_registros.count
+                                        # Excluir a matéria da tabela editais_materias
+                                        try:
+                                            supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
+                                            contador_exclusoes += 1
+                                        except Exception as e:
+                                            st.error(f"Erro ao excluir matéria '{mat['materia']}': {e}")
                                     
                                     st.success(f"✅ **{contador_exclusoes} matéria(s) excluída(s) com sucesso!**")
-                                    st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
+                                    if contador_registros > 0:
+                                        st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
                                     
                                     # Limpar cache e recarregar
                                     st.cache_data.clear()
