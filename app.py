@@ -500,6 +500,43 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- NOVA FUNÇÃO: Processar assuntos em massa ---
+def processar_assuntos_em_massa(texto, separador=";"):
+    """
+    Processa um texto com múltiplos assuntos separados por um separador.
+    Retorna uma lista limpa de assuntos.
+    """
+    if not texto:
+        return []
+    
+    # Remove espaços em branco no início e fim
+    texto = texto.strip()
+    
+    # Processa baseado no separador
+    if separador == ";":
+        assuntos = texto.split(";")
+    elif separador == ",":
+        assuntos = texto.split(",")
+    elif separador == "linha":
+        # Divide por quebras de linha
+        assuntos = texto.split("\n")
+    elif separador == "ponto":
+        # Divide por ponto
+        assuntos = texto.split(".")
+    else:
+        assuntos = [texto]
+    
+    # Limpa cada assunto
+    assuntos_limpos = []
+    for assunto in assuntos:
+        assunto = assunto.strip()
+        # Remove caracteres especiais no início/fim
+        assunto = re.sub(r'^[^a-zA-Z0-9]*|[^a-zA-Z0-9]*$', '', assunto)
+        if assunto:  # Só adiciona se não estiver vazio
+            assuntos_limpos.append(assunto)
+    
+    return assuntos_limpos
+
 # --- 2. FUNÇÕES AUXILIARES ---
 def calcular_countdown(data_str):
     if not data_str: return None, "#adb5bd"
@@ -1708,28 +1745,109 @@ else:
                         
                         st.divider()
                         
-                        # Formulário para adicionar novo assunto
+                        # Formulário para adicionar novos assuntos - MELHORADO para aceitar múltiplos assuntos
                         with st.form(f"form_novo_assunto_{id_registro}"):
-                            st.markdown("**Adicionar novo assunto:**")
-                            novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_{id_registro}")
+                            st.markdown("**Adicionar novos assuntos (em massa)**")
+                            
+                            # Opções de entrada
+                            metodo_entrada = st.selectbox(
+                                "Como deseja adicionar os assuntos?",
+                                ["Um por um", "Vários com separador", "Vários por linhas"],
+                                key=f"metodo_{id_registro}"
+                            )
+                            
+                            if metodo_entrada == "Um por um":
+                                # Modo tradicional
+                                novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_single_{id_registro}")
+                                assuntos_para_adicionar = [novo_assunto] if novo_assunto else []
+                                
+                            elif metodo_entrada == "Vários com separador":
+                                # Modo com separador
+                                col_sep1, col_sep2 = st.columns([2, 1])
+                                with col_sep1:
+                                    texto_assuntos = st.text_area(
+                                        "Digite os assuntos separados por:",
+                                        placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
+                                        key=f"texto_assuntos_{id_registro}",
+                                        height=100
+                                    )
+                                with col_sep2:
+                                    separador = st.selectbox(
+                                        "Separador",
+                                        ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
+                                        key=f"separador_{id_registro}"
+                                    )
+                                    # Mapear separador
+                                    separador_map = {
+                                        "; (ponto e vírgula)": ";",
+                                        ", (vírgula)": ",",
+                                        ". (ponto)": ".",
+                                        "- (hífen)": "-",
+                                        "| (pipe)": "|"
+                                    }
+                                    separador_char = separador_map[separador]
+                                
+                                if texto_assuntos:
+                                    # Processar os assuntos
+                                    assuntos_brutos = texto_assuntos.split(separador_char)
+                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
+                                    
+                                    # Mostrar prévia
+                                    if assuntos_para_adicionar:
+                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
+                                        with st.expander("Ver assuntos"):
+                                            for a in assuntos_para_adicionar:
+                                                st.write(f"• {a}")
+                                else:
+                                    assuntos_para_adicionar = []
+                                    
+                            else:  # "Vários por linhas"
+                                # Modo com múltiplas linhas
+                                texto_assuntos = st.text_area(
+                                    "Digite um assunto por linha:",
+                                    placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
+                                    key=f"texto_assuntos_linhas_{id_registro}",
+                                    height=120
+                                )
+                                
+                                if texto_assuntos:
+                                    # Processar os assuntos (uma por linha)
+                                    assuntos_brutos = texto_assuntos.split("\n")
+                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
+                                    
+                                    # Mostrar prévia
+                                    if assuntos_para_adicionar:
+                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
+                                        with st.expander("Ver assuntos"):
+                                            for a in assuntos_para_adicionar:
+                                                st.write(f"• {a}")
+                                else:
+                                    assuntos_para_adicionar = []
                             
                             col_btn1, col_btn2 = st.columns(2)
-                            if col_btn1.form_submit_button("➕ Adicionar", use_container_width=True):
-                                if novo_assunto:
+                            if col_btn1.form_submit_button("➕ Adicionar Assuntos", use_container_width=True):
+                                if assuntos_para_adicionar:
                                     try:
                                         # Buscar tópicos atuais
                                         if not topicos:
                                             topicos = []
-                                        # Adicionar novo tópico à lista
-                                        topicos.append(novo_assunto)
+                                        # Adicionar novos tópicos à lista (evitar duplicados)
+                                        for assunto in assuntos_para_adicionar:
+                                            if assunto not in topicos:
+                                                topicos.append(assunto)
+                                            else:
+                                                st.warning(f"Assunto '{assunto}' já existe e foi ignorado.")
+                                        
                                         # Atualizar no banco
                                         supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
-                                        st.success(f"✅ Assunto '{novo_assunto}' adicionado!")
+                                        st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
                                         time.sleep(1)
                                         st.cache_data.clear()  # Limpar cache para atualizar a interface
                                         st.rerun()
                                     except Exception as e:
-                                        st.error(f"❌ Erro ao adicionar assunto: {e}")
+                                        st.error(f"❌ Erro ao adicionar assuntos: {e}")
+                                else:
+                                    st.warning("⚠️ Nenhum assunto válido para adicionar.")
                             
                             if col_btn2.form_submit_button("✏️ Renomear Matéria", use_container_width=True, type="secondary"):
                                 # Abrir modal para renomear matéria
@@ -1767,9 +1885,11 @@ else:
             else:
                 st.info("Nenhuma matéria cadastrada ainda.")
             
-            # Formulário para adicionar nova matéria
+            # Formulário para adicionar nova matéria - MELHORADO para aceitar múltiplos assuntos
+            st.divider()
+            st.markdown("#### ➕ Adicionar Nova Matéria")
+            
             with st.form("form_nova_materia"):
-                st.markdown("#### ➕ Adicionar Nova Matéria")
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
@@ -1778,34 +1898,108 @@ else:
                 with col2:
                     st.write("")  # Espaçamento
                     st.write("")  # Espaçamento
-                    if st.form_submit_button("Adicionar", use_container_width=True):
-                        if nova_materia:
-                            try:
-                                # Verificar se já existe
-                                res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
-                                if res_existente.data:
-                                    st.error(f"❌ A matéria '{nova_materia}' já existe!")
-                                else:
-                                    # Buscar cargo atual
-                                    cargo_atual = dados.get('cargo', '')
-                                    # Adicionar nova matéria com um assunto padrão
-                                    payload = {
-                                        "concurso": missao,
-                                        "cargo": cargo_atual,
-                                        "materia": nova_materia,
-                                        "topicos": ["Geral"]
-                                    }
-                                    # Se houver data_prova, incluir
-                                    if data_prova_direta:
-                                        payload["data_prova"] = data_prova_direta
-                                    
-                                    supabase.table("editais_materias").insert(payload).execute()
-                                    st.success(f"✅ Matéria '{nova_materia}' adicionada!")
-                                    time.sleep(1)
-                                    st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                    st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao adicionar matéria: {e}")
+                
+                # Seção para assuntos iniciais
+                st.markdown("**Assuntos iniciais (opcional):**")
+                
+                metodo_assuntos = st.selectbox(
+                    "Como deseja adicionar os assuntos iniciais?",
+                    ["Sem assuntos iniciais", "Um por um", "Vários com separador", "Vários por linhas"],
+                    key="metodo_assuntos_nova"
+                )
+                
+                assuntos_iniciais = []
+                
+                if metodo_assuntos == "Um por um":
+                    assunto_inicial = st.text_input("Assunto inicial", placeholder="Ex: Princípios fundamentais", key="assunto_inicial_single")
+                    if assunto_inicial:
+                        assuntos_iniciais = [assunto_inicial]
+                        
+                elif metodo_assuntos == "Vários com separador":
+                    col_sep1, col_sep2 = st.columns([2, 1])
+                    with col_sep1:
+                        texto_assuntos = st.text_area(
+                            "Digite os assuntos separados por:",
+                            placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
+                            key="texto_assuntos_nova",
+                            height=100
+                        )
+                    with col_sep2:
+                        separador = st.selectbox(
+                            "Separador",
+                            ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
+                            key="separador_nova"
+                        )
+                        # Mapear separador
+                        separador_map = {
+                            "; (ponto e vírgula)": ";",
+                            ", (vírgula)": ",",
+                            ". (ponto)": ".",
+                            "- (hífen)": "-",
+                            "| (pipe)": "|"
+                        }
+                        separador_char = separador_map[separador]
+                    
+                    if texto_assuntos:
+                        # Processar os assuntos
+                        assuntos_brutos = texto_assuntos.split(separador_char)
+                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
+                        
+                elif metodo_assuntos == "Vários por linhas":
+                    texto_assuntos = st.text_area(
+                        "Digite um assunto por linha:",
+                        placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
+                        key="texto_assuntos_linhas_nova",
+                        height=120
+                    )
+                    
+                    if texto_assuntos:
+                        # Processar os assuntos (uma por linha)
+                        assuntos_brutos = texto_assuntos.split("\n")
+                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
+                
+                # Mostrar prévia se houver assuntos
+                if assuntos_iniciais and metodo_assuntos != "Sem assuntos iniciais":
+                    st.info(f"**Prévia:** {len(assuntos_iniciais)} assunto(s) inicial(is)")
+                    with st.expander("Ver assuntos"):
+                        for a in assuntos_iniciais:
+                            st.write(f"• {a}")
+                
+                # Botão de envio
+                if st.form_submit_button("Adicionar Matéria", use_container_width=True):
+                    if nova_materia:
+                        try:
+                            # Verificar se já existe
+                            res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
+                            if res_existente.data:
+                                st.error(f"❌ A matéria '{nova_materia}' já existe!")
+                            else:
+                                # Buscar cargo atual
+                                cargo_atual = dados.get('cargo', '')
+                                # Se não houver assuntos definidos, usar "Geral" como padrão
+                                if not assuntos_iniciais:
+                                    assuntos_iniciais = ["Geral"]
+                                
+                                # Adicionar nova matéria
+                                payload = {
+                                    "concurso": missao,
+                                    "cargo": cargo_atual,
+                                    "materia": nova_materia,
+                                    "topicos": assuntos_iniciais
+                                }
+                                # Se houver data_prova, incluir
+                                if data_prova_direta:
+                                    payload["data_prova"] = data_prova_direta
+                                
+                                supabase.table("editais_materias").insert(payload).execute()
+                                st.success(f"✅ Matéria '{nova_materia}' adicionada com {len(assuntos_iniciais)} assunto(s) inicial(is)!")
+                                time.sleep(1)
+                                st.cache_data.clear()  # Limpar cache para atualizar a interface
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao adicionar matéria: {e}")
+                    else:
+                        st.warning("⚠️ Por favor, informe o nome da matéria.")
             
             st.markdown('</div>', unsafe_allow_html=True)
 
