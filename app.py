@@ -1658,19 +1658,31 @@ else:
                 except Exception as e:
                     st.error(f"❌ Erro ao salvar: {e}")
 
-        # Seção para adicionar/gerenciar matérias
+        # Seção para adicionar/gerenciar matérias - CORRIGIDA para usar a estrutura correta do banco
         st.divider()
         st.markdown("### 📚 Gerenciar Matérias e Assuntos")
         
         with st.container():
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             
+            # Buscar matérias do banco de dados (estrutura correta)
+            try:
+                res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
+                registros_materias = res_materias.data
+            except Exception as e:
+                st.error(f"Erro ao buscar matérias: {e}")
+                registros_materias = []
+            
             # Mostrar matérias atuais
-            if 'materias' in dados and dados['materias']:
+            if registros_materias:
                 st.markdown("**Matérias e assuntos cadastrados:**")
                 
                 # Para cada matéria, criar um expander com opções de edição
-                for materia, topicos in dados['materias'].items():
+                for reg in registros_materias:
+                    materia = reg['materia']
+                    topicos = reg['topicos'] if reg['topicos'] else []
+                    id_registro = reg['id']
+                    
                     with st.expander(f"📖 {materia} ({len(topicos)} assuntos)"):
                         # Mostrar assuntos atuais
                         st.markdown("**Assuntos atuais:**")
@@ -1679,20 +1691,16 @@ else:
                                 col1, col2 = st.columns([5, 1])
                                 col1.write(f"• {topico}")
                                 # Botão para remover assunto
-                                if col2.button("🗑️", key=f"del_{materia}_{i}", help="Remover assunto", use_container_width=True):
+                                if col2.button("🗑️", key=f"del_{id_registro}_{i}", help="Remover assunto", use_container_width=True):
                                     try:
                                         # Remover o tópico da lista
                                         novos_topicos = [t for t in topicos if t != topico]
                                         # Atualizar no banco
-                                        res = supabase.table("editais_materias").select("materias").eq("concurso", missao).execute()
-                                        if res.data:
-                                            materias_atual = res.data[0].get('materias', {})
-                                            materias_atual[materia] = novos_topicos
-                                            
-                                            supabase.table("editais_materias").update({"materias": materias_atual}).eq("concurso", missao).execute()
-                                            st.success(f"✅ Assunto '{topico}' removido!")
-                                            time.sleep(1)
-                                            st.rerun()
+                                        supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).execute()
+                                        st.success(f"✅ Assunto '{topico}' removido!")
+                                        time.sleep(1)
+                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
+                                        st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao remover assunto: {e}")
                         else:
@@ -1701,69 +1709,58 @@ else:
                         st.divider()
                         
                         # Formulário para adicionar novo assunto
-                        with st.form(f"form_novo_assunto_{materia}"):
+                        with st.form(f"form_novo_assunto_{id_registro}"):
                             st.markdown("**Adicionar novo assunto:**")
-                            novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_{materia}")
+                            novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_{id_registro}")
                             
                             col_btn1, col_btn2 = st.columns(2)
                             if col_btn1.form_submit_button("➕ Adicionar", use_container_width=True):
                                 if novo_assunto:
                                     try:
-                                        # Buscar matérias atuais
-                                        res = supabase.table("editais_materias").select("materias").eq("concurso", missao).execute()
-                                        if res.data:
-                                            materias_atual = res.data[0].get('materias', {})
-                                            # Adicionar novo tópico à matéria
-                                            if materia in materias_atual:
-                                                materias_atual[materia].append(novo_assunto)
-                                            else:
-                                                materias_atual[materia] = [novo_assunto]
-                                            
-                                            # Atualizar no banco
-                                            supabase.table("editais_materias").update({"materias": materias_atual}).eq("concurso", missao).execute()
-                                            st.success(f"✅ Assunto '{novo_assunto}' adicionado!")
-                                            time.sleep(1)
-                                            st.rerun()
+                                        # Buscar tópicos atuais
+                                        if not topicos:
+                                            topicos = []
+                                        # Adicionar novo tópico à lista
+                                        topicos.append(novo_assunto)
+                                        # Atualizar no banco
+                                        supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
+                                        st.success(f"✅ Assunto '{novo_assunto}' adicionado!")
+                                        time.sleep(1)
+                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
+                                        st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao adicionar assunto: {e}")
                             
                             if col_btn2.form_submit_button("✏️ Renomear Matéria", use_container_width=True, type="secondary"):
                                 # Abrir modal para renomear matéria
-                                st.session_state[f"renomear_{materia}"] = True
+                                st.session_state[f"renomear_{id_registro}"] = True
                                 st.rerun()
                         
                         # Modal para renomear matéria
-                        if st.session_state.get(f"renomear_{materia}", False):
+                        if st.session_state.get(f"renomear_{id_registro}", False):
                             st.markdown('<div style="background: rgba(255, 75, 75, 0.1); padding: 15px; border-radius: 8px; margin-top: 10px;">', unsafe_allow_html=True)
-                            novo_nome = st.text_input("Novo nome da matéria", value=materia, key=f"novo_nome_{materia}")
+                            novo_nome = st.text_input("Novo nome da matéria", value=materia, key=f"novo_nome_{id_registro}")
                             
                             col_r1, col_r2 = st.columns(2)
-                            if col_r1.button("💾 Salvar", key=f"salvar_nome_{materia}", use_container_width=True):
+                            if col_r1.button("💾 Salvar", key=f"salvar_nome_{id_registro}", use_container_width=True):
                                 if novo_nome and novo_nome != materia:
                                     try:
-                                        # Buscar matérias atuais
-                                        res = supabase.table("editais_materias").select("materias").eq("concurso", missao).execute()
-                                        if res.data:
-                                            materias_atual = res.data[0].get('materias', {})
-                                            # Renomear a chave no dicionário
-                                            if materia in materias_atual:
-                                                materias_atual[novo_nome] = materias_atual.pop(materia)
-                                            
-                                            # Atualizar no banco
-                                            supabase.table("editais_materias").update({"materias": materias_atual}).eq("concurso", missao).execute()
-                                            
-                                            # Atualizar também nos registros de estudo
-                                            supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
-                                            
-                                            st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
-                                            time.sleep(1)
-                                            st.session_state[f"renomear_{materia}"] = False
-                                            st.rerun()
+                                        # Atualizar o nome da matéria
+                                        supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).execute()
+                                        
+                                        # Atualizar também nos registros de estudo
+                                        supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
+                                        
+                                        st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
+                                        time.sleep(1)
+                                        st.session_state[f"renomear_{id_registro}"] = False
+                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
+                                        st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao renomear matéria: {e}")
                             
-                            if col_r2.button("❌ Cancelar", key=f"cancelar_nome_{materia}", use_container_width=True):
-                                st.session_state[f"renomear_{materia}"] = False
+                            if col_r2.button("❌ Cancelar", key=f"cancelar_nome_{id_registro}", use_container_width=True):
+                                st.session_state[f"renomear_{id_registro}"] = False
                                 st.rerun()
                             
                             st.markdown('</div>', unsafe_allow_html=True)
@@ -1784,17 +1781,28 @@ else:
                     if st.form_submit_button("Adicionar", use_container_width=True):
                         if nova_materia:
                             try:
-                                # Buscar matérias atuais
-                                res = supabase.table("editais_materias").select("materias").eq("concurso", missao).execute()
-                                if res.data:
-                                    materias_atual = res.data[0].get('materias', {})
+                                # Verificar se já existe
+                                res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
+                                if res_existente.data:
+                                    st.error(f"❌ A matéria '{nova_materia}' já existe!")
+                                else:
+                                    # Buscar cargo atual
+                                    cargo_atual = dados.get('cargo', '')
                                     # Adicionar nova matéria com um assunto padrão
-                                    materias_atual[nova_materia] = ["Geral"]
+                                    payload = {
+                                        "concurso": missao,
+                                        "cargo": cargo_atual,
+                                        "materia": nova_materia,
+                                        "topicos": ["Geral"]
+                                    }
+                                    # Se houver data_prova, incluir
+                                    if data_prova_direta:
+                                        payload["data_prova"] = data_prova_direta
                                     
-                                    # Atualizar no banco
-                                    supabase.table("editais_materias").update({"materias": materias_atual}).eq("concurso", missao).execute()
+                                    supabase.table("editais_materias").insert(payload).execute()
                                     st.success(f"✅ Matéria '{nova_materia}' adicionada!")
                                     time.sleep(1)
+                                    st.cache_data.clear()  # Limpar cache para atualizar a interface
                                     st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Erro ao adicionar matéria: {e}")
