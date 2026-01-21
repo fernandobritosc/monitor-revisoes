@@ -1,17 +1,14 @@
-# app.py (com Dashboard Avançado e Planejador)
+# app.py (com correção para exclusão em massa)
 
 import streamlit as st
 import pandas as pd
 import datetime
 from datetime import timedelta
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import re
 import time
+from streamlit_option_menu import option_menu
 import calendar
-import numpy as np
-from scipy import stats
 
 # --- NOVA FUNÇÃO: Cartões de métricas estilo da imagem ---
 def render_metric_card_simple(label, value, help_text=None):
@@ -93,177 +90,10 @@ def formatar_tempo_para_bigint(tempo_str):
             return horas * 60 + minutos
         else:
             return int(tempo_str)  # Já em minutos
-    except:
+    except (ValueError, TypeError, AttributeError):
         return 0
 
-# --- NOVAS FUNÇÕES PARA DASHBOARD AVANÇADO ---
-
-def gerar_heatmap_estudos(df):
-    """Gera um heatmap estilo GitHub contributions dos estudos"""
-    if df.empty:
-        return None
-    
-    try:
-        # Converter data para datetime
-        df['data'] = pd.to_datetime(df['data_estudo'])
-        df['ano'] = df['data'].dt.year
-        df['mes'] = df['data'].dt.month
-        df['dia'] = df['data'].dt.day
-        df['dia_semana'] = df['data'].dt.dayofweek  # 0=segunda, 6=domingo
-        
-        # Agrupar por data e calcular métricas
-        df_agrupado = df.groupby('data').agg({
-            'tempo': 'sum',
-            'total': 'sum',
-            'acertos': 'sum'
-        }).reset_index()
-        
-        # Criar dataframe com todas as datas dos últimos 6 meses
-        data_fim = datetime.date.today()
-        data_inicio = data_fim - timedelta(days=180)  # 6 meses
-        
-        todas_datas = pd.date_range(start=data_inicio, end=data_fim, freq='D')
-        df_todas_datas = pd.DataFrame({'data': todas_datas})
-        
-        # Mesclar com dados reais
-        df_todas_datas = df_todas_datas.merge(df_agrupado, on='data', how='left')
-        df_todas_datas.fillna(0, inplace=True)
-        
-        # Calcular intensidade (0-4 baseado no tempo de estudo)
-        # 0: 0min, 1: 1-30min, 2: 31-90min, 3: 91-180min, 4: 180+ min
-        df_todas_datas['intensidade'] = pd.cut(
-            df_todas_datas['tempo'] / 60,  # converter para horas
-            bins=[-1, 0, 0.5, 1.5, 3, float('inf')],
-            labels=[0, 1, 2, 3, 4]
-        ).astype(int)
-        
-        # Preparar dados para o heatmap
-        df_todas_datas['ano'] = df_todas_datas['data'].dt.year
-        df_todas_datas['mes'] = df_todas_datas['data'].dt.month
-        df_todas_datas['dia'] = df_todas_datas['data'].dt.day
-        df_todas_datas['dia_semana'] = df_todas_datas['data'].dt.dayofweek
-        df_todas_datas['semana_ano'] = df_todas_datas['data'].dt.isocalendar().week
-        
-        return df_todas_datas
-    
-    except Exception as e:
-        st.error(f"Erro ao gerar heatmap: {e}")
-        return None
-
-def criar_grafico_burndown(df, meta_horas, meta_questoes):
-    """Cria gráfico de burndown para a semana atual"""
-    if df.empty:
-        return None
-    
-    hoje = datetime.date.today()
-    inicio_semana = hoje - timedelta(days=hoje.weekday())  # Segunda-feira
-    fim_semana = inicio_semana + timedelta(days=6)  # Domingo
-    
-    # Filtrar dados da semana
-    df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
-    df_semana = df[(df['data_estudo_date'] >= inicio_semana) & (df['data_estudo_date'] <= fim_semana)]
-    
-    if df_semana.empty:
-        return None
-    
-    # Criar dataframe com todos os dias da semana
-    dias_semana = [inicio_semana + timedelta(days=i) for i in range(7)]
-    df_burndown = pd.DataFrame({'data': dias_semana})
-    
-    # Calcular acumulado real
-    acumulado_horas = []
-    acumulado_questoes = []
-    horas_acum = 0
-    questoes_acum = 0
-    
-    for dia in dias_semana:
-        dados_dia = df_semana[df_semana['data_estudo_date'] == dia]
-        if not dados_dia.empty:
-            horas_acum += dados_dia['tempo'].sum() / 60
-            questoes_acum += dados_dia['total'].sum()
-        acumulado_horas.append(horas_acum)
-        acumulado_questoes.append(questoes_acum)
-    
-    df_burndown['horas_acumulado'] = acumulado_horas
-    df_burndown['questoes_acumulado'] = acumulado_questoes
-    
-    # Calcular meta ideal (linear)
-    meta_horas_diaria = meta_horas / 7
-    meta_questoes_diaria = meta_questoes / 7
-    
-    df_burndown['meta_horas_ideal'] = [meta_horas_diaria * (i+1) for i in range(7)]
-    df_burndown['meta_questoes_ideal'] = [meta_questoes_diaria * (i+1) for i in range(7)]
-    
-    return df_burndown
-
-def prever_desempenho(df, data_prova):
-    """Prever desempenho na prova baseado no histórico"""
-    if df.empty or data_prova is None:
-        return None, None, None
-    
-    try:
-        # Converter data da prova
-        data_prova_dt = pd.to_datetime(data_prova).date()
-        hoje = datetime.date.today()
-        
-        # Calcular dias até a prova
-        dias_ate_prova = (data_prova_dt - hoje).days
-        
-        if dias_ate_prova <= 0:
-            return None, None, None
-        
-        # Preparar dados históricos
-        df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
-        df = df.sort_values('data_estudo_date')
-        
-        # Calcular média móvel das últimas 4 semanas
-        data_limite = hoje - timedelta(days=28)  # 4 semanas
-        df_recente = df[df['data_estudo_date'] >= data_limite]
-        
-        if df_recente.empty:
-            # Usar todos os dados se não houver dados recentes
-            df_recente = df
-        
-        # Calcular taxa de acerto média
-        taxa_media = df_recente['taxa'].mean()
-        
-        # Calcular tendência (regressão linear simples)
-        if len(df_recente) > 1:
-            # Criar índice numérico para regressão
-            df_recente = df_recente.copy()
-            df_recente['dias_desde_inicio'] = (df_recente['data_estudo_date'] - df_recente['data_estudo_date'].min()).dt.days
-            
-            # Regressão linear
-            slope, intercept, r_value, p_value, std_err = stats.linregress(
-                df_recente['dias_desde_inicio'], 
-                df_recente['taxa']
-            )
-            
-            # Prever para o dia da prova
-            dias_totais = (data_prova_dt - df_recente['data_estudo_date'].min()).days
-            previsao = intercept + slope * dias_totais
-            
-            # Limitar previsão entre 0 e 100
-            previsao = max(0, min(100, previsao))
-            
-            # Calcular intervalo de confiança (simplificado)
-            erro_padrao = std_err * np.sqrt(1 + 1/len(df_recente) + 
-                                          (dias_totais - df_recente['dias_desde_inicio'].mean())**2 / 
-                                          np.sum((df_recente['dias_desde_inicio'] - df_recente['dias_desde_inicio'].mean())**2))
-            
-            limite_inferior = previsao - 1.96 * erro_padrao
-            limite_superior = previsao + 1.96 * erro_padrao
-            
-            return previsao, limite_inferior, limite_superior
-        else:
-            # Não há dados suficientes para regressão
-            return taxa_media, taxa_media - 5, taxa_media + 5
-    
-    except Exception as e:
-        st.error(f"Erro na previsão: {e}")
-        return None, None, None
-
-# --- INICIALIZAÇÃO OBRIGATÓRIA ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA - sem duplicação) ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
@@ -285,10 +115,6 @@ if 'editando_metas' not in st.session_state:
 if 'renomear_materia' not in st.session_state:
     st.session_state.renomear_materia = {}
 
-# Inicializar o estado do menu
-if 'menu_atual' not in st.session_state:
-    st.session_state.menu_atual = "Home"
-
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
@@ -299,7 +125,7 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno
+# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS das bolinhas e números do mês)
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -421,7 +247,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
     
-    /* Menu Lateral Personalizado */
+    /* Menu Lateral Personalizado (ATUALIZADO para corresponder à imagem) */
     .sidebar-menu {
         background: transparent;
         margin-top: 20px;
@@ -471,6 +297,8 @@ st.markdown("""
         color: #FF4B4B;
         font-weight: 600;
     }
+    
+    /* REMOVIDO: Navegação por páginas estilo da imagem (1-6) */
     
     /* Tabela de Disciplinas */
     .disciplina-table {
@@ -627,6 +455,8 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
+    /* REMOVIDO: Números de 1 a 31 em linha horizontal ÚNICA - REMOVIDO POR SOLICITAÇÃO */
+    
     /* Seção de Constância Melhorada */
     .constancia-section {
         margin-top: 30px;
@@ -714,13 +544,14 @@ def calcular_countdown(data_str):
         dias = (pd.to_datetime(data_str).date() - datetime.date.today()).days
         cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
         return dias, cor
-    except: return None, "#adb5bd"
+    except (ValueError, TypeError, AttributeError):
+        return None, "#adb5bd"
 
 # Formata minutos em '2h 15m'
 def formatar_minutos(minutos_totais):
     try:
         minutos = int(minutos_totais)
-    except Exception:
+    except (ValueError, TypeError):
         return "0m"
     horas = minutos // 60
     minutos_rest = minutos % 60
@@ -732,7 +563,7 @@ def formatar_horas_minutos(minutos_totais):
     """Formata minutos para 'Xh YYmin'"""
     try:
         minutos = int(minutos_totais)
-    except Exception:
+    except (ValueError, TypeError):
         return "0h00min"
     horas = minutos // 60
     minutos_rest = minutos % 60
@@ -742,7 +573,7 @@ def get_badge_cor(taxa):
     """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
     try:
         t = float(taxa)
-    except Exception:
+    except (ValueError, TypeError):
         return "badge-gray"
     if t >= 80:
         return "badge-green"
@@ -758,7 +589,7 @@ def calcular_streak(df):
         return 0
     try:
         datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
-    except Exception:
+    except (ValueError, TypeError, KeyError):
         return 0
     dias = set(datas)
     streak = 0
@@ -777,7 +608,7 @@ def calcular_recorde_streak(df):
         return 0
     try:
         datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().sort_values().unique()
-    except Exception:
+    except (ValueError, TypeError, KeyError):
         return 0
     
     if len(datas) == 0:
@@ -806,7 +637,7 @@ def calcular_datas_streak(df):
     try:
         datas = pd.to_datetime(df['data_estudo']).dt.date.dropna().unique()
         datas = sorted(datas, reverse=True)  # Mais recentes primeiro
-    except Exception:
+    except (ValueError, TypeError, KeyError):
         return None, None
     
     if not datas:
@@ -840,8 +671,13 @@ def calcular_estudos_semana(df):
         questoes_semana = df_semana['total'].sum()
         
         return horas_semana, questoes_semana
-    except Exception:
+    except (ValueError, TypeError, KeyError):
         return 0, 0
+
+# --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
+
+# --- FUNÇÃO REMOVIDA: gerar_numeros_mes (1-31) ---
+# A função gerar_numeros_mes foi REMOVIDA por solicitação
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -896,7 +732,7 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
                     "dificuldade": dif, "taxa": tx
                 })
         
-        # Lógica de Ciclos Longos (ADAPTATIVA)
+        # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
         else:  # rev_24h = True
             intervalo = calcular_proximo_intervalo(dif, tx)
             
@@ -1000,7 +836,9 @@ else:
     try:
         res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
         df = pd.DataFrame(res.data)
-    except: df = pd.DataFrame()
+    except Exception as e:
+        st.warning(f"Aviso: Não foi possível carregar registros - {e}")
+        df = pd.DataFrame()
     
     # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
     try:
@@ -1009,7 +847,8 @@ else:
             data_prova_direta = res_data_prova.data[0].get('data_prova')
         else:
             data_prova_direta = None
-    except:
+    except Exception as e:
+        # Log silencioso do erro, mas continua funcionando
         data_prova_direta = None
     
     dados = get_editais(supabase).get(missao, {})
@@ -1025,48 +864,45 @@ else:
         
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
-        # Menu personalizado usando st.radio
+        # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
         opcoes_menu = [
             "🏠 Home",
             "🔄 Revisões", 
             "📝 Registrar",
             "📊 Dashboard",
-            "📋 Planejador",  # NOVA ABA
             "📜 Histórico",
             "⚙️ Configurar"
         ]
         
-        # Use uma chave fixa para o radio
         menu_selecionado = st.radio(
             "Navegação",
             opcoes_menu,
-            index=opcoes_menu.index(f"🏠 Home") if f"🏠 Home" in opcoes_menu else 0,
+            index=0,
             label_visibility="collapsed",
-            key="sidebar_menu_radio"
+            key="sidebar_menu"
         )
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Atualizar o estado do menu baseado na seleção
+        # REMOVIDO: Navegação por páginas (1-6) - Conforme solicitado
+        
+        # Extrair o nome real do menu (remover ícone)
         if "🏠 Home" in menu_selecionado:
-            st.session_state.menu_atual = "Home"
+            menu = "Home"
         elif "🔄 Revisões" in menu_selecionado:
-            st.session_state.menu_atual = "Revisões"
+            menu = "Revisões"
         elif "📝 Registrar" in menu_selecionado:
-            st.session_state.menu_atual = "Registrar"
+            menu = "Registrar"
         elif "📊 Dashboard" in menu_selecionado:
-            st.session_state.menu_atual = "Dashboard"
-        elif "📋 Planejador" in menu_selecionado:  # NOVA ABA
-            st.session_state.menu_atual = "Planejador"
+            menu = "Dashboard"
         elif "📜 Histórico" in menu_selecionado:
-            st.session_state.menu_atual = "Histórico"
+            menu = "Histórico"
         elif "⚙️ Configurar" in menu_selecionado:
-            st.session_state.menu_atual = "Configurar"
+            menu = "Configurar"
+        else:
+            menu = "Home"
 
-    # Usar o estado atual do menu
-    menu = st.session_state.menu_atual
-
-    # --- ABA: HOME (PAINEL GERAL) ---
+    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO sem a seção de dias do mês ---
     if menu == "Home":
         # Título principal
         st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
@@ -1075,7 +911,7 @@ else:
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # --- VISÃO DO MÊS ATUAL ---
+            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
             st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
             # Calcular métricas
@@ -1112,7 +948,7 @@ else:
             
             st.divider()
 
-            # --- SEÇÃO DE CONSTÂNCIA MELHORADA ---
+            # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
             streak = calcular_streak(df)
@@ -1168,6 +1004,8 @@ else:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
+            # --- SEÇÃO DE DIAS DO MÊS FOI COMPLETAMENTE REMOVIDA AQUI ---
+            
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
@@ -1209,7 +1047,7 @@ else:
                     else:
                         return 'color: #FF4B4B; font-weight: 700;'
                 
-                styled_df = display_df.style.applymap(color_taxa, subset=['%'])
+                styled_df = display_df.style.map(color_taxa, subset=['%'])
                 
                 # Mostrar tabela
                 st.dataframe(
@@ -1230,6 +1068,10 @@ else:
             
             # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
+            
+            # Estado para controlar a edição das metas
+            if 'editando_metas' not in st.session_state:
+                st.session_state.editando_metas = False
             
             horas_semana, questoes_semana = calcular_estudos_semana(df)
             meta_horas = st.session_state.meta_horas_semana
@@ -1502,7 +1344,7 @@ else:
 
     # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
-        st.markdown('<h2 class="main-title">📊 Dashboard Avançado</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
         if df.empty:
             t_q, precisao, horas = 0, 0, 0
@@ -1512,318 +1354,27 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             horas = df['tempo'].sum()/60
         
-        # Exibe os cartões básicos
+        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
         m1, m2, m3 = st.columns(3)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
         with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
         
         st.divider()
-        
-        # --- NOVA SEÇÃO: DASHBOARD AVANÇADO ---
-        st.markdown('<h3 style="color:#fff; margin-top:2rem;">📈 Dashboard Preditivo</h3>', unsafe_allow_html=True)
-        
+
+        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
         if not df.empty:
-            # 1. HEATMAP DE ESTUDOS
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 🔥 Heatmap de Estudos (últimos 6 meses)")
-            
-            # Gerar dados do heatmap
-            df_heatmap = gerar_heatmap_estudos(df)
-            
-            if df_heatmap is not None:
-                # Criar heatmap com Plotly
-                meses = df_heatmap['mes'].unique()
-                semanas = df_heatmap['semana_ano'].unique()
-                
-                # Preparar matriz para heatmap
-                heatmap_data = []
-                for semana in sorted(semanas):
-                    semana_data = []
-                    for dia in range(7):  # 0-6 (segunda a domingo)
-                        dados = df_heatmap[(df_heatmap['semana_ano'] == semana) & 
-                                          (df_heatmap['dia_semana'] == dia)]
-                        if not dados.empty:
-                            semana_data.append(dados['intensidade'].iloc[0])
-                        else:
-                            semana_data.append(0)
-                    heatmap_data.append(semana_data)
-                
-                # Criar heatmap
-                fig_heatmap = go.Figure(data=go.Heatmap(
-                    z=heatmap_data,
-                    colorscale=[
-                        [0, 'rgba(255, 255, 255, 0.1)'],
-                        [0.25, 'rgba(255, 75, 75, 0.3)'],
-                        [0.5, 'rgba(255, 75, 75, 0.5)'],
-                        [0.75, 'rgba(255, 75, 75, 0.7)'],
-                        [1, 'rgba(255, 75, 75, 1)']
-                    ],
-                    showscale=False
-                ))
-                
-                fig_heatmap.update_layout(
-                    height=300,
-                    margin=dict(t=20, b=20, l=20, r=20),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(
-                        tickmode='array',
-                        tickvals=list(range(7)),
-                        ticktext=['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
-                        showgrid=False
-                    ),
-                    yaxis=dict(showgrid=False)
-                )
-                
-                st.plotly_chart(fig_heatmap, use_container_width=True)
-                
-                # Legenda
-                col_leg1, col_leg2, col_leg3, col_leg4, col_leg5 = st.columns(5)
-                with col_leg1:
-                    st.markdown('<div style="text-align:center;"><div style="width:20px;height:20px;background:rgba(255,255,255,0.1);margin:0 auto;"></div><div style="font-size:0.7rem;color:#adb5bd;">0min</div></div>', unsafe_allow_html=True)
-                with col_leg2:
-                    st.markdown('<div style="text-align:center;"><div style="width:20px;height:20px;background:rgba(255,75,75,0.3);margin:0 auto;"></div><div style="font-size:0.7rem;color:#adb5bd;">1-30min</div></div>', unsafe_allow_html=True)
-                with col_leg3:
-                    st.markdown('<div style="text-align:center;"><div style="width:20px;height:20px;background:rgba(255,75,75,0.5);margin:0 auto;"></div><div style="font-size:0.7rem;color:#adb5bd;">31-90min</div></div>', unsafe_allow_html=True)
-                with col_leg4:
-                    st.markdown('<div style="text-align:center;"><div style="width:20px;height:20px;background:rgba(255,75,75,0.7);margin:0 auto;"></div><div style="font-size:0.7rem;color:#adb5bd;">91-180min</div></div>', unsafe_allow_html=True)
-                with col_leg5:
-                    st.markdown('<div style="text-align:center;"><div style="width:20px;height:20px;background:rgba(255,75,75,1);margin:0 auto;"></div><div style="font-size:0.7rem;color:#adb5bd;">180+min</div></div>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # 2. GRÁFICO DE BURNDOWN
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📉 Burndown Semanal")
-            
-            meta_horas = st.session_state.meta_horas_semana
-            meta_questoes = st.session_state.meta_questoes_semana
-            
-            df_burndown = criar_grafico_burndown(df, meta_horas, meta_questoes)
-            
-            if df_burndown is not None:
-                # Criar gráfico de burndown duplo
-                fig_burndown = make_subplots(
-                    rows=2, cols=1,
-                    subplot_titles=("Horas de Estudo", "Questões Resolvidas"),
-                    vertical_spacing=0.15
-                )
-                
-                # Gráfico de horas
-                fig_burndown.add_trace(
-                    go.Scatter(
-                        x=df_burndown['data'],
-                        y=df_burndown['horas_acumulado'],
-                        name='Real',
-                        line=dict(color='#FF4B4B', width=3),
-                        mode='lines+markers'
-                    ),
-                    row=1, col=1
-                )
-                
-                fig_burndown.add_trace(
-                    go.Scatter(
-                        x=df_burndown['data'],
-                        y=df_burndown['meta_horas_ideal'],
-                        name='Meta Ideal',
-                        line=dict(color='#00FF00', width=2, dash='dash'),
-                        mode='lines'
-                    ),
-                    row=1, col=1
-                )
-                
-                # Gráfico de questões
-                fig_burndown.add_trace(
-                    go.Scatter(
-                        x=df_burndown['data'],
-                        y=df_burndown['questoes_acumulado'],
-                        name='Real',
-                        line=dict(color='#FF4B4B', width=3),
-                        mode='lines+markers',
-                        showlegend=False
-                    ),
-                    row=2, col=1
-                )
-                
-                fig_burndown.add_trace(
-                    go.Scatter(
-                        x=df_burndown['data'],
-                        y=df_burndown['meta_questoes_ideal'],
-                        name='Meta Ideal',
-                        line=dict(color='#00FF00', width=2, dash='dash'),
-                        mode='lines',
-                        showlegend=False
-                    ),
-                    row=2, col=1
-                )
-                
-                fig_burndown.update_layout(
-                    height=500,
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1
-                    ),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color="#fff"),
-                    margin=dict(t=50, b=20, l=40, r=20)
-                )
-                
-                fig_burndown.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
-                fig_burndown.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
-                
-                st.plotly_chart(fig_burndown, use_container_width=True)
-                
-                # Estatísticas da semana
-                hoje = datetime.date.today()
-                dia_semana = hoje.weekday()  # 0=segunda, 6=domingo
-                
-                if dia_semana < 7:  # Se ainda está na semana
-                    progresso_ate_hoje_horas = df_burndown.loc[dia_semana, 'horas_acumulado']
-                    meta_ate_hoje_horas = df_burndown.loc[dia_semana, 'meta_horas_ideal']
-                    percentual_horas = (progresso_ate_hoje_horas / meta_ate_hoje_horas * 100) if meta_ate_hoje_horas > 0 else 0
-                    
-                    progresso_ate_hoje_questoes = df_burndown.loc[dia_semana, 'questoes_acumulado']
-                    meta_ate_hoje_questoes = df_burndown.loc[dia_semana, 'meta_questoes_ideal']
-                    percentual_questoes = (progresso_ate_hoje_questoes / meta_ate_hoje_questoes * 100) if meta_ate_hoje_questoes > 0 else 0
-                    
-                    col_stat1, col_stat2 = st.columns(2)
-                    with col_stat1:
-                        st.metric("Horas (até hoje)", f"{progresso_ate_hoje_horas:.1f}h", 
-                                 f"{percentual_horas:.1f}% da meta")
-                    with col_stat2:
-                        st.metric("Questões (até hoje)", f"{int(progresso_ate_hoje_questoes)}", 
-                                 f"{percentual_questoes:.1f}% da meta")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # 3. PREVISÃO DE DESEMPENHO
-            if data_prova_direta:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### 🔮 Previsão de Desempenho")
-                
-                # Calcular previsão
-                previsao, limite_inferior, limite_superior = prever_desempenho(df, data_prova_direta)
-                
-                if previsao is not None:
-                    # Data da prova
-                    data_prova_dt = pd.to_datetime(data_prova_direta).date()
-                    dias_ate_prova = (data_prova_dt - datetime.date.today()).days
-                    
-                    col_info1, col_info2, col_info3 = st.columns(3)
-                    
-                    with col_info1:
-                        st.metric("Dias até a prova", dias_ate_prova)
-                    
-                    with col_info2:
-                        # Classificação da previsão
-                        if previsao >= 80:
-                            status = "🟢 Excelente"
-                            cor = "#00FF00"
-                        elif previsao >= 70:
-                            status = "🟡 Bom"
-                            cor = "#FFD700"
-                        elif previsao >= 60:
-                            status = "🟠 Regular"
-                            cor = "#FF8C00"
-                        else:
-                            status = "🔴 Precisa melhorar"
-                            cor = "#FF4B4B"
-                        
-                        st.metric("Previsão", f"{previsao:.1f}%", status)
-                    
-                    with col_info3:
-                        # Taxa atual para comparação
-                        taxa_atual = df['taxa'].mean()
-                        diferenca = previsao - taxa_atual
-                        sinal = "+" if diferenca >= 0 else ""
-                        st.metric("Taxa atual", f"{taxa_atual:.1f}%", f"{sinal}{diferenca:.1f}%")
-                    
-                    # Gráfico de previsão
-                    fig_previsao = go.Figure()
-                    
-                    # Adicionar barra de previsão
-                    fig_previsao.add_trace(go.Indicator(
-                        mode="gauge+number",
-                        value=previsao,
-                        title={'text': "Previsão na Prova", 'font': {'color': '#fff', 'size': 16}},
-                        number={'font': {'color': '#fff', 'size': 40}},
-                        gauge={
-                            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#fff"},
-                            'bar': {'color': "#FF4B4B"},
-                            'bgcolor': "rgba(0,0,0,0)",
-                            'borderwidth': 2,
-                            'bordercolor': "rgba(255,255,255,0.2)",
-                            'steps': [
-                                {'range': [0, 60], 'color': 'rgba(255, 75, 75, 0.1)'},
-                                {'range': [60, 70], 'color': 'rgba(255, 140, 0, 0.1)'},
-                                {'range': [70, 80], 'color': 'rgba(255, 215, 0, 0.1)'},
-                                {'range': [80, 100], 'color': 'rgba(0, 255, 0, 0.1)'}
-                            ]
-                        }
-                    ))
-                    
-                    fig_previsao.update_layout(
-                        height=300,
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color="#fff"),
-                        margin=dict(t=50, b=20, l=20, r=20)
-                    )
-                    
-                    st.plotly_chart(fig_previsao, use_container_width=True)
-                    
-                    # Intervalo de confiança
-                    if limite_inferior is not None and limite_superior is not None:
-                        st.info(f"📊 **Intervalo de confiança 95%:** {limite_inferior:.1f}% a {limite_superior:.1f}%")
-                    
-                    # Recomendações baseadas na previsão
-                    st.markdown("##### 💡 Recomendações:")
-                    
-                    if previsao >= 80:
-                        st.success("""
-                        **Excelente!** Você está no caminho certo:
-                        - Mantenha o ritmo atual
-                        - Foque em revisões de assuntos mais difíceis
-                        - Faça simulados para testar tempo
-                        """)
-                    elif previsao >= 70:
-                        st.warning("""
-                        **Bom, mas pode melhorar:**
-                        - Aumente em 10% o tempo de estudo diário
-                        - Revise assuntos com taxa abaixo de 70%
-                        - Pratique mais questões dos tópicos fracos
-                        """)
-                    elif previsao >= 60:
-                        st.error("""
-                        **Precisa de ajustes:**
-                        - Aumente em 20% o tempo de estudo
-                        - Identifique seus 3 piores assuntos
-                        - Dedique 30% do tempo a eles
-                        - Considere revisar material teórico
-                        """)
-                    else:
-                        st.error("""
-                        **Atenção urgente necessária:**
-                        - Dobrar o tempo de estudo
-                        - Revisar fundamentos teóricos
-                        - Buscar material adicional
-                        - Considerar ajuda de mentor/professor
-                        """)
-                
-                else:
-                    st.info("Não há dados suficientes para fazer uma previsão precisa. Continue estudando!")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-        
+            st.subheader("📈 Evolução de Acertos")
+            try:
+                # Agrupa pela coluna certa: 'data_estudo'
+                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
+                st.line_chart(df_evo.set_index('data_estudo'))
+            except Exception as e:
+                st.error(f"Erro ao gerar gráfico: {e}")
         else:
-            st.info("📚 Registre seus primeiros estudos para ver as visualizações avançadas!")
-        
-        # 4. GRÁFICOS PLOTLY (se houver dados) - mantendo os originais
+            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
+
+        # 4. GRÁFICOS PLOTLY (se houver dados)
         if not df.empty:
             # Gráficos
             c_g1, c_g2 = st.columns(2)
@@ -1867,330 +1418,6 @@ else:
                                     <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
                                 </div>
                             """, unsafe_allow_html=True)
-
-    # --- NOVA ABA: PLANEJADOR ---
-    elif menu == "Planejador":
-        st.markdown('<h2 class="main-title">📋 Planejador Inteligente</h2>', unsafe_allow_html=True)
-        
-        if df.empty:
-            st.info("📚 Registre alguns estudos primeiro para habilitar o planejador inteligente.")
-        else:
-            # --- SEÇÃO 1: PLANEJAMENTO DIÁRIO INTELIGENTE ---
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("### 🎯 Sugestões para Hoje")
-            
-            # Calcular revisões pendentes
-            pend = calcular_revisoes_pendentes(df, "Pendentes/Hoje", "Todas")
-            
-            if pend:
-                # Ordenar por prioridade (dificuldade + atraso)
-                pend_priorizados = sorted(pend, 
-                                         key=lambda x: (
-                                             0 if x['dificuldade'] == "🔴 Difícil" else 
-                                             1 if x['dificuldade'] == "🟡 Médio" else 2,
-                                             -x['atraso']
-                                         ))
-                
-                # Pegar as 3 principais sugestões
-                sugestoes = pend_priorizados[:3]
-                
-                for i, sug in enumerate(sugestoes):
-                    with st.container():
-                        st.markdown(f"""
-                        <div style="padding: 15px; background: rgba(26, 28, 35, 0.5); border-radius: 8px; margin-bottom: 10px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                <span style="background: rgba(255, 75, 75, 0.2); color: #FF4B4B; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">
-                                    {sug['dificuldade']}
-                                </span>
-                                <span style="color: #adb5bd; font-size: 0.8rem;">
-                                    Pendente há {sug['atraso']} dia(s)
-                                </span>
-                            </div>
-                            <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">
-                                📚 {sug['materia']}
-                            </h4>
-                            <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0;">
-                                {sug['assunto']} • <b>{sug['tipo']}</b>
-                            </p>
-                            <div style="color: #FF8E8E; font-size: 0.8rem;">
-                                ⏱️ Recomendado: {tempo_recomendado_rev24h(sug['dificuldade'])[0]}min
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # Botão para ver todas as revisões (CORREÇÃO: usando JavaScript para navegar)
-                if st.button("Ver Todas as Revisões Pendentes", use_container_width=True):
-                    # Usar JavaScript para mudar a seleção do menu
-                    js = """
-                    <script>
-                    // Encontrar o elemento do radio button para "Revisões"
-                    const radioButtons = document.querySelectorAll('input[type="radio"]');
-                    for (let radio of radioButtons) {
-                        if (radio.nextElementSibling && radio.nextElementSibling.textContent.includes('🔄 Revisões')) {
-                            radio.click();
-                            break;
-                        }
-                    }
-                    </script>
-                    """
-                    st.components.v1.html(js, height=0)
-                    # Atualizar estado e recarregar
-                    st.session_state.menu_atual = "Revisões"
-                    st.rerun()
-            else:
-                st.success("🎉 Nenhuma revisão pendente para hoje!")
-                st.markdown("""
-                **Sugestão:** Aproveite para:
-                1. Avançar em novos conteúdos
-                2. Revisar assuntos marcados como difíceis
-                3. Fazer questões de provas anteriores
-                """)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO 2: DISTRIBUIÇÃO DE TEMPO ---
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("### ⏱️ Distribuição de Tempo Recomendada")
-            
-            # Calcular desempenho por matéria
-            df_mat = df.groupby('materia').agg({
-                'tempo': 'sum',
-                'taxa': 'mean',
-                'total': 'sum'
-            }).reset_index()
-            
-            if not df_mat.empty:
-                # Calcular peso baseado em desempenho (matérias com baixa taxa ganham mais peso)
-                df_mat['peso'] = df_mat.apply(lambda row: 
-                    max(0.1, 1 - (row['taxa'] / 100)) * (row['total'] / df_mat['total'].sum() if df_mat['total'].sum() > 0 else 1),
-                    axis=1
-                )
-                
-                # Normalizar pesos para soma = 100%
-                peso_total = df_mat['peso'].sum()
-                if peso_total > 0:
-                    df_mat['percentual_tempo'] = (df_mat['peso'] / peso_total * 100).round(1)
-                else:
-                    df_mat['percentual_tempo'] = 100 / len(df_mat)
-                
-                # Ordenar por percentual (maior primeiro)
-                df_mat = df_mat.sort_values('percentual_tempo', ascending=False)
-                
-                # Definir tempo total disponível (padrão: 4 horas)
-                tempo_total_disponivel = st.slider(
-                    "Tempo total disponível para estudo hoje (minutos):",
-                    min_value=60,
-                    max_value=480,
-                    value=240,
-                    step=30
-                )
-                
-                # Calcular minutos para cada matéria
-                df_mat['minutos_recomendados'] = (tempo_total_disponivel * df_mat['percentual_tempo'] / 100).round(0).astype(int)
-                
-                # Exibir distribuição
-                for _, row in df_mat.iterrows():
-                    col1, col2, col3, col4 = st.columns([3, 1, 3, 1])
-                    
-                    with col1:
-                        st.markdown(f"**{row['materia']}**")
-                    
-                    with col2:
-                        st.markdown(f"<span style='color: #FF8E8E;'>{row['taxa']:.1f}%</span>", unsafe_allow_html=True)
-                    
-                    with col3:
-                        progress = min(100, row['percentual_tempo'])
-                        render_progress_bar(progress, height=8)
-                    
-                    with col4:
-                        st.markdown(f"<span style='color: #fff; font-weight: 600;'>{row['minutos_recomendados']}min</span>", unsafe_allow_html=True)
-                
-                # Resumo
-                st.divider()
-                col_sum1, col_sum2, col_sum3 = st.columns(3)
-                with col_sum1:
-                    st.metric("Matérias", len(df_mat))
-                with col_sum2:
-                    st.metric("Tempo Total", f"{tempo_total_disponivel}min")
-                with col_sum3:
-                    st.metric("Meta Diária", f"{sum(df_mat['minutos_recomendados'])}min")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO 3: PLANEJAMENTO SEMANAL ---
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("### 🗓️ Planejamento Semanal")
-            
-            # Obter metas semanais
-            meta_horas = st.session_state.meta_horas_semana
-            meta_questoes = st.session_state.meta_questoes_semana
-            
-            # Calcular progresso da semana atual
-            horas_semana, questoes_semana = calcular_estudos_semana(df)
-            progresso_horas = (horas_semana / meta_horas * 100) if meta_horas > 0 else 0
-            progresso_questoes = (questoes_semana / meta_questoes * 100) if meta_questoes > 0 else 0
-            
-            # Interface de planejamento
-            st.markdown("#### Distribuição Semanal")
-            
-            # Dias da semana
-            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-            horas_por_dia = meta_horas / 7
-            
-            # Criar layout de grid para planejamento
-            cols = st.columns(7)
-            
-            for i, (col, dia) in enumerate(zip(cols, dias_semana)):
-                with col:
-                    st.markdown(f"**{dia}**")
-                    
-                    # Calcular se é hoje
-                    hoje = datetime.date.today()
-                    dia_atual = hoje.weekday()  # 0 = segunda
-                    
-                    if i == dia_atual:
-                        st.markdown('<span style="color: #FF4B4B; font-size: 0.8rem;">HOJE</span>', unsafe_allow_html=True)
-                    
-                    # Mostrar meta diária
-                    st.markdown(f"<span style='color: #adb5bd; font-size: 0.8rem;'>{horas_por_dia:.1f}h</span>", unsafe_allow_html=True)
-                    
-                    # Verificar se já estudou hoje
-                    if i == dia_atual:
-                        # Calcular horas estudadas hoje
-                        hoje_str = hoje.strftime('%Y-%m-%d')
-                        df_hoje = df[pd.to_datetime(df['data_estudo']).dt.strftime('%Y-%m-%d') == hoje_str]
-                        horas_hoje = df_hoje['tempo'].sum() / 60 if not df_hoje.empty else 0
-                        
-                        if horas_hoje > 0:
-                            progresso_dia = min(100, (horas_hoje / horas_por_dia) * 100)
-                            render_progress_bar(progresso_dia, height=6)
-                            st.markdown(f"<span style='color: #00FF00; font-size: 0.7rem;'>{horas_hoje:.1f}h</span>", unsafe_allow_html=True)
-            
-            # Resumo semanal
-            st.divider()
-            col_week1, col_week2, col_week3 = st.columns(3)
-            
-            with col_week1:
-                st.metric("Horas (semana)", f"{horas_semana:.1f}h", f"{progresso_horas:.1f}%")
-            
-            with col_week2:
-                st.metric("Questões (semana)", int(questoes_semana), f"{progresso_questoes:.1f}%")
-            
-            with col_week3:
-                dias_restantes = 7 - datetime.date.today().weekday()
-                st.metric("Dias restantes", dias_restantes)
-            
-            # Sugestão de ajuste
-            if progresso_horas < 50:
-                st.warning(f"⚠️ **Atenção:** Você está com {progresso_horas:.1f}% da meta de horas. Considere aumentar o tempo de estudo nos próximos dias.")
-            elif progresso_horas > 90:
-                st.success(f"✅ **Excelente!** Você já atingiu {progresso_horas:.1f}% da meta semanal.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO 4: ANÁLISE DE CORRELAÇÃO ---
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("### 📈 Análise: Tempo vs Desempenho")
-            
-            # Preparar dados para análise
-            if len(df) > 1:
-                # Criar dataframe para análise
-                df_corr = df.copy()
-                df_corr['horas'] = df_corr['tempo'] / 60
-                
-                # Calcular correlação
-                try:
-                    correlacao = df_corr['horas'].corr(df_corr['taxa'])
-                    
-                    # Criar scatter plot
-                    fig_corr = px.scatter(
-                        df_corr, 
-                        x='horas', 
-                        y='taxa',
-                        color='materia',
-                        hover_data=['assunto', 'data_estudo'],
-                        title=f"Correlação Tempo × Desempenho (r = {correlacao:.2f})",
-                        labels={'horas': 'Tempo de Estudo (horas)', 'taxa': 'Taxa de Acerto (%)'}
-                    )
-                    
-                    # Adicionar linha de tendência
-                    if len(df_corr) > 2:
-                        z = np.polyfit(df_corr['horas'], df_corr['taxa'], 1)
-                        p = np.poly1d(z)
-                        fig_corr.add_trace(
-                            go.Scatter(
-                                x=df_corr['horas'],
-                                y=p(df_corr['horas']),
-                                mode='lines',
-                                name='Tendência',
-                                line=dict(color='#FF4B4B', width=2, dash='dash')
-                            )
-                        )
-                    
-                    fig_corr.update_layout(
-                        height=400,
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color="#fff"),
-                        showlegend=True
-                    )
-                    
-                    st.plotly_chart(fig_corr, use_container_width=True)
-                    
-                    # Insights baseados na correlação
-                    st.markdown("#### 💡 Insights:")
-                    
-                    if correlacao > 0.3:
-                        st.success(f"""
-                        **Relação positiva forte (r = {correlacao:.2f})**
-                        - Seu desempenho tende a melhorar com mais tempo de estudo
-                        - Continue investindo tempo nas matérias
-                        - O esforço está sendo bem direcionado
-                        """)
-                    elif correlacao > 0.1:
-                        st.info(f"""
-                        **Relação positiva moderada (r = {correlacao:.2f})**
-                        - Há uma tendência de melhora com mais tempo
-                        - Considere revisar a qualidade do estudo, não apenas a quantidade
-                        - Experimente técnicas de estudo ativo
-                        """)
-                    elif correlacao > -0.1:
-                        st.warning(f"""
-                        **Relação neutra (r = {correlacao:.2f})**
-                        - O tempo de estudo não está correlacionado com desempenho
-                        - Reavalie seus métodos de estudo
-                        - Foque na qualidade e técnicas de revisão
-                        """)
-                    else:
-                        st.error(f"""
-                        **Relação negativa (r = {correlacao:.2f})**
-                        - Mais tempo está associado a menor desempenho
-                        - Possível cansaço ou estudo ineficiente
-                        - Considere pausas e técnicas de Pomodoro
-                        - Revise os assuntos estudados por muito tempo
-                        """)
-                    
-                    # Estatísticas adicionais
-                    col_stat1, col_stat2, col_stat3 = st.columns(3)
-                    
-                    with col_stat1:
-                        tempo_medio = df_corr['horas'].mean()
-                        st.metric("Tempo médio por sessão", f"{tempo_medio:.1f}h")
-                    
-                    with col_stat2:
-                        taxa_media = df_corr['taxa'].mean()
-                        st.metric("Taxa média", f"{taxa_media:.1f}%")
-                    
-                    with col_stat3:
-                        sessoes = len(df_corr)
-                        st.metric("Sessões analisadas", sessoes)
-                    
-                except Exception as e:
-                    st.info("Não foi possível calcular a correlação com os dados disponíveis.")
-            else:
-                st.info("📊 Registre mais estudos para habilitar a análise de correlação.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
@@ -2372,7 +1599,7 @@ else:
                                     st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
                         
                         with metrics_col:
-                            # Métricas
+                            # Métricas - CORREÇÃO: string formatada corretamente
                             html_metricas = f"""
                                 <div style="text-align: right;">
                                     <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
@@ -2619,6 +1846,9 @@ else:
                                 key=f"metodo_{id_registro}"
                             )
                             
+                            # Inicializar variável para evitar NameError
+                            assuntos_para_adicionar = []
+                            
                             if metodo_entrada == "Um por um":
                                 # Modo tradicional
                                 novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_single_{id_registro}")
@@ -2654,6 +1884,8 @@ else:
                                     # Processar os assuntos
                                     assuntos_brutos = texto_assuntos.split(separador_char)
                                     assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
+                                else:
+                                    assuntos_para_adicionar = []
                                     
                                     # Mostrar prévia
                                     if assuntos_para_adicionar:
@@ -2674,6 +1906,8 @@ else:
                                     # Processar os assuntos (uma por linha)
                                     assuntos_brutos = texto_assuntos.split("\n")
                                     assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
+                                else:
+                                    assuntos_para_adicionar = []
                                     
                                     # Mostrar prévia
                                     if assuntos_para_adicionar:
@@ -2869,14 +2103,25 @@ else:
             st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
             
             st.warning("Esta ação é irreversível!")
-            if st.button("🗑️ Excluir Missão Completa", type="secondary", use_container_width=True):
-                # Confirmação adicional
-                confirmacao = st.checkbox("Confirmo que quero excluir TODOS os dados desta missão")
-                if confirmacao:
+            
+            # Checkbox de confirmação ANTES do botão (para funcionar corretamente com Streamlit)
+            confirmacao_exclusao = st.checkbox(
+                "✅ Confirmo que quero excluir TODOS os dados desta missão", 
+                key="confirm_delete_mission"
+            )
+            
+            # Botão só aparece habilitado se checkbox estiver marcado
+            if confirmacao_exclusao:
+                st.error("⚠️ ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos!")
+                if st.button("🗑️ EXCLUIR MISSÃO PERMANENTEMENTE", type="primary", use_container_width=True):
                     if excluir_concurso_completo(supabase, missao):  # Função do logic.py
-                        st.error("Missão excluída! Redirecionando...")
+                        st.success("Missão excluída! Redirecionando...")
                         st.session_state.missao_ativa = None
                         time.sleep(2)
                         st.rerun()
+                    else:
+                        st.error("❌ Erro ao excluir missão. Tente novamente.")
+            else:
+                st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
             
             st.markdown('</div>', unsafe_allow_html=True)
