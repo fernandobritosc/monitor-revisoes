@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import re
 import time
-from streamlit_option_menu import option_menu
 import calendar
 import numpy as np
 from scipy import stats
@@ -232,7 +231,7 @@ def prever_desempenho(df, data_prova):
         if len(df_recente) > 1:
             # Criar índice numérico para regressão
             df_recente = df_recente.copy()
-            df_recente['dias_desde_inicio'] = (df_recente['data_estudo_date'] - df_recente['data_estuno_date'].min()).dt.days
+            df_recente['dias_desde_inicio'] = (df_recente['data_estudo_date'] - df_recente['data_estudo_date'].min()).dt.days
             
             # Regressão linear
             slope, intercept, r_value, p_value, std_err = stats.linregress(
@@ -241,7 +240,7 @@ def prever_desempenho(df, data_prova):
             )
             
             # Prever para o dia da prova
-            dias_totais = (data_prova_dt - df_recente['data_estuno_date'].min()).days
+            dias_totais = (data_prova_dt - df_recente['data_estudo_date'].min()).days
             previsao = intercept + slope * dias_totais
             
             # Limitar previsão entre 0 e 100
@@ -264,7 +263,7 @@ def prever_desempenho(df, data_prova):
         st.error(f"Erro na previsão: {e}")
         return None, None, None
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA - sem duplicação) ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA ---
 if 'missao_ativa' not in st.session_state:
     st.session_state.missao_ativa = None
 
@@ -286,6 +285,10 @@ if 'editando_metas' not in st.session_state:
 if 'renomear_materia' not in st.session_state:
     st.session_state.renomear_materia = {}
 
+# Inicializar o estado do menu
+if 'menu_atual' not in st.session_state:
+    st.session_state.menu_atual = "Home"
+
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
@@ -296,7 +299,7 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS das bolinhas e números do mês)
+# CSS Customizado para Layout Moderno
 st.markdown("""
     <style>
     /* Importar Fonte */
@@ -418,7 +421,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
     
-    /* Menu Lateral Personalizado (ATUALIZADO para corresponder à imagem) */
+    /* Menu Lateral Personalizado */
     .sidebar-menu {
         background: transparent;
         margin-top: 20px;
@@ -468,8 +471,6 @@ st.markdown("""
         color: #FF4B4B;
         font-weight: 600;
     }
-    
-    /* REMOVIDO: Navegação por páginas estilo da imagem (1-6) */
     
     /* Tabela de Disciplinas */
     .disciplina-table {
@@ -625,8 +626,6 @@ st.markdown("""
     .stSegmentedControl {
         margin-bottom: 10px;
     }
-    
-    /* REMOVIDO: Números de 1 a 31 em linha horizontal ÚNICA - REMOVIDO POR SOLICITAÇÃO */
     
     /* Seção de Constância Melhorada */
     .constancia-section {
@@ -844,11 +843,6 @@ def calcular_estudos_semana(df):
     except Exception:
         return 0, 0
 
-# --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
-
-# --- FUNÇÃO REMOVIDA: gerar_numeros_mes (1-31) ---
-# A função gerar_numeros_mes foi REMOVIDA por solicitação
-
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
     """
@@ -902,7 +896,7 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
                     "dificuldade": dif, "taxa": tx
                 })
         
-        # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
+        # Lógica de Ciclos Longos (ADAPTATIVA)
         else:  # rev_24h = True
             intervalo = calcular_proximo_intervalo(dif, tx)
             
@@ -1031,7 +1025,7 @@ else:
         
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
-        # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
+        # Menu personalizado usando st.radio
         opcoes_menu = [
             "🏠 Home",
             "🔄 Revisões", 
@@ -1042,35 +1036,37 @@ else:
             "⚙️ Configurar"
         ]
         
+        # Use uma chave fixa para o radio
         menu_selecionado = st.radio(
             "Navegação",
             opcoes_menu,
-            index=0,
+            index=opcoes_menu.index(f"🏠 Home") if f"🏠 Home" in opcoes_menu else 0,
             label_visibility="collapsed",
-            key="sidebar_menu"
+            key="sidebar_menu_radio"
         )
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Extrair o nome real do menu (remover ícone)
+        # Atualizar o estado do menu baseado na seleção
         if "🏠 Home" in menu_selecionado:
-            menu = "Home"
+            st.session_state.menu_atual = "Home"
         elif "🔄 Revisões" in menu_selecionado:
-            menu = "Revisões"
+            st.session_state.menu_atual = "Revisões"
         elif "📝 Registrar" in menu_selecionado:
-            menu = "Registrar"
+            st.session_state.menu_atual = "Registrar"
         elif "📊 Dashboard" in menu_selecionado:
-            menu = "Dashboard"
+            st.session_state.menu_atual = "Dashboard"
         elif "📋 Planejador" in menu_selecionado:  # NOVA ABA
-            menu = "Planejador"
+            st.session_state.menu_atual = "Planejador"
         elif "📜 Histórico" in menu_selecionado:
-            menu = "Histórico"
+            st.session_state.menu_atual = "Histórico"
         elif "⚙️ Configurar" in menu_selecionado:
-            menu = "Configurar"
-        else:
-            menu = "Home"
+            st.session_state.menu_atual = "Configurar"
 
-    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO sem a seção de dias do mês ---
+    # Usar o estado atual do menu
+    menu = st.session_state.menu_atual
+
+    # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
         # Título principal
         st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
@@ -1079,7 +1075,7 @@ else:
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
-            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
+            # --- VISÃO DO MÊS ATUAL ---
             st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
             # Calcular métricas
@@ -1116,7 +1112,7 @@ else:
             
             st.divider()
 
-            # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
+            # --- SEÇÃO DE CONSTÂNCIA MELHORADA ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
             streak = calcular_streak(df)
@@ -1171,8 +1167,6 @@ else:
             if inicio_streak and fim_streak:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO DE DIAS DO MÊS FOI COMPLETAMENTE REMOVIDA AQUI ---
             
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
@@ -1236,10 +1230,6 @@ else:
             
             # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
-            
-            # Estado para controlar a edição das metas
-            if 'editando_metas' not in st.session_state:
-                st.session_state.editando_metas = False
             
             horas_semana, questoes_semana = calcular_estudos_semana(df)
             meta_horas = st.session_state.meta_horas_semana
@@ -1510,7 +1500,7 @@ else:
                             st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA: DASHBOARD (ATUALIZADO COM VISUALIZAÇÕES AVANÇADAS) ---
+    # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard Avançado</h2>', unsafe_allow_html=True)
         
@@ -1928,9 +1918,24 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # Botão para ver todas as revisões
+                # Botão para ver todas as revisões (CORREÇÃO: usando JavaScript para navegar)
                 if st.button("Ver Todas as Revisões Pendentes", use_container_width=True):
-                    st.session_state.sidebar_menu = "Revisões"
+                    # Usar JavaScript para mudar a seleção do menu
+                    js = """
+                    <script>
+                    // Encontrar o elemento do radio button para "Revisões"
+                    const radioButtons = document.querySelectorAll('input[type="radio"]');
+                    for (let radio of radioButtons) {
+                        if (radio.nextElementSibling && radio.nextElementSibling.textContent.includes('🔄 Revisões')) {
+                            radio.click();
+                            break;
+                        }
+                    }
+                    </script>
+                    """
+                    st.components.v1.html(js, height=0)
+                    # Atualizar estado e recarregar
+                    st.session_state.menu_atual = "Revisões"
                     st.rerun()
             else:
                 st.success("🎉 Nenhuma revisão pendente para hoje!")
@@ -2367,7 +2372,7 @@ else:
                                     st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
                         
                         with metrics_col:
-                            # Métricas - CORREÇÃO: string formatada corretamente
+                            # Métricas
                             html_metricas = f"""
                                 <div style="text-align: right;">
                                     <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
