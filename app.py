@@ -242,33 +242,33 @@ apply_styles()
 # CSS Customizado para Layout Moderno - TEMA ROXO/CIANO
 st.markdown("""
     <style>
-    /* Importar Fonte */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    /* Importar Fontes: Inter e Montserrat */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Montserrat:wght@400;500;600;700;800&display=swap');
     
-    /* Variáveis de cores - TEMA ESTUDEI / MODERNO */
+    /* Variáveis de cores - TEMA FUTURISTA PREMIUM */
     :root {
         --primary: #8B5CF6;
-        --secondary: #06B6D4;
+        --secondary: #00FFFF; /* Ciano Neon */
         --accent: #EC4899;
         --success: #10B981;
         --warning: #F59E0B;
         --danger: #EF4444;
-        --bg-dark: #0F0F23;
+        --bg-dark: #0E1117; /* Cinza Oceano Profundo */
         --bg-card: rgba(15, 15, 35, 0.7);
         --text-primary: #FFFFFF;
         --text-secondary: #94A3B8;
-        --border: rgba(139, 92, 246, 0.15);
-        --sidebar-bg: #1abc9c; /* Teal vibrante estilo Estudei */
-        --sidebar-active: #16a085; /* Tom mais escuro para item ativo */
+        --border-glow: rgba(0, 255, 255, 0.1);
+        --sidebar-bg: #0E1117; 
+        --sidebar-border: 1px solid rgba(0, 255, 255, 0.1);
     }
     
     html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Montserrat', 'Inter', sans-serif;
     }
     
-    /* Fundo principal mais escuro */
+    /* Fundo principal */
     .stApp {
-        background: linear-gradient(180deg, #0F0F23 0%, #1a1a2e 50%, #0F0F23 100%);
+        background: #0E1117;
     }
     
     /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
@@ -276,184 +276,82 @@ st.markdown("""
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
         max-width: calc(100% - 300px) !important;
         margin-left: 300px !important;
-        padding-left: 5rem !important;
-        padding-right: 5rem !important;
-        transition: all 0.3s ease;
+        padding-left: 4rem !important;
+        padding-right: 4rem !important;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
     /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 1100px !important; /* Limite elegante para leitura */
+        max-width: 1200px !important; 
         margin-left: auto !important;
         margin-right: auto !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
     /* Container principal padrão */
     .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
+        padding-top: 3rem;
+        padding-bottom: 3rem;
         transition: all 0.3s ease;
     }
 
     /* Cards Glassmorphism Modernos */
     .modern-card {
-        background: rgba(15, 15, 35, 0.7);
+        background: rgba(14, 17, 23, 0.7);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.1);
         border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 16px;
+        padding: 30px;
+        margin-bottom: 20px;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
     .modern-card:hover {
-        border-color: rgba(139, 92, 246, 0.4);
+        border-color: rgba(0, 255, 255, 0.3);
         transform: translateY(-4px);
-        box-shadow: 0 12px 40px rgba(139, 92, 246, 0.15);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     }
 
-    /* Títulos com Gradiente Roxo/Ciano */
+    /* Títulos Uppercase e Letter Spacing */
     .main-title {
-        font-size: 2.2rem;
+        font-family: 'Montserrat', sans-serif;
+        font-size: 2.5rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 1rem;
-    }
-    
-    .visao-mes-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        background: linear-gradient(135deg, #FFFFFF 0%, #00FFFF 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 1.5rem;
-        padding-bottom: 0.75rem;
-        border-bottom: 1px solid rgba(139, 92, 246, 0.2);
     }
     
     .section-subtitle {
         color: #94A3B8;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-bottom: 1.5rem;
-    }
-
-    /* Badges Modernos */
-    .badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 11px;
+        letter-spacing: 2px;
         font-weight: 600;
-        backdrop-filter: blur(10px);
-    }
-    .badge-red { 
-        background: rgba(239, 68, 68, 0.15); 
-        color: #EF4444; 
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
-    }
-    .badge-green { 
-        background: rgba(16, 185, 129, 0.15); 
-        color: #10B981; 
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
-    }
-    .badge-gray { 
-        background: rgba(148, 163, 184, 0.1); 
-        color: #94A3B8; 
-        border: 1px solid rgba(148, 163, 184, 0.2); 
-    }
-    .badge-purple {
-        background: rgba(139, 92, 246, 0.15);
-        color: #8B5CF6;
-        border: 1px solid rgba(139, 92, 246, 0.3);
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.1);
-    }
-    .badge-cyan {
-        background: rgba(6, 182, 212, 0.15);
-        color: #06B6D4;
-        border: 1px solid rgba(6, 182, 212, 0.3);
-        box-shadow: 0 0 10px rgba(6, 182, 212, 0.1);
+        margin-bottom: 2rem;
     }
 
-    /* Progress Bar Moderna */
-    .modern-progress-container {
-        width: 100%;
-        background-color: rgba(139, 92, 246, 0.1);
-        border-radius: 10px;
-        height: 8px;
-        margin: 10px 0;
-        overflow: hidden;
-    }
-    .modern-progress-fill {
-        height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #8B5CF6, #06B6D4);
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
-        transition: width 0.5s ease;
-    }
-
-    /* Sidebar Estilo Estudei */
+    /* Sidebar Futurista */
     [data-testid="stSidebar"] {
         background-color: var(--sidebar-bg) !important;
         background-image: none !important;
-        border-right: none !important;
-        min-width: 280px !important;
-        width: 280px !important;
+        border-right: var(--sidebar-border) !important;
+        min-width: 300px !important;
+        width: 300px !important;
     }
     
-    /* Menu Lateral Estudei */
-    .sidebar-menu {
-        margin-top: 10px;
+    /* Remover elementos padrão da sidebar */
+    .stSidebarUserContent {
+        padding-top: 2rem;
     }
-    
-    .sidebar-menu .stRadio > div {
-        flex-direction: column;
-        gap: 5px;
-    }
-    
-    .sidebar-menu .stRadio > div > label {
-        background: transparent;
-        border-radius: 10px;
-        padding: 12px 20px !important;
-        margin: 2px 10px;
-        border-left: none !important;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        cursor: pointer;
-    }
-    
-    .sidebar-menu .stRadio > div > label:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-    
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        color: rgba(255, 255, 255, 0.85); /* Texto branco suave */
-        font-weight: 500;
-        font-size: 16px !important;
-    }
-    
-    /* Item Ativo Estilo Estudei (Retângulo escuro) */
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] {
-        background-color: var(--sidebar-active) !important;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] div:first-child {
-        color: #FFFFFF !important; /* Texto branco puro no ativo */
-        font-weight: 700 !important;
-    }
-    
+
     /* Estilização das TABS (Abas) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
@@ -1149,45 +1047,55 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
-        
-        # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
-        opcoes_menu = [
-            "🏠 Home",
-            "🔄 Revisões", 
-            "📝 Registrar",
-            "📊 Dashboard",
-            "📜 Histórico",
-            "⚙️ Configurar"
-        ]
-        
-        menu_selecionado = st.radio(
-            "Navegação",
-            opcoes_menu,
-            index=0,
-            label_visibility="collapsed",
-            key="sidebar_menu"
+        # Menu Premium com option_menu
+        menu_selecionado = option_menu(
+            menu_title=None,
+            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "HISTÓRICO", "CONFIGURAR"],
+            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "clock-history", "gear"],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#94A3B8", "font-size": "14px"}, 
+                "nav-link": {
+                    "font-family": "Montserrat, sans-serif",
+                    "font-size": "14px",
+                    "text-align": "left",
+                    "margin": "8px 10px",
+                    "padding": "12px 20px",
+                    "border-radius": "12px",
+                    "--hover-color": "rgba(255, 255, 255, 0.03)",
+                    "letter-spacing": "1px",
+                    "font-weight": "500",
+                    "color": "#94A3B8",
+                    "transition": "all 0.3s ease"
+                },
+                "nav-link-selected": {
+                    "background-color": "rgba(138, 43, 226, 0.15)",
+                    "color": "#fff",
+                    "font-weight": "700",
+                    "border-left": "4px solid #00FFFF",
+                    "border-radius": "4px 12px 12px 4px",
+                    "box-shadow": "0 0 15px rgba(138, 43, 226, 0.2)"
+                },
+            }
         )
         
         st.markdown('</div>', unsafe_allow_html=True)
         
         # REMOVIDO: Navegação por páginas (1-6) - Conforme solicitado
         
-        # Extrair o nome real do menu (remover ícone)
-        if "🏠 Home" in menu_selecionado:
-            menu = "Home"
-        elif "🔄 Revisões" in menu_selecionado:
-            menu = "Revisões"
-        elif "📝 Registrar" in menu_selecionado:
-            menu = "Registrar"
-        elif "📊 Dashboard" in menu_selecionado:
-            menu = "Dashboard"
-        elif "📜 Histórico" in menu_selecionado:
-            menu = "Histórico"
-        elif "⚙️ Configurar" in menu_selecionado:
-            menu = "Configurar"
-        else:
-            menu = "Home"
+        # Mapeamento do Menu (Opção UI -> Estado Interno)
+        mapa_menu = {
+            "HOME": "Home",
+            "REVISÕES": "Revisões",
+            "REGISTRAR": "Registrar",
+            "DASHBOARD": "Dashboard",
+            "HISTÓRICO": "Histórico",
+            "CONFIGURAR": "Configurar"
+        }
+        
+        menu = mapa_menu.get(menu_selecionado, "Home")
 
     # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
