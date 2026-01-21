@@ -1,4 +1,4 @@
-# app.py (com Dashboard Avançado)
+# app.py (com Dashboard Avançado e Planejador)
 
 import streamlit as st
 import pandas as pd
@@ -1037,6 +1037,7 @@ else:
             "🔄 Revisões", 
             "📝 Registrar",
             "📊 Dashboard",
+            "📋 Planejador",  # NOVA ABA
             "📜 Histórico",
             "⚙️ Configurar"
         ]
@@ -1051,8 +1052,6 @@ else:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # REMOVIDO: Navegação por páginas (1-6) - Conforme solicitado
-        
         # Extrair o nome real do menu (remover ícone)
         if "🏠 Home" in menu_selecionado:
             menu = "Home"
@@ -1062,6 +1061,8 @@ else:
             menu = "Registrar"
         elif "📊 Dashboard" in menu_selecionado:
             menu = "Dashboard"
+        elif "📋 Planejador" in menu_selecionado:  # NOVA ABA
+            menu = "Planejador"
         elif "📜 Histórico" in menu_selecionado:
             menu = "Histórico"
         elif "⚙️ Configurar" in menu_selecionado:
@@ -1876,6 +1877,315 @@ else:
                                     <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
                                 </div>
                             """, unsafe_allow_html=True)
+
+    # --- NOVA ABA: PLANEJADOR ---
+    elif menu == "Planejador":
+        st.markdown('<h2 class="main-title">📋 Planejador Inteligente</h2>', unsafe_allow_html=True)
+        
+        if df.empty:
+            st.info("📚 Registre alguns estudos primeiro para habilitar o planejador inteligente.")
+        else:
+            # --- SEÇÃO 1: PLANEJAMENTO DIÁRIO INTELIGENTE ---
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("### 🎯 Sugestões para Hoje")
+            
+            # Calcular revisões pendentes
+            pend = calcular_revisoes_pendentes(df, "Pendentes/Hoje", "Todas")
+            
+            if pend:
+                # Ordenar por prioridade (dificuldade + atraso)
+                pend_priorizados = sorted(pend, 
+                                         key=lambda x: (
+                                             0 if x['dificuldade'] == "🔴 Difícil" else 
+                                             1 if x['dificuldade'] == "🟡 Médio" else 2,
+                                             -x['atraso']
+                                         ))
+                
+                # Pegar as 3 principais sugestões
+                sugestoes = pend_priorizados[:3]
+                
+                for i, sug in enumerate(sugestoes):
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="padding: 15px; background: rgba(26, 28, 35, 0.5); border-radius: 8px; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <span style="background: rgba(255, 75, 75, 0.2); color: #FF4B4B; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">
+                                    {sug['dificuldade']}
+                                </span>
+                                <span style="color: #adb5bd; font-size: 0.8rem;">
+                                    Pendente há {sug['atraso']} dia(s)
+                                </span>
+                            </div>
+                            <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">
+                                📚 {sug['materia']}
+                            </h4>
+                            <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0;">
+                                {sug['assunto']} • <b>{sug['tipo']}</b>
+                            </p>
+                            <div style="color: #FF8E8E; font-size: 0.8rem;">
+                                ⏱️ Recomendado: {tempo_recomendado_rev24h(sug['dificuldade'])[0]}min
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Botão para ver todas as revisões
+                if st.button("Ver Todas as Revisões Pendentes", use_container_width=True):
+                    st.session_state.sidebar_menu = "Revisões"
+                    st.rerun()
+            else:
+                st.success("🎉 Nenhuma revisão pendente para hoje!")
+                st.markdown("""
+                **Sugestão:** Aproveite para:
+                1. Avançar em novos conteúdos
+                2. Revisar assuntos marcados como difíceis
+                3. Fazer questões de provas anteriores
+                """)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # --- SEÇÃO 2: DISTRIBUIÇÃO DE TEMPO ---
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("### ⏱️ Distribuição de Tempo Recomendada")
+            
+            # Calcular desempenho por matéria
+            df_mat = df.groupby('materia').agg({
+                'tempo': 'sum',
+                'taxa': 'mean',
+                'total': 'sum'
+            }).reset_index()
+            
+            if not df_mat.empty:
+                # Calcular peso baseado em desempenho (matérias com baixa taxa ganham mais peso)
+                df_mat['peso'] = df_mat.apply(lambda row: 
+                    max(0.1, 1 - (row['taxa'] / 100)) * (row['total'] / df_mat['total'].sum() if df_mat['total'].sum() > 0 else 1),
+                    axis=1
+                )
+                
+                # Normalizar pesos para soma = 100%
+                peso_total = df_mat['peso'].sum()
+                if peso_total > 0:
+                    df_mat['percentual_tempo'] = (df_mat['peso'] / peso_total * 100).round(1)
+                else:
+                    df_mat['percentual_tempo'] = 100 / len(df_mat)
+                
+                # Ordenar por percentual (maior primeiro)
+                df_mat = df_mat.sort_values('percentual_tempo', ascending=False)
+                
+                # Definir tempo total disponível (padrão: 4 horas)
+                tempo_total_disponivel = st.slider(
+                    "Tempo total disponível para estudo hoje (minutos):",
+                    min_value=60,
+                    max_value=480,
+                    value=240,
+                    step=30
+                )
+                
+                # Calcular minutos para cada matéria
+                df_mat['minutos_recomendados'] = (tempo_total_disponivel * df_mat['percentual_tempo'] / 100).round(0).astype(int)
+                
+                # Exibir distribuição
+                for _, row in df_mat.iterrows():
+                    col1, col2, col3, col4 = st.columns([3, 1, 3, 1])
+                    
+                    with col1:
+                        st.markdown(f"**{row['materia']}**")
+                    
+                    with col2:
+                        st.markdown(f"<span style='color: #FF8E8E;'>{row['taxa']:.1f}%</span>", unsafe_allow_html=True)
+                    
+                    with col3:
+                        progress = min(100, row['percentual_tempo'])
+                        render_progress_bar(progress, height=8)
+                    
+                    with col4:
+                        st.markdown(f"<span style='color: #fff; font-weight: 600;'>{row['minutos_recomendados']}min</span>", unsafe_allow_html=True)
+                
+                # Resumo
+                st.divider()
+                col_sum1, col_sum2, col_sum3 = st.columns(3)
+                with col_sum1:
+                    st.metric("Matérias", len(df_mat))
+                with col_sum2:
+                    st.metric("Tempo Total", f"{tempo_total_disponivel}min")
+                with col_sum3:
+                    st.metric("Meta Diária", f"{sum(df_mat['minutos_recomendados'])}min")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # --- SEÇÃO 3: PLANEJAMENTO SEMANAL ---
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("### 🗓️ Planejamento Semanal")
+            
+            # Obter metas semanais
+            meta_horas = st.session_state.meta_horas_semana
+            meta_questoes = st.session_state.meta_questoes_semana
+            
+            # Calcular progresso da semana atual
+            horas_semana, questoes_semana = calcular_estudos_semana(df)
+            progresso_horas = (horas_semana / meta_horas * 100) if meta_horas > 0 else 0
+            progresso_questoes = (questoes_semana / meta_questoes * 100) if meta_questoes > 0 else 0
+            
+            # Interface de planejamento
+            st.markdown("#### Distribuição Semanal")
+            
+            # Dias da semana
+            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+            horas_por_dia = meta_horas / 7
+            
+            # Criar layout de grid para planejamento
+            cols = st.columns(7)
+            
+            for i, (col, dia) in enumerate(zip(cols, dias_semana)):
+                with col:
+                    st.markdown(f"**{dia}**")
+                    
+                    # Calcular se é hoje
+                    hoje = datetime.date.today()
+                    dia_atual = hoje.weekday()  # 0 = segunda
+                    
+                    if i == dia_atual:
+                        st.markdown('<span style="color: #FF4B4B; font-size: 0.8rem;">HOJE</span>', unsafe_allow_html=True)
+                    
+                    # Mostrar meta diária
+                    st.markdown(f"<span style='color: #adb5bd; font-size: 0.8rem;'>{horas_por_dia:.1f}h</span>", unsafe_allow_html=True)
+                    
+                    # Verificar se já estudou hoje
+                    if i == dia_atual:
+                        # Calcular horas estudadas hoje
+                        hoje_str = hoje.strftime('%Y-%m-%d')
+                        df_hoje = df[pd.to_datetime(df['data_estudo']).dt.strftime('%Y-%m-%d') == hoje_str]
+                        horas_hoje = df_hoje['tempo'].sum() / 60 if not df_hoje.empty else 0
+                        
+                        if horas_hoje > 0:
+                            progresso_dia = min(100, (horas_hoje / horas_por_dia) * 100)
+                            render_progress_bar(progresso_dia, height=6)
+                            st.markdown(f"<span style='color: #00FF00; font-size: 0.7rem;'>{horas_hoje:.1f}h</span>", unsafe_allow_html=True)
+            
+            # Resumo semanal
+            st.divider()
+            col_week1, col_week2, col_week3 = st.columns(3)
+            
+            with col_week1:
+                st.metric("Horas (semana)", f"{horas_semana:.1f}h", f"{progresso_horas:.1f}%")
+            
+            with col_week2:
+                st.metric("Questões (semana)", int(questoes_semana), f"{progresso_questoes:.1f}%")
+            
+            with col_week3:
+                dias_restantes = 7 - datetime.date.today().weekday()
+                st.metric("Dias restantes", dias_restantes)
+            
+            # Sugestão de ajuste
+            if progresso_horas < 50:
+                st.warning(f"⚠️ **Atenção:** Você está com {progresso_horas:.1f}% da meta de horas. Considere aumentar o tempo de estudo nos próximos dias.")
+            elif progresso_horas > 90:
+                st.success(f"✅ **Excelente!** Você já atingiu {progresso_horas:.1f}% da meta semanal.")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # --- SEÇÃO 4: ANÁLISE DE CORRELAÇÃO ---
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("### 📈 Análise: Tempo vs Desempenho")
+            
+            # Preparar dados para análise
+            if len(df) > 1:
+                # Criar dataframe para análise
+                df_corr = df.copy()
+                df_corr['horas'] = df_corr['tempo'] / 60
+                
+                # Calcular correlação
+                try:
+                    correlacao = df_corr['horas'].corr(df_corr['taxa'])
+                    
+                    # Criar scatter plot
+                    fig_corr = px.scatter(
+                        df_corr, 
+                        x='horas', 
+                        y='taxa',
+                        color='materia',
+                        hover_data=['assunto', 'data_estudo'],
+                        title=f"Correlação Tempo × Desempenho (r = {correlacao:.2f})",
+                        labels={'horas': 'Tempo de Estudo (horas)', 'taxa': 'Taxa de Acerto (%)'}
+                    )
+                    
+                    # Adicionar linha de tendência
+                    if len(df_corr) > 2:
+                        z = np.polyfit(df_corr['horas'], df_corr['taxa'], 1)
+                        p = np.poly1d(z)
+                        fig_corr.add_trace(
+                            go.Scatter(
+                                x=df_corr['horas'],
+                                y=p(df_corr['horas']),
+                                mode='lines',
+                                name='Tendência',
+                                line=dict(color='#FF4B4B', width=2, dash='dash')
+                            )
+                        )
+                    
+                    fig_corr.update_layout(
+                        height=400,
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color="#fff"),
+                        showlegend=True
+                    )
+                    
+                    st.plotly_chart(fig_corr, use_container_width=True)
+                    
+                    # Insights baseados na correlação
+                    st.markdown("#### 💡 Insights:")
+                    
+                    if correlacao > 0.3:
+                        st.success(f"""
+                        **Relação positiva forte (r = {correlacao:.2f})**
+                        - Seu desempenho tende a melhorar com mais tempo de estudo
+                        - Continue investindo tempo nas matérias
+                        - O esforço está sendo bem direcionado
+                        """)
+                    elif correlacao > 0.1:
+                        st.info(f"""
+                        **Relação positiva moderada (r = {correlacao:.2f})**
+                        - Há uma tendência de melhora com mais tempo
+                        - Considere revisar a qualidade do estudo, não apenas a quantidade
+                        - Experimente técnicas de estudo ativo
+                        """)
+                    elif correlacao > -0.1:
+                        st.warning(f"""
+                        **Relação neutra (r = {correlacao:.2f})**
+                        - O tempo de estudo não está correlacionado com desempenho
+                        - Reavalie seus métodos de estudo
+                        - Foque na qualidade e técnicas de revisão
+                        """)
+                    else:
+                        st.error(f"""
+                        **Relação negativa (r = {correlacao:.2f})**
+                        - Mais tempo está associado a menor desempenho
+                        - Possível cansaço ou estudo ineficiente
+                        - Considere pausas e técnicas de Pomodoro
+                        - Revise os assuntos estudados por muito tempo
+                        """)
+                    
+                    # Estatísticas adicionais
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    
+                    with col_stat1:
+                        tempo_medio = df_corr['horas'].mean()
+                        st.metric("Tempo médio por sessão", f"{tempo_medio:.1f}h")
+                    
+                    with col_stat2:
+                        taxa_media = df_corr['taxa'].mean()
+                        st.metric("Taxa média", f"{taxa_media:.1f}%")
+                    
+                    with col_stat3:
+                        sessoes = len(df_corr)
+                        st.metric("Sessões analisadas", sessoes)
+                    
+                except Exception as e:
+                    st.info("Não foi possível calcular a correlação com os dados disponíveis.")
+            else:
+                st.info("📊 Registre mais estudos para habilitar a análise de correlação.")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: HISTÓRICO ---
     elif menu == "Histórico":
