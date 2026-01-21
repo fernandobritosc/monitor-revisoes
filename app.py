@@ -1124,14 +1124,27 @@ else:
     dados = get_editais(supabase).get(missao, {})
 
     with st.sidebar:
-        # Logo Estilizado (Inspirado na imagem)
+        # Logo Estilizado Moderno e Genérico
         st.markdown("""
-            <div style='text-align: center; padding: 10px 0 30px 0;'>
-                <h1 style='color: white; font-family: "Inter", sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: -1px;'>
-                    🚀estudei<span style='color: #16a085;'>.</span>
+            <div style='text-align: center; padding: 15px 0 30px 0;'>
+                <div style='
+                    background: rgba(255, 255, 255, 0.1); 
+                    width: 60px; 
+                    height: 60px; 
+                    border-radius: 16px; 
+                    margin: 0 auto 15px auto;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                '>
+                    <span style='font-size: 30px;'>🎯</span>
+                </div>
+                <h1 style='color: white; font-family: "Inter", sans-serif; font-weight: 800; font-size: 1.8rem; margin: 0; letter-spacing: -0.5px; line-height: 1.2;'>
+                    MONITOR<span style='color: #1a1a2e; background: #fff; padding: 0 6px; border-radius: 6px; margin-left: 4px; font-size: 1.4rem; vertical-align: middle;'>PRO</span>
                 </h1>
-                <p style='color: rgba(255,255,255,0.7); font-size: 0.8rem; margin: 0; text-transform: uppercase; letter-spacing: 2px;'>
-                    Monitor de Revisões
+                <p style='color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-top: 8px; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;'>
+                    Alta Performance
                 </p>
             </div>
         """, unsafe_allow_html=True)
