@@ -10,57 +10,161 @@ import time
 from streamlit_option_menu import option_menu
 import calendar
 
-# --- NOVA FUNÇÃO: Cartões de métricas estilo da imagem ---
-def render_metric_card_simple(label, value, help_text=None):
-    """Renderiza cartões de métricas no estilo da imagem (simples e limpo)"""
+# ============================================================================
+# 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
+# ============================================================================
+
+# Paleta de cores moderna
+COLORS = {
+    "primary": "#8B5CF6",      # Roxo elétrico
+    "secondary": "#06B6D4",    # Ciano
+    "accent": "#EC4899",       # Rosa neon
+    "success": "#10B981",      # Verde neon
+    "warning": "#F59E0B",      # Âmbar
+    "danger": "#EF4444",       # Vermelho
+    "bg_dark": "#0F0F23",      # Fundo principal
+    "bg_card": "rgba(15, 15, 35, 0.7)",  # Cards
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#94A3B8",
+    "border": "rgba(139, 92, 246, 0.15)",
+}
+
+# --- FUNÇÃO: Anel circular de progresso (SVG) ---
+def render_circular_progress(percentage, label, value, color_start=None, color_end=None, size=120, icon=""):
+    """Renderiza um anel circular de progresso com SVG"""
+    if color_start is None:
+        color_start = COLORS["primary"]
+    if color_end is None:
+        color_end = COLORS["secondary"]
+    
+    # Calcular o offset do stroke (283 é a circunferência de um círculo com r=45)
+    circumference = 283
+    offset = circumference - (percentage / 100 * circumference)
+    
+    gradient_id = f"grad_{label.replace(' ', '_')}_{percentage}"
+    
     st.markdown(f"""
         <div style="
-            text-align: center; 
-            padding: 20px 15px; 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            border-radius: 12px;
-            background: rgba(26, 28, 35, 0.8);
-            min-height: 120px;
+            text-align: center;
+            padding: 20px 15px;
+            background: {COLORS['bg_card']};
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid {COLORS['border']};
+            border-radius: 16px;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        " onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.boxShadow='0 0 30px rgba(139, 92, 246, 0.2)';"
+           onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.boxShadow='none';">
+            <div style="position: relative; width: {size}px; height: {size}px; margin-bottom: 10px;">
+                <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+                    <defs>
+                        <linearGradient id="{gradient_id}" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:{color_start};stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:{color_end};stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="45" stroke="rgba(139, 92, 246, 0.1)" stroke-width="8" fill="none"/>
+                    <circle cx="50" cy="50" r="45" stroke="url(#{gradient_id})" stroke-width="8" 
+                            fill="none" stroke-dasharray="{circumference}" stroke-dashoffset="{offset}"
+                            stroke-linecap="round" style="transition: stroke-dashoffset 1s ease;"/>
+                </svg>
+                <div style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    text-align: center;
+                ">
+                    <div style="font-size: 1.1rem; margin-bottom: 2px;">{icon}</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: #fff;">{value}</div>
+                </div>
+            </div>
+            <div style="
+                color: {COLORS['text_secondary']};
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-weight: 600;
+            ">{label}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO: Card de métrica moderno ---
+def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
+    """Renderiza cartões de métricas modernos com glassmorphism"""
+    if color is None:
+        color = COLORS["primary"]
+    
+    st.markdown(f"""
+        <div style="
+            text-align: center;
+            padding: 24px 20px;
+            background: {COLORS['bg_card']};
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid {COLORS['border']};
+            border-radius: 16px;
+            min-height: 140px;
             display: flex;
             flex-direction: column;
             justify-content: center;
-        ">
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        " onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 40px rgba(139, 92, 246, 0.15)';"
+           onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
             <div style="
-                color: #adb5bd; 
-                font-size: 0.85rem; 
+                font-size: 2rem;
+                margin-bottom: 8px;
+                filter: drop-shadow(0 0 10px {color}40);
+            ">{icon}</div>
+            <div style="
+                color: {COLORS['text_secondary']};
+                font-size: 0.7rem;
                 text-transform: uppercase;
-                letter-spacing: 1px;
-                margin-bottom: 10px;
+                letter-spacing: 1.5px;
+                margin-bottom: 8px;
                 font-weight: 600;
             ">{label}</div>
             <div style="
-                font-size: 2.2rem; 
-                font-weight: 800; 
-                color: #fff;
+                font-size: 2rem;
+                font-weight: 800;
+                background: linear-gradient(135deg, {color}, {COLORS['secondary']});
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
                 line-height: 1;
-                margin-bottom: 5px;
             ">{value}</div>
-            {"<div style='color: #6c757d; font-size: 0.75rem; margin-top: 5px;'>" + help_text + "</div>" if help_text else ""}
+            {f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle else ''}
         </div>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÃO ORIGINAL MANTIDA PARA COMPATIBILIDADE ---
+# --- FUNÇÃO LEGADO: mantida para compatibilidade ---
+def render_metric_card_simple(label, value, help_text=None):
+    """Renderiza cartões de métricas (agora usa o design moderno)"""
+    render_metric_card_modern(label, value, icon="📊", subtitle=help_text)
+
 def render_metric_card(label, value, icon="📊"):
-    st.markdown(f"""
-        <div style="text-align: center; padding: 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;">
-            <div style="font-size: 1.5rem; margin-bottom: 5px;">{icon}</div>
-            <div style="color: #adb5bd; font-size: 0.8rem; text-transform: uppercase;">{label}</div>
-            <div style="font-size: 1.8rem; font-weight: 700;">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
+    """Função legado - agora usa design moderno"""
+    render_metric_card_modern(label, value, icon)
 
-# --- ADICIONAR FUNÇÃO PARA BARRA DE PROGRESSO SIMPLES ---
-def render_progress_bar(percentage, height=8):
-    """Renderiza uma barra de progresso simples"""
+# --- FUNÇÃO: Barra de progresso moderna ---
+def render_progress_bar(percentage, height=8, color_start=None, color_end=None):
+    """Renderiza uma barra de progresso com gradiente moderno"""
+    if color_start is None:
+        color_start = COLORS["primary"]
+    if color_end is None:
+        color_end = COLORS["secondary"]
+    
     st.markdown(f"""
         <div style="
             width: 100%;
-            background-color: rgba(255, 255, 255, 0.05);
+            background-color: rgba(139, 92, 246, 0.1);
             border-radius: 10px;
             height: {height}px;
             margin: 8px 0;
@@ -69,11 +173,14 @@ def render_progress_bar(percentage, height=8):
             <div style="
                 height: 100%;
                 border-radius: 10px;
-                background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
-                width: {percentage}%;
+                background: linear-gradient(90deg, {color_start}, {color_end});
+                width: {min(percentage, 100)}%;
+                transition: width 0.5s ease;
+                box-shadow: 0 0 10px {color_start}40;
             "></div>
         </div>
     """, unsafe_allow_html=True)
+
 
 # --- FUNÇÃO ADICIONADA: Conversor de tempo ---
 def formatar_tempo_para_bigint(tempo_str):
@@ -125,99 +232,150 @@ from styles import apply_styles
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno (ATUALIZADO - removido CSS das bolinhas e números do mês)
+# CSS Customizado para Layout Moderno - TEMA ROXO/CIANO
 st.markdown("""
     <style>
     /* Importar Fonte */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    /* Variáveis de cores */
+    :root {
+        --primary: #8B5CF6;
+        --secondary: #06B6D4;
+        --accent: #EC4899;
+        --success: #10B981;
+        --warning: #F59E0B;
+        --danger: #EF4444;
+        --bg-dark: #0F0F23;
+        --bg-card: rgba(15, 15, 35, 0.7);
+        --text-primary: #FFFFFF;
+        --text-secondary: #94A3B8;
+        --border: rgba(139, 92, 246, 0.15);
+    }
     
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
     
-    /* CORREÇÃO CRÍTICA: Ajuste para conteúdo principal EXPANDIR quando sidebar fecha */
+    /* Fundo principal mais escuro */
+    .stApp {
+        background: linear-gradient(180deg, #0F0F23 0%, #1a1a2e 50%, #0F0F23 100%);
+    }
+    
+    /* Container principal */
     .main .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
         max-width: 100% !important;
         transition: all 0.3s ease;
     }
     
-    /* Quando a sidebar está recolhida, expandir conteúdo */
+    /* Sidebar recolhida */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
         max-width: 100% !important;
         margin-left: 0 !important;
     }
     
-    /* Quando a sidebar está expandida, manter padding normal */
+    /* Sidebar expandida */
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: calc(100% - 280px) !important;
-        margin-left: 280px !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        max-width: calc(100% - 300px) !important;
+        margin-left: 300px !important;
     }
 
-    /* Estilo dos Cards (Glassmorphism) */
+    /* Cards Glassmorphism Modernos */
     .modern-card {
-        background: rgba(26, 28, 35, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 15px;
-        transition: transform 0.2s ease, border 0.2s ease;
+        background: rgba(15, 15, 35, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(139, 92, 246, 0.15);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
     }
     .modern-card:hover {
-        border: 1px solid rgba(255, 75, 75, 0.4);
-        transform: translateY(-2px);
+        border-color: rgba(139, 92, 246, 0.4);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(139, 92, 246, 0.15);
     }
 
-    /* Títulos e Textos */
+    /* Títulos com Gradiente Roxo/Ciano */
     .main-title {
         font-size: 2.2rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
+        font-weight: 800;
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 1rem;
     }
     
-    /* NOVO: Título estilo da imagem */
     .visao-mes-title {
         font-size: 1.8rem;
         font-weight: 700;
-        color: #fff;
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin-bottom: 1.5rem;
         padding-bottom: 0.75rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        border-bottom: 1px solid rgba(139, 92, 246, 0.2);
     }
     
     .section-subtitle {
-        color: #adb5bd;
+        color: #94A3B8;
         font-size: 0.9rem;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
         margin-bottom: 1.5rem;
     }
 
-    /* Badges */
+    /* Badges Modernos */
     .badge {
-        padding: 4px 10px;
+        padding: 5px 12px;
         border-radius: 20px;
         font-size: 11px;
         font-weight: 600;
+        backdrop-filter: blur(10px);
     }
-    .badge-red { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid rgba(255, 75, 75, 0.3); }
-    .badge-green { background: rgba(0, 255, 0, 0.1); color: #00FF00; border: 1px solid rgba(0, 255, 0, 0.2); }
-    .badge-gray { background: rgba(173, 181, 189, 0.1); color: #adb5bd; border: 1px solid rgba(173, 181, 189, 0.2); }
+    .badge-red { 
+        background: rgba(239, 68, 68, 0.15); 
+        color: #EF4444; 
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+    }
+    .badge-green { 
+        background: rgba(16, 185, 129, 0.15); 
+        color: #10B981; 
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+    }
+    .badge-gray { 
+        background: rgba(148, 163, 184, 0.1); 
+        color: #94A3B8; 
+        border: 1px solid rgba(148, 163, 184, 0.2); 
+    }
+    .badge-purple {
+        background: rgba(139, 92, 246, 0.15);
+        color: #8B5CF6;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.1);
+    }
+    .badge-cyan {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06B6D4;
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        box-shadow: 0 0 10px rgba(6, 182, 212, 0.1);
+    }
 
-    /* Progress Bar */
+    /* Progress Bar Moderna */
     .modern-progress-container {
         width: 100%;
-        background-color: rgba(255, 255, 255, 0.05);
+        background-color: rgba(139, 92, 246, 0.1);
         border-radius: 10px;
         height: 8px;
         margin: 10px 0;
@@ -226,28 +384,51 @@ st.markdown("""
     .modern-progress-fill {
         height: 100%;
         border-radius: 10px;
-        background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
+        background: linear-gradient(90deg, #8B5CF6, #06B6D4);
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+        transition: width 0.5s ease;
     }
 
-    /* Sidebar Styling */
+    /* Sidebar Moderna */
     [data-testid="stSidebar"] {
-        background-color: #0E1117;
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-        min-width: 280px !important;
-        width: 280px !important;
+        background: linear-gradient(180deg, #0F0F23 0%, #161629 100%);
+        border-right: 1px solid rgba(139, 92, 246, 0.1);
+        min-width: 300px !important;
+        width: 300px !important;
     }
     
-    /* Inputs e Botões */
+    /* Botões Modernos */
     .stButton>button {
-        border-radius: 8px !important;
+        border-radius: 12px !important;
         font-weight: 600 !important;
-        transition: all 0.3s !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid rgba(139, 92, 246, 0.3) !important;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2)) !important;
     }
-    .stTextInput>div>div>input, .stSelectbox>div>div>div {
-        border-radius: 8px !important;
+    .stButton>button:hover {
+        border-color: rgba(139, 92, 246, 0.6) !important;
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.3) !important;
+        transform: translateY(-2px);
+    }
+    .stButton>button[kind="primary"] {
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
+        border: none !important;
+    }
+    .stButton>button[kind="primary"]:hover {
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.5) !important;
     }
     
-    /* Menu Lateral Personalizado (ATUALIZADO para corresponder à imagem) */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+        border-radius: 12px !important;
+        border: 1px solid rgba(139, 92, 246, 0.2) !important;
+        background: rgba(15, 15, 35, 0.8) !important;
+    }
+    .stTextInput>div>div>input:focus {
+        border-color: rgba(139, 92, 246, 0.5) !important;
+        box-shadow: 0 0 15px rgba(139, 92, 246, 0.2) !important;
+    }
+    
+    /* Menu Lateral Moderno */
     .sidebar-menu {
         background: transparent;
         margin-top: 20px;
@@ -259,66 +440,67 @@ st.markdown("""
     
     .sidebar-menu .stRadio > div {
         flex-direction: column;
-        gap: 5px;
+        gap: 8px;
     }
     
     .sidebar-menu .stRadio > div > label {
-        background: transparent;
-        border-radius: 8px;
-        padding: 12px 15px !important;
-        margin-bottom: 5px;
-        border-left: 0px solid transparent;
-        transition: all 0.3s;
+        background: rgba(139, 92, 246, 0.05);
+        border-radius: 12px;
+        padding: 14px 18px !important;
+        margin-bottom: 4px;
+        border-left: 3px solid transparent;
+        transition: all 0.3s ease;
         min-height: 50px;
         display: flex;
         align-items: center;
     }
     
     .sidebar-menu .stRadio > div > label:hover {
-        background: rgba(255, 75, 75, 0.1);
-        border-left: 0px solid rgba(255, 75, 75, 0.5);
+        background: rgba(139, 92, 246, 0.15);
+        border-left-color: rgba(139, 92, 246, 0.5);
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child {
         display: flex;
         align-items: center;
         gap: 12px;
-        color: #adb5bd;
+        color: #94A3B8;
         font-weight: 500;
         font-size: 15px !important;
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] {
-        background: rgba(255, 75, 75, 0.15);
-        border-left: 0px solid #FF4B4B;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.1));
+        border-left-color: #8B5CF6;
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
     }
     
     .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] div:first-child {
-        color: #FF4B4B;
+        color: #8B5CF6;
         font-weight: 600;
     }
     
-    /* REMOVIDO: Navegação por páginas estilo da imagem (1-6) */
-    
-    /* Tabela de Disciplinas */
+    /* Tabela de Disciplinas Moderna */
     .disciplina-table {
         width: 100%;
         border-collapse: collapse;
         margin: 20px 0;
-        background: rgba(26, 28, 35, 0.3);
-        border-radius: 8px;
+        background: rgba(15, 15, 35, 0.5);
+        border-radius: 12px;
         overflow: hidden;
     }
     
     .disciplina-table thead {
-        background: rgba(255, 75, 75, 0.1);
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1));
     }
     
     .disciplina-table th {
         text-align: left;
         padding: 18px 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        color: #FF8E8E;
+        border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         font-weight: 700;
         text-transform: uppercase;
         font-size: 0.85rem;
@@ -327,42 +509,51 @@ st.markdown("""
     
     .disciplina-table td {
         padding: 16px 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(139, 92, 246, 0.08);
         color: #fff;
         font-size: 0.95rem;
     }
     
     .disciplina-table tr:hover {
-        background-color: rgba(255, 75, 75, 0.05);
+        background-color: rgba(139, 92, 246, 0.08);
     }
     
     .disciplina-table tr:last-child td {
         border-bottom: none;
     }
     
-    /* Metas Cards */
+    /* Metas Cards Modernos */
     .meta-card {
-        background: rgba(26, 28, 35, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 25px;
+        background: rgba(15, 15, 35, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(139, 92, 246, 0.15);
+        border-radius: 16px;
+        padding: 28px;
         text-align: center;
         height: 100%;
         position: relative;
+        transition: all 0.3s ease;
+    }
+    .meta-card:hover {
+        border-color: rgba(139, 92, 246, 0.4);
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.15);
     }
     
     .meta-title {
-        color: #adb5bd;
-        font-size: 1rem;
-        margin-bottom: 10px;
+        color: #94A3B8;
+        font-size: 0.9rem;
+        margin-bottom: 12px;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
+        font-weight: 600;
     }
     
     .meta-value {
         font-size: 2.5rem;
-        font-weight: 700;
-        color: #fff;
+        font-weight: 800;
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin: 15px 0;
     }
     
@@ -371,37 +562,40 @@ st.markdown("""
     }
     
     .meta-subtitle {
-        color: #FF8E8E;
+        color: #06B6D4;
         font-size: 0.9rem;
         margin-top: 10px;
+        font-weight: 500;
     }
     
-    /* Modal de Configuração de Metas */
+    /* Modal de Configuração */
     .meta-modal {
-        background: rgba(26, 28, 35, 0.95);
-        border: 1px solid rgba(255, 75, 75, 0.3);
-        border-radius: 12px;
-        padding: 25px;
+        background: rgba(15, 15, 35, 0.95);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 16px;
+        padding: 28px;
         margin-top: 20px;
     }
     
-    /* Streak Card */
+    /* Streak Card Moderno */
     .streak-card {
-        background: rgba(26, 28, 35, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 25px;
+        background: rgba(15, 15, 35, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(139, 92, 246, 0.15);
+        border-radius: 16px;
+        padding: 28px;
         margin: 20px 0;
     }
     
     .streak-title {
-        color: #adb5bd;
+        color: #94A3B8;
         font-size: 1.2rem;
         margin-bottom: 15px;
         font-weight: 600;
         text-align: center;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
     }
     
     .streak-value-container {
@@ -415,16 +609,21 @@ st.markdown("""
     .streak-value-box {
         flex: 1;
         text-align: center;
-        padding: 20px;
-        background: linear-gradient(135deg, rgba(255, 75, 75, 0.15), rgba(255, 75, 75, 0.05));
-        border-radius: 12px;
-        border: 1px solid rgba(255, 75, 75, 0.2);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 24px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.08));
+        border-radius: 16px;
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+    }
+    .streak-value-box:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(139, 92, 246, 0.2);
     }
     
     .streak-value-label {
-        color: #FF8E8E;
-        font-size: 1rem;
+        color: #06B6D4;
+        font-size: 0.9rem;
         margin-bottom: 12px;
         font-weight: 700;
         text-transform: uppercase;
@@ -434,37 +633,37 @@ st.markdown("""
     .streak-value-number {
         font-size: 3rem;
         font-weight: 800;
-        color: #FF4B4B;
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin: 10px 0;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
     
     .streak-period {
-        color: #adb5bd;
+        color: #94A3B8;
         font-size: 0.9rem;
         margin-top: 15px;
         text-align: center;
-        background: rgba(255, 255, 255, 0.05);
-        padding: 8px 15px;
-        border-radius: 8px;
+        background: rgba(139, 92, 246, 0.1);
+        padding: 10px 18px;
+        border-radius: 10px;
         display: inline-block;
     }
     
-    /* Estilo para os filtros do Radar de Revisões */
+    /* Filtros modernos */
     .stSegmentedControl {
         margin-bottom: 10px;
     }
     
-    /* REMOVIDO: Números de 1 a 31 em linha horizontal ÚNICA - REMOVIDO POR SOLICITAÇÃO */
-    
-    /* Seção de Constância Melhorada */
+    /* Seção de Constância Moderna */
     .constancia-section {
         margin-top: 30px;
-        padding: 25px;
-        background: linear-gradient(135deg, rgba(26, 28, 35, 0.9), rgba(26, 28, 35, 0.7));
-        border-radius: 15px;
-        border: 1px solid rgba(255, 75, 75, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        padding: 28px;
+        background: linear-gradient(135deg, rgba(15, 15, 35, 0.9), rgba(15, 15, 35, 0.7));
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
     }
     
     .constancia-header {
@@ -473,19 +672,19 @@ st.markdown("""
         align-items: center;
         margin-bottom: 25px;
         padding-bottom: 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        border-bottom: 1px solid rgba(139, 92, 246, 0.15);
     }
     
     .constancia-title {
         color: #fff;
         font-size: 1.5rem;
         font-weight: 700;
-        background: linear-gradient(90deg, #FF4B4B, #FF8E8E);
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
     
-    /* Ajustes para responsividade */
+    /* Responsividade */
     @media (max-width: 768px) {
         .streak-value-container {
             flex-direction: column;
@@ -495,6 +694,43 @@ st.markdown("""
         .streak-value-box {
             width: 100%;
         }
+    }
+    
+    /* Scrollbar personalizada */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgba(15, 15, 35, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #8B5CF6;
+    }
+    
+    /* Expanders modernos */
+    .streamlit-expanderHeader {
+        background: rgba(139, 92, 246, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(139, 92, 246, 0.15) !important;
+    }
+    .streamlit-expanderHeader:hover {
+        border-color: rgba(139, 92, 246, 0.3) !important;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: rgba(139, 92, 246, 0.15) !important;
+    }
+    
+    /* DataFrames */
+    .stDataFrame {
+        border-radius: 12px;
+        overflow: hidden;
     }
     
     </style>
@@ -776,8 +1012,8 @@ if st.session_state.missao_ativa is None:
                 with cols[i % 2]:
                     st.markdown(f"""
                         <div class="modern-card">
-                            <h3 style="margin:0; color:#FF4B4B;">{nome}</h3>
-                            <p style="color:#adb5bd; font-size:0.9rem; margin-bottom:15px;">{d_concurso['cargo']}</p>
+                            <h3 style="margin:0; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{nome}</h3>
+                            <p style="color:#94A3B8; font-size:0.9rem; margin-bottom:15px;">{d_concurso['cargo']}</p>
                         </div>
                     """, unsafe_allow_html=True)
                     if st.button(f"Acessar Missão", key=f"ac_{nome}", use_container_width=True, type="primary"):
@@ -854,8 +1090,8 @@ else:
     dados = get_editais(supabase).get(missao, {})
 
     with st.sidebar:
-        st.markdown(f"<h2 style='color:#FF4B4B; margin-bottom:0;'>{missao}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color:#adb5bd; font-size:0.9rem; margin-bottom:20px;'>{dados.get('cargo', '')}</p>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom:0;'>{missao}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:#94A3B8; font-size:0.9rem; margin-bottom:20px;'>{dados.get('cargo', '')}</p>", unsafe_allow_html=True)
         
         # Botão com seta como na imagem
         if st.button("◀ Voltar à Central", use_container_width=True): 
@@ -902,11 +1138,11 @@ else:
         else:
             menu = "Home"
 
-    # --- ABA: HOME (PAINEL GERAL) - ATUALIZADO sem a seção de dias do mês ---
+    # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
-        # Título principal
-        st.markdown(f'<h1 style="color:#fff; font-size:1.8rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
-        st.markdown(f'<p style="color:#adb5bd; font-size:1rem; margin-bottom:2rem;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+        # Título principal com gradiente
+        st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:2rem;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
         
         if df.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
@@ -932,19 +1168,59 @@ else:
                 except Exception:
                     dias_restantes = None
             
-            # 4 cartões de métricas (como na imagem)
+            # 4 cartões de métricas com ANÉIS CIRCULARES MODERNOS
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            
+            # Calcular percentuais para os anéis
+            horas_totais = minutos_totais / 60
+            meta_horas_mes = 80  # Meta de horas por mês
+            pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
+            pct_precisao = min(precisao, 100)
+            meta_questoes_mes = 1000
+            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
+            
             with c1:
-                render_metric_card_simple("TEMPO TOTAL", tempo_formatado)
+                render_circular_progress(
+                    percentage=pct_tempo,
+                    label="TEMPO TOTAL",
+                    value=tempo_formatado,
+                    color_start=COLORS["primary"],
+                    color_end=COLORS["secondary"],
+                    icon="⏱️"
+                )
             with c2:
-                render_metric_card_simple("PRECISÃO", f"{precisao:.1f}%")
+                render_circular_progress(
+                    percentage=pct_precisao,
+                    label="PRECISÃO",
+                    value=f"{precisao:.0f}%",
+                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                    color_end=COLORS["secondary"],
+                    icon="🎯"
+                )
             with c3:
-                render_metric_card_simple("QUESTÕES", f"{int(t_q)}")
+                render_circular_progress(
+                    percentage=pct_questoes,
+                    label="QUESTÕES",
+                    value=f"{int(t_q)}",
+                    color_start=COLORS["accent"],
+                    color_end=COLORS["primary"],
+                    icon="📝"
+                )
             with c4:
                 if dias_restantes is not None:
-                    render_metric_card_simple("DIAS PARA A PROVA", f"{dias_restantes}")
+                    # Calcular percentual baseado em 90 dias
+                    pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
+                    cor = COLORS["danger"] if dias_restantes <= 30 else COLORS["warning"] if dias_restantes <= 60 else COLORS["success"]
+                    render_circular_progress(
+                        percentage=pct_dias,
+                        label="DIAS PARA PROVA",
+                        value=f"{dias_restantes}",
+                        color_start=cor,
+                        color_end=COLORS["secondary"],
+                        icon="📅"
+                    )
                 else:
-                    render_metric_card_simple("DIAS PARA A PROVA", "—")
+                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅")
             
             st.divider()
 
@@ -958,9 +1234,9 @@ else:
             st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
             st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
             
-            # Indicador de performance (como na imagem)
+            # Indicador de performance 
             performance = "🟢 Excelente" if streak >= 7 else "🟡 Bom" if streak >= 3 else "🔴 Precisa melhorar"
-            st.markdown(f'<div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="color: #06B6D4; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
             # Stats de constância em 3 colunas
@@ -968,19 +1244,19 @@ else:
             
             with col_s1:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 20px; background: rgba(255, 75, 75, 0.1); border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.2);">
-                        <div style="color: #FF8E8E; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">STREAK ATUAL</div>
-                        <div style="font-size: 2.8rem; font-weight: 800; color: #FF4B4B; margin: 10px 0;">{streak}</div>
-                        <div style="color: #adb5bd; font-size: 0.8rem;">dias consecutivos</div>
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.2); transition: all 0.3s ease;">
+                        <div style="color: #8B5CF6; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">STREAK ATUAL</div>
+                        <div style="font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0;">{streak}</div>
+                        <div style="color: #94A3B8; font-size: 0.8rem;">dias consecutivos</div>
                     </div>
                 ''', unsafe_allow_html=True)
             
             with col_s2:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 20px; background: rgba(0, 255, 0, 0.1); border-radius: 10px; border: 1px solid rgba(0, 255, 0, 0.2);">
-                        <div style="color: #00FF00; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">SEU RECORDE</div>
-                        <div style="font-size: 2.8rem; font-weight: 800; color: #00FF00; margin: 10px 0;">{recorde}</div>
-                        <div style="color: #adb5bd; font-size: 0.8rem;">dias seguidos</div>
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                        <div style="color: #10B981; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">SEU RECORDE</div>
+                        <div style="font-size: 3rem; font-weight: 800; color: #10B981; margin: 10px 0;">{recorde}</div>
+                        <div style="color: #94A3B8; font-size: 0.8rem;">dias seguidos</div>
                     </div>
                 ''', unsafe_allow_html=True)
             
@@ -992,17 +1268,17 @@ else:
                 percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
                 
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 20px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 215, 0, 0.2);">
-                        <div style="color: #FFD700; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">MÊS ATUAL</div>
-                        <div style="font-size: 2.2rem; font-weight: 800; color: #FFD700; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
-                        <div style="color: #adb5bd; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05)); border-radius: 16px; border: 1px solid rgba(6, 182, 212, 0.2); transition: all 0.3s ease;">
+                        <div style="color: #06B6D4; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">MÊS ATUAL</div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #06B6D4; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
+                        <div style="color: #94A3B8; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
                     </div>
                 ''', unsafe_allow_html=True)
             
             # Período do streak atual
             if inicio_streak and fim_streak:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
-                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #adb5bd; font-size: 0.9rem; background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">Período do streak atual: <span style="color: #FF8E8E; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px;">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
             # --- SEÇÃO DE DIAS DO MÊS FOI COMPLETAMENTE REMOVIDA AQUI ---
             
