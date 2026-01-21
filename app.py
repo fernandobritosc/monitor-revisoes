@@ -245,7 +245,7 @@ st.markdown("""
     /* Importar Fonte */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     
-    /* Variáveis de cores */
+    /* Variáveis de cores - TEMA ESTUDEI / MODERNO */
     :root {
         --primary: #8B5CF6;
         --secondary: #06B6D4;
@@ -258,6 +258,8 @@ st.markdown("""
         --text-primary: #FFFFFF;
         --text-secondary: #94A3B8;
         --border: rgba(139, 92, 246, 0.15);
+        --sidebar-bg: #1abc9c; /* Teal vibrante estilo Estudei */
+        --sidebar-active: #16a085; /* Tom mais escuro para item ativo */
     }
     
     html, body, [class*="css"] {
@@ -269,30 +271,31 @@ st.markdown("""
         background: linear-gradient(180deg, #0F0F23 0%, #1a1a2e 50%, #0F0F23 100%);
     }
     
-    /* Container principal */
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
-        max-width: 100% !important;
+    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
+    /* Quando a sidebar está EXPANDIDA */
+    [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+        max-width: calc(100% - 300px) !important;
+        margin-left: 300px !important;
+        padding-left: 5rem !important;
+        padding-right: 5rem !important;
         transition: all 0.3s ease;
     }
     
-    /* Sidebar recolhida */
+    /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
-        max-width: 100% !important;
-        margin-left: 0 !important;
+        max-width: 1100px !important; /* Limite elegante para leitura */
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        transition: all 0.3s ease;
     }
     
-    /* Sidebar expandida */
-    [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
-        max-width: calc(100% - 300px) !important;
-        margin-left: 300px !important;
+    /* Container principal padrão */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        transition: all 0.3s ease;
     }
 
     /* Cards Glassmorphism Modernos */
@@ -396,12 +399,92 @@ st.markdown("""
         transition: width 0.5s ease;
     }
 
-    /* Sidebar Moderna */
+    /* Sidebar Estilo Estudei */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0F0F23 0%, #161629 100%);
-        border-right: 1px solid rgba(139, 92, 246, 0.1);
-        min-width: 300px !important;
-        width: 300px !important;
+        background-color: var(--sidebar-bg) !important;
+        background-image: none !important;
+        border-right: none !important;
+        min-width: 280px !important;
+        width: 280px !important;
+    }
+    
+    /* Menu Lateral Estudei */
+    .sidebar-menu {
+        margin-top: 10px;
+    }
+    
+    .sidebar-menu .stRadio > div {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .sidebar-menu .stRadio > div > label {
+        background: transparent;
+        border-radius: 10px;
+        padding: 12px 20px !important;
+        margin: 2px 10px;
+        border-left: none !important;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+    
+    .sidebar-menu .stRadio > div > label:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        color: rgba(255, 255, 255, 0.85); /* Texto branco suave */
+        font-weight: 500;
+        font-size: 16px !important;
+    }
+    
+    /* Item Ativo Estilo Estudei (Retângulo escuro) */
+    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] {
+        background-color: var(--sidebar-active) !important;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] div:first-child {
+        color: #FFFFFF !important; /* Texto branco puro no ativo */
+        font-weight: 700 !important;
+    }
+    
+    /* Estilização das TABS (Abas) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(15, 15, 35, 0.5);
+        padding: 8px;
+        border-radius: 14px;
+        border: 1px solid rgba(139, 92, 246, 0.1);
+        margin-bottom: 20px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        white-space: pre-wrap;
+        background-color: transparent;
+        border-radius: 10px;
+        color: #94A3B8;
+        font-weight: 600;
+        border: none !important;
+        transition: all 0.3s ease;
+        padding: 0 20px;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #FFFFFF;
+        background-color: rgba(139, 92, 246, 0.1);
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
     }
     
     /* Botões Modernos */
@@ -411,6 +494,7 @@ st.markdown("""
         transition: all 0.3s ease !important;
         border: 1px solid rgba(139, 92, 246, 0.3) !important;
         background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2)) !important;
+        color: #FFFFFF !important;
     }
     .stButton>button:hover {
         border-color: rgba(139, 92, 246, 0.6) !important;
@@ -421,70 +505,13 @@ st.markdown("""
         background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
         border: none !important;
     }
-    .stButton>button[kind="primary"]:hover {
-        box-shadow: 0 0 30px rgba(139, 92, 246, 0.5) !important;
-    }
     
+    /* Inputs Modernos */
     .stTextInput>div>div>input, .stSelectbox>div>div>div {
         border-radius: 12px !important;
         border: 1px solid rgba(139, 92, 246, 0.2) !important;
         background: rgba(15, 15, 35, 0.8) !important;
-    }
-    .stTextInput>div>div>input:focus {
-        border-color: rgba(139, 92, 246, 0.5) !important;
-        box-shadow: 0 0 15px rgba(139, 92, 246, 0.2) !important;
-    }
-    
-    /* Menu Lateral Moderno */
-    .sidebar-menu {
-        background: transparent;
-        margin-top: 20px;
-    }
-    
-    .sidebar-menu .stRadio {
-        background: transparent;
-    }
-    
-    .sidebar-menu .stRadio > div {
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .sidebar-menu .stRadio > div > label {
-        background: rgba(139, 92, 246, 0.05);
-        border-radius: 12px;
-        padding: 14px 18px !important;
-        margin-bottom: 4px;
-        border-left: 3px solid transparent;
-        transition: all 0.3s ease;
-        min-height: 50px;
-        display: flex;
-        align-items: center;
-    }
-    
-    .sidebar-menu .stRadio > div > label:hover {
-        background: rgba(139, 92, 246, 0.15);
-        border-left-color: rgba(139, 92, 246, 0.5);
-    }
-    
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"] div:first-child {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: #94A3B8;
-        font-weight: 500;
-        font-size: 15px !important;
-    }
-    
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] {
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.1));
-        border-left-color: #8B5CF6;
-        box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
-    }
-    
-    .sidebar-menu .stRadio > div > label[data-baseweb="radio"][aria-checked="true"] div:first-child {
-        color: #8B5CF6;
-        font-weight: 600;
+        color: #FFFFFF !important;
     }
     
     /* Tabela de Disciplinas Moderna */
@@ -1097,6 +1124,18 @@ else:
     dados = get_editais(supabase).get(missao, {})
 
     with st.sidebar:
+        # Logo Estilizado (Inspirado na imagem)
+        st.markdown("""
+            <div style='text-align: center; padding: 10px 0 30px 0;'>
+                <h1 style='color: white; font-family: "Inter", sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: -1px;'>
+                    🚀estudei<span style='color: #16a085;'>.</span>
+                </h1>
+                <p style='color: rgba(255,255,255,0.7); font-size: 0.8rem; margin: 0; text-transform: uppercase; letter-spacing: 2px;'>
+                    Monitor de Revisões
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.markdown('<div class="sidebar-menu">', unsafe_allow_html=True)
         
         # Menu personalizado usando st.radio - ATUALIZADO para corresponder à imagem
