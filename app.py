@@ -1535,9 +1535,9 @@ else:
                     
                     with c_input:
                         ci1, ci2, ci3 = st.columns(3)
-                        acertos = ci1.number_input("Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}", label_visibility="collapsed", placeholder="Acertos")
-                        total = ci2.number_input("Total", min_value=0, key=f"to_{p['id']}_{p['col']}", label_visibility="collapsed", placeholder="Total")
-                        tempo_rev = ci3.number_input("Minutos", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}", label_visibility="collapsed", help="Tempo gasto nesta revisão (min)", placeholder="Min")
+                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
+                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
+                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
                     
                     with c_btn:
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
