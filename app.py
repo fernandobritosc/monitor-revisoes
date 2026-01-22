@@ -203,9 +203,76 @@ def formatar_tempo_para_bigint(tempo_str):
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
-from database import supabase
-from logic import get_editais, excluir_concurso_completo
-from styles import apply_styles
+# --- INTEGRAÇÃO: SUPABASE ---
+from supabase import create_client, Client
+
+def init_supabase():
+    url = st.secrets.get("supabase", {}).get("url")
+    key = st.secrets.get("supabase", {}).get("key")
+    
+    if not url or not key or url == "SUA_URL_SUPABASE_AQUI":
+        return None
+    
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Supabase: {e}")
+        return None
+
+try:
+    supabase: Client = init_supabase()
+except Exception:
+    supabase = None
+
+# --- INTEGRAÇÃO: LÓGICA ---
+def get_editais(supabase):
+    if not supabase: return {}
+    try:
+        response = supabase.table("editais_materias").select("*").execute()
+        data = response.data
+        editais = {}
+        if data:
+            for item in data:
+                concurso = item.get("concurso")
+                if not concurso: continue
+                if concurso not in editais:
+                    editais[concurso] = {
+                        "cargo": item.get("cargo", ""),
+                        "data_prova": item.get("data_prova"),
+                        "materias": {}
+                    }
+                materia = item.get("materia")
+                topicos = item.get("topicos", [])
+                if materia:
+                    editais[concurso]["materias"][materia] = topicos
+        return editais
+    except Exception:
+        return {}
+
+def excluir_concurso_completo(supabase, missao):
+    if not supabase or not missao: return False
+    try:
+        supabase.table("registros_estudos").delete().eq("concurso", missao).execute()
+        supabase.table("editais_materias").delete().eq("concurso", missao).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao excluir concurso: {e}")
+        return False
+
+# --- INTEGRAÇÃO: ESTILOS ---
+def apply_styles():
+    st.markdown("""
+        <style>
+        .block-container { padding-top: 2rem !important; padding-bottom: 5rem !important; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .badge-green { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-red { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-gray { background-color: rgba(148, 163, 184, 0.2); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
+        .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .modern-progress-container { width: 100%; background-color: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 6px; overflow: hidden; }
+        .modern-progress-fill { height: 100%; background: linear-gradient(90deg, #8B5CF6, #06B6D4); border-radius: 10px; transition: width 0.5s ease; }
+        </style>
+    """, unsafe_allow_html=True)
 
 # --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
 if 'missao_ativa' not in st.session_state:
@@ -283,11 +350,11 @@ st.markdown("""
     
     /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 1200px !important; 
+        max-width: 95% !important; 
         margin-left: auto !important;
         margin-right: auto !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
@@ -1056,27 +1123,25 @@ else:
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#94A3B8", "font-size": "14px"}, 
+                "icon": {"color": "#94A3B8", "font-size": "16px"}, 
                 "nav-link": {
                     "font-family": "Montserrat, sans-serif",
                     "font-size": "14px",
                     "text-align": "left",
-                    "margin": "8px 10px",
+                    "margin": "6px 15px",
                     "padding": "12px 20px",
-                    "border-radius": "12px",
+                    "border-radius": "30px",
                     "--hover-color": "rgba(255, 255, 255, 0.03)",
-                    "letter-spacing": "1px",
                     "font-weight": "500",
                     "color": "#94A3B8",
                     "transition": "all 0.3s ease"
                 },
                 "nav-link-selected": {
-                    "background-color": "rgba(138, 43, 226, 0.15)",
+                    "background": "linear-gradient(90deg, #8B5CF6, #06B6D4)",
                     "color": "#fff",
                     "font-weight": "700",
-                    "border-left": "4px solid #00FFFF",
-                    "border-radius": "4px 12px 12px 4px",
-                    "box-shadow": "0 0 15px rgba(138, 43, 226, 0.2)"
+                    "box-shadow": "0 4px 15px rgba(139, 92, 246, 0.3)",
+                    "border": "none",
                 },
             }
         )
