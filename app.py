@@ -1,198 +1,615 @@
-# app.py (com correção para exclusão em massa)
+# app.py (REDESIGN COMPLETO - Layout Premium)
 
 import streamlit as st
 import pandas as pd
 import datetime
 from datetime import timedelta
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 import time
 from streamlit_option_menu import option_menu
 import calendar
+import numpy as np
 
 # ============================================================================
-# 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
+# 🎨 NOVO DESIGN SYSTEM - TEMA PREMIUM ROXO/CIANO 3D
 # ============================================================================
 
-# Paleta de cores moderna
+# Paleta de cores premium
 COLORS = {
     "primary": "#8B5CF6",      # Roxo elétrico
     "secondary": "#00FFFF",    # Ciano Neon
     "accent": "#EC4899",       # Rosa neon
     "success": "#10B981",      # Verde neon
     "warning": "#F59E0B",      # Âmbar
-    "danger": "#EF4444",       # Vermelho
-    "bg_dark": "#0E1117",      # Fundo principal
-    "bg_card": "rgba(15, 15, 35, 0.6)",  # Cards - mais transparente para glassmorphism
+    "danger": "#FF4B4B",       # Vermelho vibrante
+    "bg_dark": "#0A0B15",      # Fundo mais escuro
+    "bg_card": "rgba(20, 22, 40, 0.7)",  # Cards - mais escuro para contraste
     "text_primary": "#FFFFFF",
-    "text_secondary": "#94A3B8",
-    "border": "rgba(0, 255, 255, 0.1)",  # Ciano sutil
+    "text_secondary": "#A0AEC0",
+    "border": "rgba(0, 255, 255, 0.15)",
+    "glow": "rgba(139, 92, 246, 0.3)",
 }
 
-# --- FUNÇÃO: Anel circular de progresso (SVG) ---
-def render_circular_progress(percentage, label, value, color_start=None, color_end=None, size=120, icon=""):
-    """Renderiza um anel circular de progresso com SVG"""
+# --- NOVO: Sistema de Grid Responsivo ---
+def create_responsive_grid(cols=3, gap=20):
+    """Cria um grid responsivo moderno"""
+    return st.columns(cols, gap=f"{gap}px")
+
+def create_dashboard_grid():
+    """Layout de dashboard em grid Z-pattern"""
+    # Header principal
+    col_title, col_actions = st.columns([3, 1])
+    
+    # Grid de métricas principais
+    metrics_grid = st.columns(4, gap="25px")
+    
+    # Grid duplo para conteúdo
+    main_content = st.columns([2, 1], gap="30px")
+    
+    # Grid inferior
+    bottom_grid = st.columns(2, gap="30px")
+    
+    return {
+        "header": (col_title, col_actions),
+        "metrics": metrics_grid,
+        "main": main_content,
+        "bottom": bottom_grid
+    }
+
+# --- NOVO: Anel circular 3D ---
+def render_3d_circular_progress(percentage, label, value, color_start=None, color_end=None, size=140, icon="", glow=False):
+    """Renderiza um anel circular com efeito 3D"""
     if color_start is None:
         color_start = COLORS["primary"]
     if color_end is None:
         color_end = COLORS["secondary"]
     
-    # Calcular o offset do stroke (283 é a circunferência de um círculo com r=45)
     circumference = 283
     offset = circumference - (percentage / 100 * circumference)
+    gradient_id = f"grad_3d_{label.replace(' ', '_')}_{percentage}"
+    shadow_id = f"shadow_{label.replace(' ', '_')}_{percentage}"
     
-    gradient_id = f"grad_{label.replace(' ', '_')}_{percentage}"
+    glow_effect = ""
+    if glow:
+        glow_effect = f"""
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+        <feFlood flood-color="{color_start}" flood-opacity="0.5" result="color"/>
+        <feComposite in="color" in2="blur" operator="in" result="glow"/>
+        <feMerge>
+            <feMergeNode in="glow"/>
+            <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+        """
     
     st.markdown(f"""
         <div style="
             text-align: center;
-            padding: 20px 15px;
-            background: {COLORS['bg_card']};
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            padding: 25px 20px;
+            background: linear-gradient(145deg, rgba(20, 22, 40, 0.9), rgba(10, 12, 28, 0.9));
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
             border: 1px solid {COLORS['border']};
-            border-radius: 16px;
-            min-height: 180px;
+            min-height: 220px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        " onmouseover="this.style.borderColor='rgba(0, 255, 255, 0.3)'; this.style.boxShadow='0 0 40px rgba(139, 92, 246, 0.3)';"
-           onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.boxShadow='0 8px 32px rgba(0, 0, 0, 0.2)';">
-            <div style="position: relative; width: {size}px; height: {size}px; margin-bottom: 10px;">
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 10px 40px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        " onmouseover="
+            this.style.transform='translateY(-8px) scale(1.02)';
+            this.style.boxShadow='0 20px 60px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+            this.style.borderColor='rgba(0, 255, 255, 0.3)';
+        " onmouseout="
+            this.style.transform='translateY(0) scale(1)';
+            this.style.boxShadow='0 10px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)';
+            this.style.borderColor='{COLORS['border']}';
+        ">
+            
+            {/* Efeito de brilho no fundo */}
+            <div style="
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle at center, {color_start}10 0%, transparent 70%);
+                opacity: 0.3;
+                z-index: 0;
+            "></div>
+            
+            <div style="position: relative; width: {size}px; height: {size}px; margin-bottom: 15px; z-index: 1;">
                 <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 100%; height: 100%;">
                     <defs>
                         <linearGradient id="{gradient_id}" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" style="stop-color:{color_start};stop-opacity:1" />
                             <stop offset="100%" style="stop-color:{color_end};stop-opacity:1" />
                         </linearGradient>
+                        <filter id="{shadow_id}" x="-20%" y="-20%" width="140%" height="140%">
+                            {glow_effect}
+                        </filter>
                     </defs>
-                    <circle cx="50" cy="50" r="45" stroke="rgba(139, 92, 246, 0.1)" stroke-width="8" fill="none"/>
+                    
+                    {/* Sombra do anel */}
+                    <circle cx="50" cy="50" r="45" stroke="rgba(0, 0, 0, 0.2)" stroke-width="10" fill="none" 
+                            filter="url(#{shadow_id})"/>
+                    
+                    {/* Anel de fundo */}
+                    <circle cx="50" cy="50" r="45" stroke="rgba(139, 92, 246, 0.15)" stroke-width="8" fill="none"/>
+                    
+                    {/* Anel de progresso */}
                     <circle cx="50" cy="50" r="45" stroke="url(#{gradient_id})" stroke-width="8" 
                             fill="none" stroke-dasharray="{circumference}" stroke-dashoffset="{offset}"
-                            stroke-linecap="round" style="transition: stroke-dashoffset 1s ease;"/>
+                            stroke-linecap="round" style="transition: stroke-dashoffset 1.5s ease;"
+                            filter="url(#{shadow_id})"/>
+                    
+                    {/* Ponto de destaque no final do progresso */}
+                    <circle cx="50" cy="5" r="4" fill="{color_end}" style="
+                        transform: rotate({percentage * 3.6}deg);
+                        transform-origin: 50px 50px;
+                        transition: transform 1.5s ease;
+                        filter: drop-shadow(0 0 5px {color_end});
+                    "/>
                 </svg>
+                
+                {/* Centro do anel */}
                 <div style="
                     position: absolute;
                     top: 50%;
                     left: 50%;
                     transform: translate(-50%, -50%);
                     text-align: center;
+                    background: rgba(20, 22, 40, 0.8);
+                    border-radius: 50%;
+                    width: 80px;
+                    height: 80px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid rgba(139, 92, 246, 0.2);
+                    box-shadow: 
+                        inset 0 2px 10px rgba(0, 0, 0, 0.3),
+                        0 2px 20px rgba(0, 0, 0, 0.2);
                 ">
-                    <div style="font-size: 1.1rem; margin-bottom: 2px;">{icon}</div>
-                    <div style="font-size: 1.4rem; font-weight: 800; color: #fff;">{value}</div>
+                    <div style="font-size: 1.3rem; margin-bottom: 5px; filter: drop-shadow(0 0 8px {color_start}80);">{icon}</div>
+                    <div style="font-size: 1.6rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">{value}</div>
                 </div>
             </div>
+            
             <div style="
                 color: {COLORS['text_secondary']};
-                font-size: 0.75rem;
+                font-size: 0.8rem;
                 text-transform: uppercase;
-                letter-spacing: 1.5px;
+                letter-spacing: 2px;
                 font-weight: 600;
+                margin-top: 10px;
+                z-index: 1;
             ">{label}</div>
+            
+            {/* Barra de progresso adicional */}
+            <div style="
+                width: 80%;
+                height: 4px;
+                background: rgba(139, 92, 246, 0.1);
+                border-radius: 2px;
+                margin-top: 15px;
+                overflow: hidden;
+                z-index: 1;
+            ">
+                <div style="
+                    height: 100%;
+                    border-radius: 2px;
+                    background: linear-gradient(90deg, {color_start}, {color_end});
+                    width: {percentage}%;
+                    transition: width 1.5s ease;
+                    box-shadow: 0 0 10px {color_start}80;
+                "></div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÃO: Card de métrica moderno ---
-def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
-    """Renderiza cartões de métricas modernos com glassmorphism"""
+# --- NOVO: Card de métrica 3D ---
+def render_3d_metric_card(label, value, icon="📊", color=None, subtitle=None, trend=None):
+    """Renderiza cartões de métricas com efeito 3D"""
     if color is None:
         color = COLORS["primary"]
+    
+    trend_icon = ""
+    trend_color = ""
+    if trend:
+        if trend > 0:
+            trend_icon = "↗️"
+            trend_color = COLORS["success"]
+        elif trend < 0:
+            trend_icon = "↘️"
+            trend_color = COLORS["danger"]
+        else:
+            trend_icon = "→"
+            trend_color = COLORS["text_secondary"]
     
     st.markdown(f"""
         <div style="
             text-align: center;
-            padding: 24px 20px;
-            background: {COLORS['bg_card']};
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            padding: 28px 24px;
+            background: linear-gradient(145deg, rgba(20, 22, 40, 0.9), rgba(10, 12, 28, 0.9));
+            backdrop-filter: blur(20px);
             border: 1px solid {COLORS['border']};
-            border-radius: 16px;
-            min-height: 140px;
+            border-radius: 20px;
+            min-height: 160px;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        " onmouseover="this.style.borderColor='rgba(0, 255, 255, 0.3)'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 20px 40px rgba(139, 92, 246, 0.25)';"
-           onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 8px 32px rgba(0, 0, 0, 0.2)';">
+            box-shadow: 
+                0 10px 40px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        " onmouseover="
+            this.style.transform='translateY(-6px) scale(1.03)';
+            this.style.boxShadow='0 20px 50px rgba(139, 92, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+            this.style.borderColor='rgba(0, 255, 255, 0.3)';
+        " onmouseout="
+            this.style.transform='translateY(0) scale(1)';
+            this.style.boxShadow='0 10px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)';
+            this.style.borderColor='{COLORS['border']}';
+        ">
+            
+            {/* Efeito de brilho sutil */}
             <div style="
                 position: absolute;
                 top: 0;
                 left: 0;
                 right: 0;
                 height: 1px;
-                background: linear-gradient(90deg, transparent, {color}, transparent);
+                background: linear-gradient(90deg, transparent, {color}80, transparent);
             "></div>
+            
+            {/* Ícone com brilho */}
             <div style="
-                font-size: 2rem;
-                margin-bottom: 8px;
-                filter: drop-shadow(0 0 12px {color}50);
+                font-size: 2.5rem;
+                margin-bottom: 12px;
+                filter: drop-shadow(0 0 15px {color}80);
+                transition: transform 0.3s ease;
             ">{icon}</div>
+            
+            {/* Label */}
             <div style="
                 color: {COLORS['text_secondary']};
-                font-size: 0.7rem;
+                font-size: 0.75rem;
                 text-transform: uppercase;
-                letter-spacing: 1.5px;
-                margin-bottom: 8px;
+                letter-spacing: 2px;
+                margin-bottom: 10px;
                 font-weight: 600;
             ">{label}</div>
+            
+            {/* Valor principal */}
             <div style="
-                font-size: 2rem;
+                font-size: 2.2rem;
                 font-weight: 800;
                 background: linear-gradient(135deg, {color}, {COLORS['secondary']});
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
                 background-clip: text;
-                line-height: 1;
+                line-height: 1.2;
+                margin: 8px 0;
+                text-shadow: 0 2px 10px {color}40;
             ">{value}</div>
-            {f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle else ''}
-        </div>
-    """, unsafe_allow_html=True)
-
-# --- FUNÇÃO LEGADO: mantida para compatibilidade ---
-def render_metric_card_simple(label, value, help_text=None):
-    """Renderiza cartões de métricas (agora usa o design moderno)"""
-    render_metric_card_modern(label, value, icon="📊", subtitle=help_text)
-
-def render_metric_card(label, value, icon="📊"):
-    """Função legado - agora usa design moderno"""
-    render_metric_card_modern(label, value, icon)
-
-# --- FUNÇÃO: Barra de progresso moderna ---
-def render_progress_bar(percentage, height=8, color_start=None, color_end=None):
-    """Renderiza uma barra de progresso com gradiente moderno"""
-    if color_start is None:
-        color_start = COLORS["primary"]
-    if color_end is None:
-        color_end = COLORS["secondary"]
-    
-    st.markdown(f"""
-        <div style="
-            width: 100%;
-            background-color: rgba(139, 92, 246, 0.1);
-            border-radius: 10px;
-            height: {height}px;
-            margin: 8px 0;
-            overflow: hidden;
-        ">
+            
+            {/* Subtítulo e trend */}
             <div style="
-                height: 100%;
-                border-radius: 10px;
-                background: linear-gradient(90deg, {color_start}, {color_end});
-                width: {min(percentage, 100)}%;
-                transition: width 0.5s ease;
-                box-shadow: 0 0 15px {color_start}60;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+            ">
+                {f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.8rem;">{subtitle}</div>' if subtitle else ''}
+                {f'<div style="color: {trend_color}; font-size: 0.9rem;">{trend_icon} {abs(trend)}%</div>' if trend is not None else ''}
+            </div>
+            
+            {/* Efeito de partículas no fundo */}
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-image: 
+                    radial-gradient(circle at 20% 80%, {color}10 2px, transparent 2px),
+                    radial-gradient(circle at 80% 20%, {COLORS['secondary']}10 2px, transparent 2px);
+                background-size: 50px 50px;
+                opacity: 0.3;
+                z-index: -1;
             "></div>
         </div>
     """, unsafe_allow_html=True)
 
+# --- NOVO: Sidebar Transformável ---
+def render_premium_sidebar():
+    """Renderiza sidebar premium com estado transformável"""
+    st.markdown("""
+        <style>
+        /* Sidebar Premium */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0A0B15 0%, #0E1117 100%) !important;
+            border-right: 1px solid rgba(0, 255, 255, 0.15) !important;
+            min-width: 280px !important;
+            width: 280px !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: 5px 0 30px rgba(0, 0, 0, 0.4) !important;
+        }
+        
+        /* Quando a sidebar está recolhida */
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            min-width: 80px !important;
+            width: 80px !important;
+            transform: translateX(-200px) !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ div {
+            margin-left: 80px !important;
+            transition: margin-left 0.3s ease !important;
+        }
+        
+        /* Esconder texto quando sidebar recolhida */
+        [data-testid="stSidebar"][aria-expanded="false"] .sidebar-text {
+            display: none !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] .sidebar-logo-text {
+            display: none !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] .nav-link span {
+            display: none !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] .nav-link {
+            padding: 15px !important;
+            justify-content: center !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] .nav-link i {
+            margin-right: 0 !important;
+            font-size: 1.2rem !important;
+        }
+        
+        /* Ajustar conteúdo principal quando sidebar recolhida */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            margin-left: 100px !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            transition: all 0.3s ease !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-# --- FUNÇÃO ADICIONADA: Conversor de tempo ---
+# --- NOVO: Heatmap de Atividade ---
+def render_activity_heatmap(df, days=90):
+    """Renderiza um heatmap de atividade estilo GitHub"""
+    if df.empty:
+        return "<div style='text-align: center; color: #94A3B8;'>Sem dados de atividade</div>"
+    
+    hoje = datetime.date.today()
+    data_inicio = hoje - datetime.timedelta(days=days-1)
+    
+    # Criar matriz de datas
+    datas = pd.date_range(start=data_inicio, end=hoje, freq='D')
+    
+    # Contar estudos por dia
+    df['data'] = pd.to_datetime(df['data_estudo']).dt.date
+    contagem_por_dia = df.groupby('data').size()
+    
+    # Preparar HTML
+    html = """
+    <div style="
+        background: linear-gradient(145deg, rgba(20, 22, 40, 0.9), rgba(10, 12, 28, 0.9));
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 25px;
+        border: 1px solid rgba(0, 255, 255, 0.15);
+        margin: 20px 0;
+    ">
+        <h4 style="color: #fff; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            <span style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                📅 Heatmap de Atividade
+            </span>
+            <span style="color: #94A3B8; font-size: 0.9rem;">({days} dias)</span>
+        </h4>
+        
+        <div style="display: flex; gap: 3px; flex-wrap: wrap; justify-content: center;">
+    """
+    
+    # Definir cores baseadas na intensidade
+    cores = [
+        "rgba(139, 92, 246, 0.1)",
+        "rgba(139, 92, 246, 0.3)",
+        "rgba(139, 92, 246, 0.5)",
+        "rgba(139, 92, 246, 0.7)",
+        "rgba(139, 92, 246, 0.9)"
+    ]
+    
+    for data in datas:
+        data_str = data.date()
+        if data_str in contagem_por_dia:
+            count = contagem_por_dia[data_str]
+            # Escalar para índice de cor (0-4)
+            color_idx = min(int(count / 3), 4) if count > 0 else 0
+            cor = cores[color_idx]
+            tooltip = f"{data_str.strftime('%d/%m')}: {count} estudo(s)"
+        else:
+            cor = "rgba(255, 255, 255, 0.05)"
+            tooltip = f"{data_str.strftime('%d/%m')}: Sem estudo"
+        
+        html += f"""
+        <div title="{tooltip}" style="
+            width: 12px;
+            height: 12px;
+            background: {cor};
+            border-radius: 2px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        " onmouseover="this.style.transform='scale(1.3)'" 
+           onmouseout="this.style.transform='scale(1)'"></div>
+        """
+    
+    html += """
+        </div>
+        
+        <div style="
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            color: #94A3B8;
+            font-size: 0.8rem;
+        ">
+            <span>Menos</span>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <div style="width: 10px; height: 10px; background: rgba(139, 92, 246, 0.1); border-radius: 2px;"></div>
+                <div style="width: 10px; height: 10px; background: rgba(139, 92, 246, 0.5); border-radius: 2px;"></div>
+                <div style="width: 10px; height: 10px; background: rgba(139, 92, 246, 0.9); border-radius: 2px;"></div>
+            </div>
+            <span>Mais</span>
+        </div>
+    </div>
+    """
+    
+    return html
+
+# --- NOVO: Speedometer de Performance ---
+def render_performance_speedometer(value, max_value=100, label="Performance"):
+    """Renderiza um velocímetro de performance"""
+    porcentagem = min(value / max_value * 100, 100)
+    
+    # Definir cor baseada no valor
+    if porcentagem >= 80:
+        color = COLORS["success"]
+        nivel = "Excelente"
+    elif porcentagem >= 60:
+        color = COLORS["warning"]
+        nivel = "Bom"
+    else:
+        color = COLORS["danger"]
+        nivel = "Melhorar"
+    
+    st.markdown(f"""
+        <div style="
+            text-align: center;
+            padding: 25px;
+            background: linear-gradient(145deg, rgba(20, 22, 40, 0.9), rgba(10, 12, 28, 0.9));
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            position: relative;
+            overflow: hidden;
+        ">
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #fff; margin: 0; font-size: 1.1rem;">{label}</h4>
+                <div style="color: #94A3B8; font-size: 0.85rem; margin-top: 5px;">Nível: {nivel}</div>
+            </div>
+            
+            {/* Speedometer container */}
+            <div style="
+                position: relative;
+                width: 200px;
+                height: 100px;
+                margin: 0 auto 20px;
+                overflow: hidden;
+            ">
+                {/* Fundo do speedometer */}
+                <div style="
+                    position: absolute;
+                    width: 200px;
+                    height: 100px;
+                    border: 15px solid rgba(255, 255, 255, 0.1);
+                    border-top: none;
+                    border-radius: 0 0 100px 100px;
+                    box-sizing: border-box;
+                "></div>
+                
+                {/* Faixas do speedometer */}
+                <div style="
+                    position: absolute;
+                    width: 170px;
+                    height: 85px;
+                    border: 15px solid transparent;
+                    border-top: none;
+                    border-radius: 0 0 85px 85px;
+                    border-image: linear-gradient(90deg, 
+                        {COLORS["danger"]} 0%, 
+                        {COLORS["warning"]} 50%, 
+                        {COLORS["success"]} 100%
+                    ) 1;
+                    box-sizing: border-box;
+                "></div>
+                
+                {/* Agulha */}
+                <div style="
+                    position: absolute;
+                    bottom: 0;
+                    left: 50%;
+                    width: 4px;
+                    height: 70px;
+                    background: {color};
+                    transform-origin: bottom center;
+                    transform: translateX(-50%) rotate({-135 + (porcentagem * 2.7)}deg);
+                    transition: transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    border-radius: 2px 2px 0 0;
+                    z-index: 2;
+                    box-shadow: 0 0 10px {color};
+                "></div>
+                
+                {/* Ponto central */}
+                <div style="
+                    position: absolute;
+                    bottom: 0;
+                    left: 50%;
+                    width: 20px;
+                    height: 20px;
+                    background: {color};
+                    border-radius: 50%;
+                    transform: translate(-50%, 50%);
+                    z-index: 3;
+                    box-shadow: 0 0 15px {color};
+                "></div>
+            </div>
+            
+            {/* Valor */}
+            <div style="
+                font-size: 2.5rem;
+                font-weight: 800;
+                background: linear-gradient(135deg, {color}, {COLORS["secondary"]});
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin: 10px 0;
+            ">{porcentagem:.0f}%</div>
+            
+            {/* Marcadores */}
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                color: #94A3B8;
+                font-size: 0.8rem;
+                margin-top: 15px;
+                padding: 0 10px;
+            ">
+                <span>0</span>
+                <span>50</span>
+                <span>100</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÕES AUXILIARES (mantidas do original) ---
 def formatar_tempo_para_bigint(tempo_str):
     """Converte string HHMM para minutos inteiros."""
     try:
@@ -210,16 +627,23 @@ def formatar_tempo_para_bigint(tempo_str):
     except (ValueError, TypeError, AttributeError):
         return 0
 
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
-st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
+# ============================================================================
+# CONFIGURAÇÃO PRINCIPAL
+# ============================================================================
+
+st.set_page_config(
+    page_title="Monitor Pro Premium",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    page_icon="🎯"
+)
 
 from database import supabase
 from logic import get_editais, excluir_concurso_completo
 from styles import apply_styles
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
+# --- INICIALIZAÇÃO OBRIGATÓRIA ---
 if 'missao_ativa' not in st.session_state:
-    # Padrão Automático: tenta carregar a primeira missão disponível
     try:
         ed = get_editais(supabase)
         if ed:
@@ -232,14 +656,12 @@ if 'missao_ativa' not in st.session_state:
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
-# Inicializar estados das metas semanais
 if 'meta_horas_semana' not in st.session_state:
     st.session_state.meta_horas_semana = 22
 
 if 'meta_questoes_semana' not in st.session_state:
     st.session_state.meta_questoes_semana = 350
 
-# Inicializar estados para controle de interface
 if 'editando_metas' not in st.session_state:
     st.session_state.editando_metas = False
 
@@ -249,200 +671,148 @@ if 'renomear_materia' not in st.session_state:
 # Aplicar estilos base
 apply_styles()
 
-# CSS Customizado para Layout Moderno - TEMA ROXO/CIANO PREMIUM
+# --- CSS CUSTOMIZADO PREMIUM ---
 st.markdown("""
     <style>
-    /* Importar Fontes: Inter e Montserrat */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Montserrat:wght@400;500;600;700;800&display=swap');
-    
-    /* Variáveis de cores - TEMA FUTURISTA PREMIUM */
+    /* RESET E CONFIGURAÇÕES GERAIS */
     :root {
         --primary: #8B5CF6;
-        --secondary: #00FFFF; /* Ciano Neon */
+        --secondary: #00FFFF;
         --accent: #EC4899;
         --success: #10B981;
         --warning: #F59E0B;
-        --danger: #EF4444;
-        --bg-dark: #0E1117; /* Cinza Oceano Profundo */
-        --bg-card: rgba(15, 15, 35, 0.6);
+        --danger: #FF4B4B;
+        --bg-primary: #0A0B15;
+        --bg-secondary: #0E1117;
+        --bg-card: rgba(20, 22, 40, 0.7);
         --text-primary: #FFFFFF;
-        --text-secondary: #94A3B8;
-        --border-glow: rgba(0, 255, 255, 0.1);
-        --sidebar-bg: #0E1117; 
-        --sidebar-border: 1px solid rgba(0, 255, 255, 0.15);
-        --glass-bg: rgba(15, 15, 35, 0.6);
+        --text-secondary: #A0AEC0;
+        --border: rgba(0, 255, 255, 0.15);
+        --glow: rgba(139, 92, 246, 0.3);
     }
     
-    html, body, [class*="css"] {
-        font-family: 'Montserrat', 'Inter', sans-serif;
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
     }
     
-    /* Fundo principal */
+    /* FUNDO PRINCIPAL COM GRADIENTE */
     .stApp {
-        background: linear-gradient(135deg, #0E1117 0%, #0F0F23 100%);
-        background-attachment: fixed;
+        background: linear-gradient(135deg, #0A0B15 0%, #0E1117 100%) !important;
+        background-attachment: fixed !important;
+        min-height: 100vh !important;
     }
     
-    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
-    /* Quando a sidebar está EXPANDIDA */
+    /* REMOVER BACKGROUNDS PADRÃO DO STREAMLIT */
+    .main .block-container {
+        background: transparent !important;
+    }
+    
+    /* SIDEBAR PREMIUM */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%) !important;
+        border-right: 1px solid var(--border) !important;
+        min-width: 280px !important;
+        width: 280px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 5px 0 30px rgba(0, 0, 0, 0.5) !important;
+        backdrop-filter: blur(20px) !important;
+    }
+    
+    /* CONTEÚDO PRINCIPAL */
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        max-width: calc(100% - 300px) !important;
-        margin-left: 300px !important;
+        max-width: calc(100% - 280px) !important;
+        margin-left: 280px !important;
         padding-left: 4rem !important;
         padding-right: 4rem !important;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        padding-top: 2rem !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* Quando a sidebar está RECOLHIDA (Minimizada) */
-    [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 1200px !important; 
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-    
-    /* Container principal padrão */
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        transition: all 0.3s ease;
-    }
-
-    /* Cards Glassmorphism Premium */
-    .modern-card {
-        background: rgba(15, 15, 35, 0.6);
-        backdrop-filter: blur(25px) saturate(180%);
-        -webkit-backdrop-filter: blur(25px) saturate(180%);
-        border: 1px solid rgba(139, 92, 246, 0.15);
-        border-radius: 16px;
-        padding: 30px;
-        margin-bottom: 20px;
-        transition: all 0.3s ease;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .modern-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, 
-            transparent, 
-            rgba(139, 92, 246, 0.5), 
-            rgba(0, 255, 255, 0.5), 
-            transparent
-        );
-        z-index: 1;
-    }
-    
-    .modern-card:hover {
-        border-color: rgba(0, 255, 255, 0.3);
-        transform: translateY(-4px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    }
-
-    /* Títulos Uppercase e Letter Spacing */
-    .main-title {
+    /* TÍTULOS PREMIUM */
+    .premium-title {
         font-family: 'Montserrat', sans-serif;
-        font-size: 2.5rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        background: linear-gradient(135deg, #FFFFFF 0%, #00FFFF 100%);
+        font-size: 2.8rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 1.5rem;
-        filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3));
-    }
-    
-    .section-subtitle {
-        color: #94A3B8;
-        font-size: 0.85rem;
+        margin-bottom: 1rem;
         text-transform: uppercase;
-        letter-spacing: 2px;
-        font-weight: 600;
-        margin-bottom: 2rem;
-    }
-
-    /* Sidebar Futurista Premium */
-    [data-testid="stSidebar"] {
-        background-color: var(--sidebar-bg) !important;
-        background-image: linear-gradient(180deg, rgba(14, 17, 23, 0.95), rgba(14, 17, 23, 0.98)) !important;
-        border-right: var(--sidebar-border) !important;
-        min-width: 300px !important;
-        width: 300px !important;
-        box-shadow: 5px 0 30px rgba(0, 0, 0, 0.3);
+        letter-spacing: 1px;
+        text-shadow: 0 4px 20px var(--glow);
     }
     
-    /* Remover elementos padrão da sidebar */
-    .stSidebarUserContent {
-        padding-top: 2rem;
-    }
-
-    /* Sidebar Content - Glassmorphism */
-    [data-testid="stSidebar"] .element-container {
-        background: rgba(15, 15, 35, 0.4);
-        backdrop-filter: blur(10px);
-        border-radius: 12px;
-        padding: 15px;
-        margin: 10px 0;
-        border: 1px solid rgba(0, 255, 255, 0.05);
-    }
-
-    /* Estilização das TABS (Abas) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: rgba(15, 15, 35, 0.5);
-        padding: 8px;
-        border-radius: 14px;
-        border: 1px solid rgba(139, 92, 246, 0.15);
-        margin-bottom: 20px;
-        backdrop-filter: blur(10px);
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        white-space: pre-wrap;
-        background-color: transparent;
-        border-radius: 10px;
-        color: #94A3B8;
-        font-weight: 600;
-        border: none !important;
-        transition: all 0.3s ease;
-        padding: 0 20px;
-    }
-
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #FFFFFF;
-        background-color: rgba(139, 92, 246, 0.1);
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    .section-title {
+        color: var(--text-primary);
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 2rem 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     
-    /* Botões Modernos Premium */
-    .stButton>button {
+    .section-title::before {
+        content: '';
+        width: 4px;
+        height: 24px;
+        background: linear-gradient(var(--primary), var(--secondary));
+        border-radius: 2px;
+    }
+    
+    /* CARDS PREMIUM */
+    .premium-card {
+        background: linear-gradient(145deg, var(--bg-card), rgba(10, 12, 28, 0.9));
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 30px;
+        margin: 20px 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        box-shadow: 
+            0 10px 40px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    
+    .premium-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 
+            0 20px 60px rgba(139, 92, 246, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        border-color: rgba(0, 255, 255, 0.3);
+    }
+    
+    /* GRID SYSTEM */
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 25px;
+        margin: 25px 0;
+    }
+    
+    .grid-item {
+        min-height: 200px;
+    }
+    
+    /* BOTÕES PREMIUM */
+    .stButton > button {
         border-radius: 12px !important;
         font-weight: 600 !important;
         transition: all 0.3s ease !important;
-        border: 1px solid rgba(139, 92, 246, 0.3) !important;
+        border: 1px solid var(--border) !important;
         background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2)) !important;
-        color: #FFFFFF !important;
-        backdrop-filter: blur(10px);
-        overflow: hidden;
-        position: relative;
+        color: var(--text-primary) !important;
+        backdrop-filter: blur(10px) !important;
+        overflow: hidden !important;
+        position: relative !important;
+        padding: 12px 24px !important;
     }
     
-    .stButton>button::before {
+    .stButton > button::before {
         content: '';
         position: absolute;
         top: 0;
@@ -453,529 +823,1457 @@ st.markdown("""
         transition: left 0.5s ease;
     }
     
-    .stButton>button:hover::before {
+    .stButton > button:hover::before {
         left: 100%;
     }
     
-    .stButton>button:hover {
+    .stButton > button:hover {
         border-color: rgba(139, 92, 246, 0.6) !important;
         box-shadow: 0 0 25px rgba(139, 92, 246, 0.4) !important;
-        transform: translateY(-2px);
+        transform: translateY(-2px) !important;
     }
     
-    .stButton>button[kind="primary"] {
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
         border: none !important;
-        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3) !important;
+        box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3) !important;
     }
     
-    .stButton>button[kind="primary"]:hover {
-        box-shadow: 0 6px 25px rgba(139, 92, 246, 0.5) !important;
-    }
-    
-    /* Inputs Modernos */
-    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+    /* INPUTS PREMIUM */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        background: rgba(20, 22, 40, 0.8) !important;
+        border: 1px solid var(--border) !important;
         border-radius: 12px !important;
-        border: 1px solid rgba(139, 92, 246, 0.2) !important;
-        background: rgba(15, 15, 35, 0.8) !important;
-        color: #FFFFFF !important;
+        color: var(--text-primary) !important;
+        padding: 12px 16px !important;
+        font-size: 1rem !important;
+        transition: all 0.3s ease !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus,
+    .stNumberInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 15px var(--glow) !important;
+        outline: none !important;
+    }
+    
+    /* TABS PREMIUM */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: rgba(20, 22, 40, 0.6) !important;
         backdrop-filter: blur(10px);
-        transition: all 0.3s ease;
-    }
-    
-    .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus {
-        border-color: rgba(139, 92, 246, 0.4) !important;
-        box-shadow: 0 0 15px rgba(139, 92, 246, 0.2) !important;
-    }
-    
-    /* Tabela de Disciplinas Moderna */
-    .disciplina-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 20px 0;
-        background: rgba(15, 15, 35, 0.5);
-        border-radius: 12px;
-        overflow: hidden;
-        backdrop-filter: blur(10px);
-    }
-    
-    .disciplina-table thead {
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1));
-    }
-    
-    .disciplina-table th {
-        text-align: left;
-        padding: 18px 15px;
-        border-bottom: 1px solid rgba(139, 92, 246, 0.15);
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.85rem;
-        letter-spacing: 1px;
-    }
-    
-    .disciplina-table td {
-        padding: 16px 15px;
-        border-bottom: 1px solid rgba(139, 92, 246, 0.08);
-        color: #fff;
-        font-size: 0.95rem;
-    }
-    
-    .disciplina-table tr:hover {
-        background-color: rgba(139, 92, 246, 0.08);
-    }
-    
-    .disciplina-table tr:last-child td {
-        border-bottom: none;
-    }
-    
-    /* Metas Cards Modernos */
-    .meta-card {
-        background: rgba(15, 15, 35, 0.7);
-        backdrop-filter: blur(25px);
-        border: 1px solid rgba(139, 92, 246, 0.15);
         border-radius: 16px;
-        padding: 28px;
-        text-align: center;
-        height: 100%;
-        position: relative;
-        transition: all 0.3s ease;
-        overflow: hidden;
-    }
-    
-    .meta-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
-    }
-    
-    .meta-card:hover {
-        border-color: rgba(139, 92, 246, 0.4);
-        box-shadow: 0 0 40px rgba(139, 92, 246, 0.2);
-        transform: translateY(-4px);
-    }
-    
-    .meta-title {
-        color: #94A3B8;
-        font-size: 0.9rem;
-        margin-bottom: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        font-weight: 600;
-    }
-    
-    .meta-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 15px 0;
-    }
-    
-    .meta-progress {
-        margin-top: 20px;
-    }
-    
-    .meta-subtitle {
-        color: #06B6D4;
-        font-size: 0.9rem;
-        margin-top: 10px;
-        font-weight: 500;
-    }
-    
-    /* Modal de Configuração */
-    .meta-modal {
-        background: rgba(15, 15, 35, 0.95);
-        backdrop-filter: blur(25px);
-        border: 1px solid rgba(139, 92, 246, 0.3);
-        border-radius: 16px;
-        padding: 28px;
-        margin-top: 20px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-    }
-    
-    /* Streak Card Moderno */
-    .streak-card {
-        background: rgba(15, 15, 35, 0.7);
-        backdrop-filter: blur(25px);
-        border: 1px solid rgba(139, 92, 246, 0.15);
-        border-radius: 16px;
-        padding: 28px;
-        margin: 20px 0;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .streak-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
-    }
-    
-    .streak-title {
-        color: #94A3B8;
-        font-size: 1.2rem;
-        margin-bottom: 15px;
-        font-weight: 600;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-    }
-    
-    .streak-value-container {
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-        margin: 20px 0;
-        gap: 20px;
-    }
-    
-    .streak-value-box {
-        flex: 1;
-        text-align: center;
-        padding: 24px;
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.08));
-        border-radius: 16px;
-        border: 1px solid rgba(139, 92, 246, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        transition: all 0.3s ease;
-        backdrop-filter: blur(10px);
-    }
-    
-    .streak-value-box:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 40px rgba(139, 92, 246, 0.3);
-        border-color: rgba(139, 92, 246, 0.4);
-    }
-    
-    .streak-value-label {
-        color: #06B6D4;
-        font-size: 0.9rem;
-        margin-bottom: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .streak-value-number {
-        font-size: 3rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 10px 0;
-    }
-    
-    .streak-period {
-        color: #94A3B8;
-        font-size: 0.9rem;
-        margin-top: 15px;
-        text-align: center;
-        background: rgba(139, 92, 246, 0.1);
-        padding: 10px 18px;
-        border-radius: 10px;
-        display: inline-block;
-        backdrop-filter: blur(5px);
-    }
-    
-    /* Filtros modernos */
-    .stSegmentedControl {
-        margin-bottom: 10px;
-    }
-    
-    /* Seção de Constância Moderna */
-    .constancia-section {
-        margin-top: 30px;
-        padding: 28px;
-        background: linear-gradient(135deg, rgba(15, 15, 35, 0.9), rgba(15, 15, 35, 0.7));
-        backdrop-filter: blur(25px);
-        border-radius: 20px;
-        border: 1px solid rgba(139, 92, 246, 0.2);
-        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .constancia-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
-    }
-    
-    .constancia-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--border);
         margin-bottom: 25px;
-        padding-bottom: 15px;
-        border-bottom: 1px solid rgba(139, 92, 246, 0.15);
     }
     
-    .constancia-title {
-        color: #fff;
-        font-size: 1.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    
-    /* Badges Modernos */
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.75rem;
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding: 0 24px;
+        background: transparent;
+        border-radius: 12px;
+        color: var(--text-secondary);
         font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        backdrop-filter: blur(10px);
+        border: none;
+        transition: all 0.3s ease;
     }
     
-    .badge-red {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        color: #EF4444;
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(139, 92, 246, 0.1);
+        color: var(--text-primary);
     }
     
-    .badge-green {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        color: #10B981;
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
+        color: white !important;
+        box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
     }
     
-    .badge-gray {
-        background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.1));
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        color: #94A3B8;
+    /* METRIC CARDS NATIVOS */
+    [data-testid="metric-container"] {
+        background: linear-gradient(145deg, var(--bg-card), rgba(10, 12, 28, 0.9)) !important;
+        backdrop-filter: blur(20px) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 20px !important;
+        padding: 25px !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* Progress Bars Modernas */
-    .modern-progress-container {
-        width: 100%;
-        height: 8px;
-        background-color: rgba(139, 92, 246, 0.1);
-        border-radius: 10px;
-        overflow: hidden;
-        margin: 10px 0;
+    [data-testid="metric-container"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 15px 40px rgba(139, 92, 246, 0.2);
+        border-color: rgba(0, 255, 255, 0.3);
     }
     
-    .modern-progress-fill {
-        height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #8B5CF6, #06B6D4);
-        box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
-        transition: width 0.5s ease;
+    /* DATA FRAMES */
+    .stDataFrame {
+        border-radius: 16px !important;
+        border: 1px solid var(--border) !important;
+        overflow: hidden !important;
+        background: rgba(20, 22, 40, 0.6) !important;
     }
     
-    /* Responsividade */
-    @media (max-width: 768px) {
-        .streak-value-container {
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .streak-value-box {
-            width: 100%;
-        }
-        
-        .main-title {
-            font-size: 2rem;
-        }
+    /* EXPANDERS */
+    .streamlit-expanderHeader {
+        background: rgba(139, 92, 246, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 12px !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* Scrollbar personalizada */
+    .streamlit-expanderHeader:hover {
+        background: rgba(139, 92, 246, 0.15) !important;
+        border-color: var(--primary) !important;
+    }
+    
+    /* SCROLLBAR PERSONALIZADA */
     ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
     }
     
     ::-webkit-scrollbar-track {
-        background: rgba(15, 15, 35, 0.5);
+        background: rgba(20, 22, 40, 0.5);
         border-radius: 5px;
     }
     
     ::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
         border-radius: 5px;
-        border: 2px solid rgba(15, 15, 35, 0.5);
+        border: 2px solid rgba(20, 22, 40, 0.5);
     }
     
     ::-webkit-scrollbar-thumb:hover {
-        background: #8B5CF6;
+        background: var(--primary);
     }
     
-    /* Expanders modernos */
-    .streamlit-expanderHeader {
-        background: rgba(139, 92, 246, 0.1) !important;
+    /* ANIMAÇÕES */
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+    
+    @keyframes glow {
+        0%, 100% { box-shadow: 0 0 10px var(--glow); }
+        50% { box-shadow: 0 0 20px var(--glow); }
+    }
+    
+    .floating {
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    .pulse {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .glow {
+        animation: glow 2s ease-in-out infinite;
+    }
+    
+    /* RESPONSIVIDADE */
+    @media (max-width: 768px) {
+        .premium-title {
+            font-size: 2rem;
+        }
+        
+        .grid-container {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+    }
+    
+    /* EFEITOS ESPECIAIS */
+    .glass-effect {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
         backdrop-filter: blur(10px);
-        border-radius: 12px !important;
-        border: 1px solid rgba(139, 92, 246, 0.15) !important;
-        color: #fff !important;
-        font-weight: 600 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
-    .streamlit-expanderHeader:hover {
-        border-color: rgba(139, 92, 246, 0.3) !important;
-        background: rgba(139, 92, 246, 0.15) !important;
+    .particle-bg {
+        background-image: 
+            radial-gradient(circle at 20% 80%, var(--primary)10 1px, transparent 1px),
+            radial-gradient(circle at 80% 20%, var(--secondary)10 1px, transparent 1px);
+        background-size: 50px 50px;
     }
     
-    /* Dividers */
-    hr {
-        border-color: rgba(139, 92, 246, 0.15) !important;
-        margin: 30px 0 !important;
+    /* STATUS INDICATORS */
+    .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
     }
     
-    /* DataFrames */
-    .stDataFrame {
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid rgba(139, 92, 246, 0.15);
-        backdrop-filter: blur(10px);
+    .status-active {
+        background: var(--success);
+        box-shadow: 0 0 10px var(--success);
     }
     
-    /* Metric Cards no Dashboard */
-    [data-testid="metric-container"] {
-        background: rgba(15, 15, 35, 0.6) !important;
-        backdrop-filter: blur(25px) !important;
-        border: 1px solid rgba(139, 92, 246, 0.15) !important;
-        border-radius: 16px !important;
-        padding: 20px !important;
-        transition: all 0.3s ease !important;
+    .status-inactive {
+        background: var(--text-secondary);
     }
     
-    [data-testid="metric-container"]:hover {
-        border-color: rgba(139, 92, 246, 0.3) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 25px rgba(139, 92, 246, 0.2) !important;
+    .status-warning {
+        background: var(--warning);
+        box-shadow: 0 0 10px var(--warning);
     }
     
-    /* Alertas e Mensagens */
-    .stAlert {
-        border-radius: 12px !important;
-        backdrop-filter: blur(10px) !important;
-        border: 1px solid rgba(139, 92, 246, 0.15) !important;
+    /* LOADING SKELETON */
+    .skeleton {
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+        border-radius: 8px;
     }
     
-    /* Seletores e Sliders */
-    .stSelectbox, .stSlider, .stDateInput {
-        backdrop-filter: blur(10px);
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
     }
-    
-    /* Visão do Mês Atual */
-    .visao-mes-title {
-        color: #fff;
-        font-size: 1.2rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        margin-bottom: 25px;
-        padding-bottom: 15px;
-        border-bottom: 1px solid rgba(139, 92, 246, 0.15);
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    
     </style>
 """, unsafe_allow_html=True)
 
-# --- NOVA FUNÇÃO: Processar assuntos em massa ---
-def processar_assuntos_em_massa(texto, separador=";"):
-    """
-    Processa um texto com múltiplos assuntos separados por um separador.
-    Retorna uma lista limpa de assuntos.
-    """
-    if not texto:
-        return []
+# ============================================================================
+# LÓGICA DE NAVEGAÇÃO COM NOVO LAYOUT
+# ============================================================================
+
+if st.session_state.missao_ativa is None:
+    # Tela inicial premium
+    st.markdown('<h1 class="premium-title">🎯 CENTRAL DE COMANDO</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="color: #94A3B8; font-size: 1.1rem; margin-bottom: 2rem;">Selecione sua missão ou inicie um novo ciclo</p>', unsafe_allow_html=True)
     
-    # Remove espaços em branco no início e fim
-    texto = texto.strip()
+    ed = get_editais(supabase)
+    tabs = st.tabs(["🚀 MISSÕES ATIVAS", "➕ NOVA MISSÃO"])
     
-    # Processa baseado no separador
-    if separador == ";":
-        assuntos = texto.split(";")
-    elif separador == ",":
-        assuntos = texto.split(",")
-    elif separador == "linha":
-        # Divide por quebras de linha
-        assuntos = texto.split("\n")
-    elif separador == "ponto":
-        # Divide por ponto
-        assuntos = texto.split(".")
-    else:
-        assuntos = [texto]
+    with tabs[0]:
+        if not ed: 
+            st.markdown('<div class="premium-card"><p style="text-align: center; color: #94A3B8;">Nenhuma missão ativa no momento.</p></div>', unsafe_allow_html=True)
+        else:
+            cols = st.columns(2, gap="25px")
+            for i, (nome, d_concurso) in enumerate(ed.items()):
+                with cols[i % 2]:
+                    st.markdown(f"""
+                        <div class="premium-card" style="cursor: pointer;" onclick="
+                            const event = new CustomEvent('selectMission', {{detail: '{nome}'}});
+                            window.dispatchEvent(event);
+                        ">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="
+                                    width: 50px;
+                                    height: 50px;
+                                    background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+                                    border-radius: 12px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 1.5rem;
+                                ">🎯</div>
+                                <div>
+                                    <h3 style="margin:0; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{nome}</h3>
+                                    <p style="color:#94A3B8; font-size:0.9rem; margin:5px 0 0 0;">{d_concurso['cargo']}</p>
+                                </div>
+                            </div>
+                            <div style="margin-top: 20px;">
+                                <button style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+                                    border: none;
+                                    border-radius: 12px;
+                                    color: white;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 20px rgba(139, 92, 246, 0.4)'"
+                                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                                   onclick="event.stopPropagation(); const e = new CustomEvent('selectMission', {{detail: '{nome}'}}); window.dispatchEvent(e);">
+                                    ACESSAR MISSÃO
+                                </button>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
     
-    # Limpa cada assunto
-    assuntos_limpos = []
-    for assunto in assuntos:
-        assunto = assunto.strip()
-        # Remove caracteres especiais no início/fim
-        assunto = re.sub(r'^[^a-zA-Z0-9]*|[^a-zA-Z0-9]*$', '', assunto)
-        if assunto:  # Só adiciona se não estiver vazio
-            assuntos_limpos.append(assunto)
+    with tabs[1]:
+        with st.container():
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            st.markdown("##### 🚀 Cadastrar Nova Missão")
+            
+            with st.form("form_novo_concurso", clear_on_submit=True):
+                col1, col2 = st.columns(2, gap="20px")
+                with col1:
+                    nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
+                with col2:
+                    cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
+                
+                informar_data_prova = st.checkbox("📅 Informar data da prova (opcional)")
+                if informar_data_prova:
+                    data_prova_input = st.date_input("Data da Prova")
+                else:
+                    data_prova_input = None
+                
+                st.divider()
+                
+                btn_cadastrar = st.form_submit_button("🚀 INICIAR MISSÃO", use_container_width=True, type="primary")
+                
+                if btn_cadastrar:
+                    if nome_concurso and cargo_concurso:
+                        try:
+                            payload = {
+                                "concurso": nome_concurso,
+                                "cargo": cargo_concurso,
+                                "materia": "Geral",
+                                "topicos": ["Introdução"]
+                            }
+                            if data_prova_input:
+                                payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
+                            
+                            res_ins = supabase.table("editais_materias").insert(payload).execute()
+                            
+                            if res_ins.data:
+                                st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
+                                time.sleep(1)
+                                st.session_state.missao_ativa = nome_concurso
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao cadastrar: {e}")
+                    else:
+                        st.warning("⚠️ Por favor, preencha o nome e o cargo.")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    return assuntos_limpos
+    # JavaScript para lidar com seleção de missão
+    st.markdown("""
+        <script>
+        window.addEventListener('selectMission', function(e) {
+            const missionName = e.detail;
+            window.parent.postMessage({
+                type: 'streamlit:setComponentValue',
+                value: missionName
+            }, '*');
+        });
+        </script>
+    """, unsafe_allow_html=True)
 
-# --- 2. FUNÇÕES AUXILIARES ---
-def calcular_countdown(data_str):
-    if not data_str: return None, "#adb5bd"
+else:
+    missao = st.session_state.missao_ativa
+    
+    # Carregar dados
     try:
-        dias = (pd.to_datetime(data_str).date() - datetime.date.today()).days
-        cor = "#FF4B4B" if dias <= 7 else "#FFD700" if dias <= 30 else "#00FF00"
-        return dias, cor
-    except (ValueError, TypeError, AttributeError):
-        return None, "#adb5bd"
-
-# Formata minutos em '2h 15m'
-def formatar_minutos(minutos_totais):
+        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        df = pd.DataFrame(res.data)
+    except Exception as e:
+        st.warning(f"Aviso: Não foi possível carregar registros - {e}")
+        df = pd.DataFrame()
+    
+    # Buscar data da prova
     try:
-        minutos = int(minutos_totais)
-    except (ValueError, TypeError):
-        return "0m"
-    horas = minutos // 60
-    minutos_rest = minutos % 60
-    if horas > 0:
-        return f"{horas}h{minutos_rest:02d}min"
-    return f"{minutos_rest}min"
+        res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
+        data_prova_direta = res_data_prova.data[0].get('data_prova') if res_data_prova.data else None
+    except Exception:
+        data_prova_direta = None
+    
+    dados = get_editais(supabase).get(missao, {})
 
-def formatar_horas_minutos(minutos_totais):
-    """Formata minutos para 'Xh YYmin'"""
-    try:
-        minutos = int(minutos_totais)
-    except (ValueError, TypeError):
-        return "0h00min"
-    horas = minutos // 60
-    minutos_rest = minutos % 60
-    return f"{horas}h{minutos_rest:02d}min"
+    # --- NOVA SIDEBAR PREMIUM ---
+    with st.sidebar:
+        # Logo premium
+        st.markdown("""
+            <div style='text-align: center; padding: 20px 0 30px 0;'>
+                <div style='
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.1));
+                    width: 70px;
+                    height: 70px;
+                    border-radius: 18px;
+                    margin: 0 auto 15px auto;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                    border: 1px solid rgba(0, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                '>
+                    <span style='font-size: 35px; filter: drop-shadow(0 0 15px rgba(139, 92, 246, 0.5));'>🎯</span>
+                </div>
+                <h1 style='color: white; font-family: "Montserrat", sans-serif; font-weight: 800; font-size: 1.8rem; margin: 0; letter-spacing: -0.5px; line-height: 1.2;'>
+                    MONITOR<span style='color: #00FFFF; padding: 0 6px; border-radius: 6px; margin-left: 4px; font-size: 1.4rem; vertical-align: middle;'>PRO</span>
+                </h1>
+                <p style='color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-top: 8px; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;'>
+                    Premium Edition
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Menu premium com ícones
+        menu_selecionado = option_menu(
+            menu_title=None,
+            options=["DASHBOARD", "REVISÕES", "REGISTRAR", "HISTÓRICO", "CONFIGURAÇÕES"],
+            icons=["speedometer2", "arrow-repeat", "plus-circle", "clock", "gear"],
+            menu_icon="list",
+            default_index=0,
+            styles={
+                "container": {
+                    "padding": "0!important", 
+                    "background-color": "rgba(20, 22, 40, 0.4)",
+                    "backdrop-filter": "blur(10px)",
+                    "border-radius": "16px",
+                    "border": "1px solid rgba(0, 255, 255, 0.1)",
+                },
+                "icon": {"color": "#8B5CF6", "font-size": "16px", "margin-right": "12px"}, 
+                "nav-link": {
+                    "font-family": "Montserrat, sans-serif",
+                    "font-size": "14px",
+                    "text-align": "left",
+                    "margin": "10px 12px",
+                    "padding": "14px 20px",
+                    "border-radius": "12px",
+                    "--hover-color": "rgba(139, 92, 246, 0.1)",
+                    "letter-spacing": "0.5px",
+                    "font-weight": "500",
+                    "color": "#94A3B8",
+                    "transition": "all 0.3s ease",
+                    "border": "1px solid transparent"
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.08))",
+                    "color": "#fff",
+                    "font-weight": "700",
+                    "border-left": "4px solid #00FFFF",
+                    "border-radius": "4px 12px 12px 4px",
+                    "box-shadow": "0 4px 15px rgba(139, 92, 246, 0.2)",
+                    "border": "1px solid rgba(139, 92, 246, 0.2)"
+                },
+            }
+        )
+        
+        # Info da missão atual
+        st.markdown(f"""
+            <div style='
+                background: linear-gradient(135deg, rgba(20, 22, 40, 0.6), rgba(10, 12, 28, 0.8));
+                backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 20px;
+                margin: 20px 0;
+                border: 1px solid rgba(0, 255, 255, 0.1);
+            '>
+                <p style='color: #8B5CF6; font-size: 0.8rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;'>Missão Ativa</p>
+                <p style='color: #fff; font-weight: 700; font-size: 1.1rem; margin: 0 0 5px 0;'>{missao}</p>
+                <p style='color: #94A3B8; font-size: 0.85rem; margin: 0;'>{dados.get('cargo', '')}</p>
+                
+                <div style='margin-top: 15px;'>
+                    <button style='
+                        width: 100%;
+                        padding: 10px;
+                        background: rgba(139, 92, 246, 0.1);
+                        border: 1px solid rgba(139, 92, 246, 0.3);
+                        border-radius: 10px;
+                        color: #8B5CF6;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        font-size: 0.85rem;
+                    ' onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'; this.style.transform='translateY(-2px)'"
+                       onmouseout="this.style.background='rgba(139, 92, 246, 0.1)'; this.style.transform='translateY(0)'"
+                       onclick="window.location.href='?change_mission=true'">
+                        🔄 Trocar Missão
+                    </button>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Stats rápidos
+        if not df.empty:
+            total_questoes = df['total'].sum()
+            total_horas = df['tempo'].sum() / 60
+            taxa_media = df['taxa'].mean() if not df.empty else 0
+            
+            st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, rgba(20, 22, 40, 0.6), rgba(10, 12, 28, 0.8));
+                    backdrop-filter: blur(10px);
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin: 15px 0;
+                    border: 1px solid rgba(0, 255, 255, 0.1);
+                '>
+                    <p style='color: #8B5CF6; font-size: 0.8rem; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;'>Stats Rápidos</p>
+                    
+                    <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 15px;'>
+                        <div style='text-align: center;'>
+                            <p style='color: #94A3B8; font-size: 0.75rem; margin: 0;'>Questões</p>
+                            <p style='color: #fff; font-weight: 800; font-size: 1.2rem; margin: 5px 0 0 0;'>{int(total_questoes)}</p>
+                        </div>
+                        <div style='text-align: center;'>
+                            <p style='color: #94A3B8; font-size: 0.75rem; margin: 0;'>Horas</p>
+                            <p style='color: #fff; font-weight: 800; font-size: 1.2rem; margin: 5px 0 0 0;'>{total_horas:.1f}h</p>
+                        </div>
+                        <div style='text-align: center; grid-column: span 2;'>
+                            <p style='color: #94A3B8; font-size: 0.75rem; margin: 0;'>Taxa Média</p>
+                            <p style='color: #fff; font-weight: 800; font-size: 1.2rem; margin: 5px 0 0 0;'>{taxa_media:.1f}%</p>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-def get_badge_cor(taxa):
-    """Retorna classe CSS simples para badges baseado na taxa (0-100)."""
-    try:
-        t = float(taxa)
-    except (ValueError, TypeError):
-        return "badge-gray"
-    if t >= 80:
-        return "badge-green"
-    if t >= 60:
-        return "badge-gray"
-    return "badge-red"
+    # ============================================================================
+    # PÁGINAS COM NOVO LAYOUT
+    # ============================================================================
+    
+    # Mapeamento do menu
+    menu_map = {
+        "DASHBOARD": "Dashboard",
+        "REVISÕES": "Revisões",
+        "REGISTRAR": "Registrar",
+        "HISTÓRICO": "Histórico",
+        "CONFIGURAÇÕES": "Configurações"
+    }
+    
+    menu = menu_map.get(menu_selecionado, "Dashboard")
+    
+    # --- DASHBOARD PREMIUM ---
+    if menu == "Dashboard":
+        # Header do dashboard
+        col_title, col_actions = st.columns([3, 1])
+        
+        with col_title:
+            st.markdown(f'<h1 class="premium-title">{missao}</h1>', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#94A3B8; font-size:1.1rem; margin-bottom:2rem;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+        
+        with col_actions:
+            if st.button("🔄", help="Atualizar dashboard", use_container_width=True):
+                st.rerun()
+        
+        # Grid de métricas principais
+        if not df.empty:
+            # Calcular métricas
+            t_q = df['total'].sum()
+            a_q = df['acertos'].sum()
+            precisao = (a_q / t_q * 100) if t_q > 0 else 0
+            minutos_totais = int(df['tempo'].sum())
+            tempo_formatado = formatar_tempo_para_bigint(minutos_totais)
+            
+            # Dias para a prova
+            dias_restantes = None
+            if data_prova_direta:
+                try:
+                    dt_prova = pd.to_datetime(data_prova_direta).date()
+                    dias_restantes = (dt_prova - datetime.date.today()).days
+                except Exception:
+                    dias_restantes = None
+            
+            # Grid 2x2 com métricas
+            col1, col2 = st.columns(2, gap="25px")
+            
+            with col1:
+                # Heatmap de atividade
+                st.markdown(render_activity_heatmap(df, days=30), unsafe_allow_html=True)
+                
+                # Speedometer de performance
+                render_performance_speedometer(precisao, 100, "Performance Geral")
+            
+            with col2:
+                # Grid de métricas circulares
+                metrics_col1, metrics_col2 = st.columns(2, gap="20px")
+                
+                with metrics_col1:
+                    render_3d_circular_progress(
+                        percentage=min((minutos_totais/60/80)*100, 100),
+                        label="TEMPO",
+                        value=f"{minutos_totais//60}h{minutos_totais%60:02d}m",
+                        icon="⏱️",
+                        glow=True
+                    )
+                    
+                    render_3d_circular_progress(
+                        percentage=min((t_q/1000)*100, 100),
+                        label="QUESTÕES",
+                        value=f"{int(t_q)}",
+                        icon="📝",
+                        glow=True
+                    )
+                
+                with metrics_col2:
+                    render_3d_circular_progress(
+                        percentage=min(precisao, 100),
+                        label="PRECISÃO",
+                        value=f"{precisao:.0f}%",
+                        color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                        icon="🎯",
+                        glow=True
+                    )
+                    
+                    if dias_restantes is not None:
+                        pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
+                        render_3d_circular_progress(
+                            percentage=pct_dias,
+                            label="DIAS PROVA",
+                            value=f"{dias_restantes}",
+                            color_start=COLORS["danger"] if dias_restantes <= 30 else COLORS["warning"],
+                            icon="📅",
+                            glow=True
+                        )
+                    else:
+                        render_3d_metric_card("DIAS PROVA", "—", icon="📅")
+            
+            # Seção de constância
+            st.markdown('<div class="section-title">📊 Constância nos Estudos</div>', unsafe_allow_html=True)
+            
+            # Calcular stats de constância
+            streak = calcular_streak(df)
+            recorde = calcular_recorde_streak(df)
+            inicio_streak, fim_streak = calcular_datas_streak(df)
+            
+            # Grid de stats de constância
+            const_col1, const_col2, const_col3 = st.columns(3, gap="25px")
+            
+            with const_col1:
+                render_3d_metric_card(
+                    "STREAK ATUAL",
+                    f"{streak}",
+                    icon="🔥",
+                    color=COLORS["primary"],
+                    subtitle="dias consecutivos",
+                    trend=5 if streak > 0 else None
+                )
+            
+            with const_col2:
+                render_3d_metric_card(
+                    "SEU RECORDE",
+                    f"{recorde}",
+                    icon="🏆",
+                    color=COLORS["success"],
+                    subtitle="dias seguidos"
+                )
+            
+            with const_col3:
+                hoje = datetime.date.today()
+                dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
+                dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
+                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
+                
+                render_3d_metric_card(
+                    "MÊS ATUAL",
+                    f"{dias_estudados_mes}/{dias_no_mes}",
+                    icon="📅",
+                    color=COLORS["secondary"],
+                    subtitle=f"({percentual_mes:.0f}%)",
+                    trend=percentual_mes - 50
+                )
+            
+            # Período do streak
+            if inicio_streak and fim_streak:
+                st.markdown(f"""
+                    <div style="
+                        background: rgba(139, 92, 246, 0.1);
+                        backdrop-filter: blur(10px);
+                        border-radius: 12px;
+                        padding: 15px;
+                        margin: 20px 0;
+                        text-align: center;
+                        border: 1px solid rgba(139, 92, 246, 0.2);
+                    ">
+                        <p style="color: #94A3B8; margin: 0; font-size: 0.9rem;">
+                            Período do streak atual: 
+                            <span style="color: #8B5CF6; font-weight: 600;">
+                                {inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}
+                            </span>
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Painel de desempenho por disciplina
+            st.markdown('<div class="section-title">📈 Desempenho por Disciplina</div>', unsafe_allow_html=True)
+            
+            if not df.empty:
+                df_disciplinas = df.groupby('materia').agg({
+                    'tempo': 'sum',
+                    'acertos': 'sum',
+                    'total': 'sum',
+                    'taxa': 'mean'
+                }).reset_index()
+                
+                df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(lambda x: f"{x//60}h{x%60:02d}m")
+                df_disciplinas = df_disciplinas.sort_values('total', ascending=False)
+                
+                # Mostrar como cards em grid
+                cols = st.columns(3, gap="25px")
+                for idx, (_, row) in enumerate(df_disciplinas.iterrows()):
+                    with cols[idx % 3]:
+                        render_3d_metric_card(
+                            label=row['materia'][:20] + ("..." if len(row['materia']) > 20 else ""),
+                            value=f"{row['taxa']:.0f}%",
+                            icon="📚",
+                            color=COLORS["accent"] if row['taxa'] >= 70 else COLORS["warning"],
+                            subtitle=f"{int(row['acertos'])}/{int(row['total'])} questões",
+                            trend=row['taxa'] - 70
+                        )
+            
+            # Metas semanais
+            st.markdown('<div class="section-title">🎯 Metas Semanais</div>', unsafe_allow_html=True)
+            
+            horas_semana, questoes_semana = calcular_estudos_semana(df)
+            meta_horas = st.session_state.meta_horas_semana
+            meta_questoes = st.session_state.meta_questoes_semana
+            
+            meta_col1, meta_col2 = st.columns(2, gap="25px")
+            
+            with meta_col1:
+                progresso_horas = min((horas_semana / meta_horas) * 100, 100) if meta_horas > 0 else 0
+                st.markdown(f"""
+                    <div class="premium-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="color: #fff; margin: 0;">Horas de Estudo</h4>
+                            <span style="color: #8B5CF6; font-weight: 600; font-size: 0.9rem;">{progresso_horas:.0f}%</span>
+                        </div>
+                        <div style="margin: 20px 0;">
+                            <div style="font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                                {horas_semana:.1f}h / {meta_horas}h
+                            </div>
+                        </div>
+                        <div style="
+                            width: 100%;
+                            height: 8px;
+                            background: rgba(139, 92, 246, 0.1);
+                            border-radius: 4px;
+                            overflow: hidden;
+                        ">
+                            <div style="
+                                height: 100%;
+                                border-radius: 4px;
+                                background: linear-gradient(90deg, #8B5CF6, #06B6D4);
+                                width: {progresso_horas}%;
+                                transition: width 1s ease;
+                                box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+                            "></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #94A3B8; font-size: 0.85rem;">
+                            <span>0h</span>
+                            <span>Meta: {meta_horas}h</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with meta_col2:
+                progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
+                st.markdown(f"""
+                    <div class="premium-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="color: #fff; margin: 0;">Questões Resolvidas</h4>
+                            <span style="color: #8B5CF6; font-weight: 600; font-size: 0.9rem;">{progresso_questoes:.0f}%</span>
+                        </div>
+                        <div style="margin: 20px 0;">
+                            <div style="font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #EC4899, #8B5CF6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                                {int(questoes_semana)} / {meta_questoes}
+                            </div>
+                        </div>
+                        <div style="
+                            width: 100%;
+                            height: 8px;
+                            background: rgba(236, 72, 153, 0.1);
+                            border-radius: 4px;
+                            overflow: hidden;
+                        ">
+                            <div style="
+                                height: 100%;
+                                border-radius: 4px;
+                                background: linear-gradient(90deg, #EC4899, #8B5CF6);
+                                width: {progresso_questoes}%;
+                                transition: width 1s ease;
+                                box-shadow: 0 0 10px rgba(236, 72, 153, 0.5);
+                            "></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #94A3B8; font-size: 0.85rem;">
+                            <span>0</span>
+                            <span>Meta: {meta_questoes}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        else:
+            st.markdown('<div class="premium-card"><p style="text-align: center; color: #94A3B8; font-size: 1.1rem;">Comece seus estudos para preencher o dashboard!</p></div>', unsafe_allow_html=True)
 
+    # --- REVISÕES PREMIUM ---
+    elif menu == "Revisões":
+        st.markdown('<h1 class="premium-title">🔄 Radar de Revisões</h1>', unsafe_allow_html=True)
+        
+        # Filtros premium
+        with st.container():
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            
+            col_f1, col_f2, col_f3 = st.columns([2, 1, 1], gap="20px")
+            with col_f1:
+                filtro_rev = st.selectbox(
+                    "📊 Visualizar",
+                    ["Pendentes/Hoje", "Todas (incluindo futuras)"],
+                    key="filtro_rev_premium"
+                )
+            with col_f2:
+                filtro_dif = st.selectbox(
+                    "🎯 Dificuldade",
+                    ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"],
+                    key="filtro_dif_premium"
+                )
+            with col_f3:
+                st.write("")  # Espaçamento
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Usar função com cache para melhor performance
+        pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
+        
+        if not pend: 
+            st.markdown("""
+                <div class="premium-card" style="text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">✨</div>
+                    <h3 style="color: #fff; margin-bottom: 10px;">Tudo em dia!</h3>
+                    <p style="color: #94A3B8;">Aproveite para avançar no conteúdo ou revisar matérias anteriores.</p>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            pend = sorted(pend, key=lambda x: (x['dificuldade'] != "🔴 Difícil", x['data_prevista']))
+            
+            # Resumo premium
+            st.markdown('<div class="section-title">📊 Resumo de Revisões</div>', unsafe_allow_html=True)
+            
+            dif_count = len([p for p in pend if p['dificuldade'] == "🔴 Difícil"])
+            med_count = len([p for p in pend if p['dificuldade'] == "🟡 Médio"])
+            fac_count = len([p for p in pend if p['dificuldade'] == "🟢 Fácil"])
+            total_count = len(pend)
+            
+            resumo_cols = st.columns(4, gap="20px")
+            with resumo_cols[0]:
+                render_3d_metric_card("TOTAL", total_count, icon="📋", color=COLORS["primary"])
+            with resumo_cols[1]:
+                render_3d_metric_card("🔴 DIFÍCIL", dif_count, icon="🔴", color=COLORS["danger"])
+            with resumo_cols[2]:
+                render_3d_metric_card("🟡 MÉDIO", med_count, icon="🟡", color=COLORS["warning"])
+            with resumo_cols[3]:
+                render_3d_metric_card("🟢 FÁCIL", fac_count, icon="🟢", color=COLORS["success"])
+            
+            # Lista de revisões
+            st.markdown('<div class="section-title">📋 Lista de Revisões Pendentes</div>', unsafe_allow_html=True)
+            
+            for p in pend:
+                with st.container():
+                    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                    
+                    col_info, col_input, col_action = st.columns([2, 1.5, 1], gap="20px")
+                    
+                    with col_info:
+                        # Status badge
+                        status_color = COLORS["danger"] if p['atraso'] > 0 else COLORS["success"] if p['atraso'] == 0 else COLORS["warning"]
+                        status_text = f"⚠️ {p['atraso']}d atraso" if p['atraso'] > 0 else "🎯 Vence hoje" if p['atraso'] == 0 else "📅 Futura"
+                        
+                        # Tempo recomendado
+                        tempo_rec, desc = tempo_recomendado_rev24h(p['dificuldade'])
+                        
+                        st.markdown(f"""
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <span style="
+                                    background: {status_color}20;
+                                    color: {status_color};
+                                    padding: 4px 12px;
+                                    border-radius: 20px;
+                                    font-size: 0.75rem;
+                                    font-weight: 600;
+                                    border: 1px solid {status_color}40;
+                                ">{status_text}</span>
+                                <span style="
+                                    background: rgba(139, 92, 246, 0.1);
+                                    color: #8B5CF6;
+                                    padding: 4px 12px;
+                                    border-radius: 20px;
+                                    font-size: 0.75rem;
+                                    font-weight: 600;
+                                ">{p['dificuldade']}</span>
+                            </div>
+                            <h3 style="color: #fff; margin: 0 0 5px 0;">{p['materia']}</h3>
+                            <p style="color: #94A3B8; margin: 0 0 10px 0;">
+                                {p['assunto']} • <strong>{p['tipo']}</strong>
+                            </p>
+                            <div style="
+                                background: rgba(255, 142, 142, 0.1);
+                                border-left: 3px solid #FF4B4B;
+                                padding: 10px;
+                                border-radius: 0 8px 8px 0;
+                                margin-top: 10px;
+                            ">
+                                <p style="color: #FF8E8E; margin: 0; font-size: 0.85rem;">
+                                    ⏱️ {desc} (~{tempo_rec}min)
+                                </p>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if p['coment']:
+                            with st.expander("📝 Ver Anotações", expanded=False):
+                                st.info(p['coment'])
+                    
+                    with col_input:
+                        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
+                        st.markdown('<p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 10px;">Resultado da Revisão:</p>', unsafe_allow_html=True)
+                        input_col1, input_col2 = st.columns(2, gap="10px")
+                        acr_rev = input_col1.number_input(
+                            "Acertos", 
+                            0,
+                            key=f"ac_{p['id']}_{p['col']}",
+                            help="Acertos na revisão",
+                            label_visibility="collapsed"
+                        )
+                        tor_rev = input_col2.number_input(
+                            "Total", 
+                            0,
+                            key=f"to_{p['id']}_{p['col']}",
+                            help="Total de questões na revisão",
+                            label_visibility="collapsed"
+                        )
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col_action:
+                        st.write("")  # Espaçamento
+                        if st.button("✅ CONCLUIR", 
+                                   key=f"btn_{p['id']}_{p['col']}", 
+                                   use_container_width=True, 
+                                   type="primary"):
+                            try:
+                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
+                                if res_db.data:
+                                    n_ac = res_db.data[0]['acertos'] + acr_rev
+                                    n_to = res_db.data[0]['total'] + tor_rev
+                                    supabase.table("registros_estudos").update({
+                                        p['col']: True, 
+                                        "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
+                                        "acertos": n_ac, "total": n_to, 
+                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
+                                    }).eq("id", p['id']).execute()
+                                    st.success("✅ Revisão concluída!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Erro ao buscar dados do registro.")
+                            except Exception as e:
+                                st.error(f"❌ Erro ao concluir revisão: {e}")
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- REGISTRAR PREMIUM ---
+    elif menu == "Registrar":
+        st.markdown('<h1 class="premium-title">📝 Novo Registro de Estudo</h1>', unsafe_allow_html=True)
+        
+        mats = list(dados.get('materias', {}).keys())
+        
+        if not mats:
+            st.warning("⚠️ Nenhuma matéria cadastrada. Vá em 'Configurações' para adicionar disciplinas.")
+        else:
+            with st.container():
+                st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                
+                # Formulário premium
+                with st.form("form_registro_premium", clear_on_submit=True):
+                    # Data e tempo
+                    col_dt, col_tm = st.columns([2, 1], gap="20px")
+                    with col_dt:
+                        dt_reg = st.date_input(
+                            "📅 Data do Estudo", 
+                            format="DD/MM/YYYY",
+                            help="Data em que o estudo foi realizado"
+                        )
+                    with col_tm:
+                        tm_reg = st.text_input(
+                            "⏱️ Tempo (HHMM)", 
+                            value="0100",
+                            help="Ex: 0130 para 1h30min, 0230 para 2h30min"
+                        )
+                    
+                    # Matéria e assunto
+                    mat_reg = st.selectbox(
+                        "📚 Disciplina", 
+                        mats,
+                        help="Selecione a disciplina estudada"
+                    )
+                    
+                    assuntos_disponiveis = dados['materias'].get(mat_reg, ["Geral"])
+                    ass_reg = st.selectbox(
+                        "📖 Assunto", 
+                        assuntos_disponiveis, 
+                        key=f"assunto_select_premium_{mat_reg}",
+                        help="Selecione o assunto específico estudado"
+                    )
+                    
+                    st.divider()
+                    
+                    # Questões e dificuldade
+                    st.markdown("##### 🎯 Desempenho e Dificuldade")
+                    
+                    col_ac, col_to = st.columns(2, gap="20px")
+                    with col_ac:
+                        ac_reg = st.number_input(
+                            "✅ Questões Acertadas", 
+                            0,
+                            help="Número de questões que você acertou"
+                        )
+                    with col_to:
+                        to_reg = st.number_input(
+                            "📝 Total de Questões", 
+                            1,
+                            help="Número total de questões resolvidas"
+                        )
+                    
+                    # Classificação de dificuldade
+                    st.markdown("##### 🎯 Como foi esse assunto?")
+                    dif_reg = st.selectbox(
+                        "Classificação de Dificuldade:",
+                        ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
+                        index=1,
+                        help="Classifique a dificuldade do assunto para o sistema de revisões"
+                    )
+                    
+                    # Mostrar recomendação
+                    tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
+                    st.info(f"""
+                        💡 **{dif_reg}** 
+                        
+                        **Revisar em 24h:** ~{tempo_rec}min  
+                        **Recomendação:** {desc_rec}
+                    """)
+                    
+                    st.divider()
+                    
+                    # Anotações
+                    com_reg = st.text_area(
+                        "📝 Anotações / Comentários", 
+                        placeholder="O que você aprendeu? Onde sentiu dificuldade? Alguma dica importante?",
+                        height=120,
+                        help="Registre suas observações para consultas futuras"
+                    )
+                    
+                    # Botão de envio
+                    btn_col1, btn_col2, btn_col3 = st.columns([2, 1, 1], gap="10px")
+                    with btn_col2:
+                        btn_salvar = st.form_submit_button(
+                            "💾 SALVAR REGISTRO", 
+                            use_container_width=True, 
+                            type="primary"
+                        )
+                    
+                    if btn_salvar:
+                        try:
+                            t_b = formatar_tempo_para_bigint(tm_reg)
+                            taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
+                            
+                            payload = {
+                                "concurso": missao, 
+                                "materia": mat_reg, 
+                                "assunto": ass_reg, 
+                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
+                                "acertos": ac_reg, 
+                                "total": to_reg, 
+                                "taxa": taxa,
+                                "dificuldade": dif_reg,
+                                "comentarios": com_reg, 
+                                "tempo": t_b, 
+                                "rev_24h": False, 
+                                "rev_07d": False, 
+                                "rev_15d": False, 
+                                "rev_30d": False
+                            }
+                            
+                            supabase.table("registros_estudos").insert(payload).execute()
+                            st.success("✅ Registro salvo com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"❌ Erro ao salvar: {e}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- HISTÓRICO PREMIUM ---
+    elif menu == "Histórico":
+        st.markdown('<h1 class="premium-title">📜 Histórico de Estudos</h1>', unsafe_allow_html=True)
+        
+        if not df.empty:
+            df_h = df.copy()
+            df_h['data_estudo_display'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
+            
+            with st.container():
+                st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                
+                # Filtros premium
+                col_f1, col_f2, col_f3 = st.columns(3, gap="20px")
+                with col_f1:
+                    mat_filter = st.selectbox(
+                        "📚 Filtrar por Matéria:", 
+                        ["Todas"] + list(df_h['materia'].unique()), 
+                        key="mat_hist_filter_premium"
+                    )
+                with col_f2:
+                    ordem = st.selectbox(
+                        "📊 Ordenar por:", 
+                        ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], 
+                        key="ord_hist_premium"
+                    )
+                with col_f3:
+                    periodo = st.selectbox(
+                        "📅 Período:", 
+                        ["Todos", "Últimos 7 dias", "Últimos 30 dias", "Este mês"], 
+                        key="periodo_hist_premium"
+                    )
+                
+                # Aplicar filtros
+                df_filtered = df_h.copy()
+                
+                if mat_filter != "Todas":
+                    df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
+                
+                # Filtrar por período
+                hoje = datetime.date.today()
+                if periodo == "Últimos 7 dias":
+                    data_limite = hoje - datetime.timedelta(days=7)
+                    df_filtered = df_filtered[pd.to_datetime(df_filtered['data_estudo']).dt.date >= data_limite]
+                elif periodo == "Últimos 30 dias":
+                    data_limite = hoje - datetime.timedelta(days=30)
+                    df_filtered = df_filtered[pd.to_datetime(df_filtered['data_estudo']).dt.date >= data_limite]
+                elif periodo == "Este mês":
+                    inicio_mes = datetime.date(hoje.year, hoje.month, 1)
+                    df_filtered = df_filtered[pd.to_datetime(df_filtered['data_estudo']).dt.date >= inicio_mes]
+                
+                # Aplicar ordenação
+                if ordem == "Mais Recente":
+                    df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
+                elif ordem == "Mais Antigo":
+                    df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
+                elif ordem == "Maior Taxa":
+                    df_filtered = df_filtered.sort_values('taxa', ascending=False)
+                else:  # Menor Taxa
+                    df_filtered = df_filtered.sort_values('taxa', ascending=True)
+                
+                st.divider()
+                
+                # Resumo
+                total_registros = len(df_filtered)
+                taxa_media = df_filtered['taxa'].mean()
+                tempo_total = df_filtered['tempo'].sum() / 60
+                acertos_total = df_filtered['acertos'].sum()
+                
+                # Grid de resumo
+                resumo_cols = st.columns(4, gap="20px")
+                with resumo_cols[0]:
+                    render_3d_metric_card("Registros", total_registros, icon="📝", color=COLORS["primary"])
+                with resumo_cols[1]:
+                    render_3d_metric_card("Taxa Média", f"{taxa_media:.1f}%", icon="🎯", 
+                                         color=COLORS["success"] if taxa_media >= 70 else COLORS["warning"])
+                with resumo_cols[2]:
+                    render_3d_metric_card("Tempo Total", f"{tempo_total:.1f}h", icon="⏱️", color=COLORS["secondary"])
+                with resumo_cols[3]:
+                    render_3d_metric_card("Acertos", acertos_total, icon="✅", color=COLORS["accent"])
+                
+                st.divider()
+                
+                # Lista de registros
+                st.markdown('<div class="section-title">📋 Registros de Estudo</div>', unsafe_allow_html=True)
+                
+                if len(df_filtered) == 0:
+                    st.info("Nenhum registro encontrado com os filtros selecionados.")
+                else:
+                    for index, row in df_filtered.iterrows():
+                        with st.container():
+                            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                            
+                            col_info, col_metrics, col_actions = st.columns([3, 1.5, 1.2], gap="20px")
+                            
+                            with col_info:
+                                # Cor baseada na taxa
+                                taxa_color = COLORS["success"] if row['taxa'] >= 80 else COLORS["warning"] if row['taxa'] >= 60 else COLORS["danger"]
+                                
+                                st.markdown(f"""
+                                    <div style="margin-bottom: 10px;">
+                                        <span style="color: #94A3B8; font-size: 0.85rem; font-weight: 600;">📅 {row['data_estudo_display']}</span>
+                                        <span style="color: {taxa_color}; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
+                                            {row['taxa']:.1f}%
+                                        </span>
+                                        <span style="color: #94A3B8; font-size: 0.85rem; margin-left: 15px;">
+                                            {row.get('dificuldade', '🟡 Médio')}
+                                        </span>
+                                    </div>
+                                    <h3 style="margin: 0; color: #fff; font-size: 1.2rem;">{row['materia']}</h3>
+                                    <p style="color: #94A3B8; font-size: 0.95rem; margin: 5px 0 0 0;">{row['assunto']}</p>
+                                """, unsafe_allow_html=True)
+                                
+                                # Anotações
+                                if row.get('comentarios'):
+                                    with st.expander("📝 Ver Anotações", expanded=False):
+                                        st.markdown(f"<p style='color: #94A3B8; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
+                            
+                            with col_metrics:
+                                st.markdown(f"""
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 5px;">Desempenho</div>
+                                        <div style="font-size: 1.4rem; font-weight: 800; color: #fff;">
+                                            {int(row['acertos'])}/{int(row['total'])}
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 5px;">
+                                            ⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}m
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            with col_actions:
+                                action_col1, action_col2 = st.columns(2, gap="5px")
+                                
+                                # Botão Editar
+                                if action_col1.button("✏️", 
+                                                    key=f"edit_premium_{row['id']}", 
+                                                    help="Editar registro",
+                                                    use_container_width=True):
+                                    st.session_state.edit_id = row['id']
+                                    st.rerun()
+                                
+                                # Botão Excluir
+                                if action_col2.button("🗑️", 
+                                                    key=f"del_premium_{row['id']}", 
+                                                    help="Excluir registro",
+                                                    use_container_width=True):
+                                    try:
+                                        if st.session_state.get(f"confirm_delete_premium_{row['id']}", False):
+                                            supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                            st.toast("✅ Registro excluído com sucesso!", icon="✅")
+                                            time.sleep(0.5)
+                                            st.session_state[f"confirm_delete_premium_{row['id']}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.session_state[f"confirm_delete_premium_{row['id']}"] = True
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao excluir: {e}")
+                                
+                                # Confirmação visual
+                                if st.session_state.get(f"confirm_delete_premium_{row['id']}", False):
+                                    st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar", icon="⚠️")
+                            
+                            st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
+
+    # --- CONFIGURAÇÕES PREMIUM ---
+    elif menu == "Configurações":
+        st.markdown('<h1 class="premium-title">⚙️ Configurações</h1>', unsafe_allow_html=True)
+        
+        # Tabs de configurações
+        tab1, tab2, tab3 = st.tabs(["🎯 Missão", "📚 Matérias", "⚠️ Perigo"])
+        
+        with tab1:
+            with st.container():
+                st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                st.markdown("### 📌 Gerenciar Missão")
+                
+                # Selecionar missão
+                ed = get_editais(supabase)
+                if ed:
+                    nomes_missoes = list(ed.keys())
+                    try:
+                        indice_atual = nomes_missoes.index(missao) if missao in nomes_missoes else 0
+                    except (ValueError, IndexError):
+                        indice_atual = 0
+                    
+                    nova_missao = st.selectbox(
+                        "Selecione a missão ativa:",
+                        options=nomes_missoes,
+                        index=indice_atual,
+                        help="Altera a missão exibida em todo o aplicativo"
+                    )
+                    
+                    if nova_missao != missao:
+                        st.session_state.missao_ativa = nova_missao
+                        st.success(f"✅ Missão alterada para: {nova_missao}")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.warning("Nenhuma missão cadastrada.")
+                    if st.button("➕ Criar Nova Missão", use_container_width=True):
+                        st.session_state.missao_ativa = None
+                        st.rerun()
+                
+                st.divider()
+                
+                # Data da prova
+                st.markdown("### 📅 Data da Prova")
+                
+                data_prova_atual = None
+                if data_prova_direta:
+                    try:
+                        data_prova_atual = pd.to_datetime(data_prova_direta).date()
+                    except:
+                        data_prova_atual = None
+                
+                with st.form("form_data_prova"):
+                    nova_data = st.date_input(
+                        "Defina a data da prova:",
+                        value=data_prova_atual or datetime.date.today(),
+                        help="Esta data será usada para contagem regressiva"
+                    )
+                    
+                    remover_data = st.checkbox("Remover data da prova")
+                    
+                    if st.form_submit_button("💾 Salvar Data", use_container_width=True):
+                        try:
+                            valor_final = None if remover_data else nova_data.strftime("%Y-%m-%d")
+                            supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
+                            st.success("✅ Data atualizada!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro: {e}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        with tab2:
+            with st.container():
+                st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+                st.markdown("### 📚 Gerenciar Matérias")
+                
+                # Buscar matérias existentes
+                try:
+                    res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
+                    registros_materias = res_materias.data
+                except Exception as e:
+                    st.error(f"Erro ao buscar matérias: {e}")
+                    registros_materias = []
+                
+                if registros_materias:
+                    for reg in registros_materias:
+                        with st.expander(f"📖 {reg['materia']} ({len(reg['topicos'] if reg['topicos'] else [])} assuntos)"):
+                            # Listar assuntos
+                            topicos = reg['topicos'] if reg['topicos'] else []
+                            if topicos:
+                                for i, topico in enumerate(topicos):
+                                    col_t1, col_t2 = st.columns([5, 1])
+                                    col_t1.write(f"• {topico}")
+                                    if col_t2.button("🗑️", key=f"del_t_{reg['id']}_{i}", use_container_width=True):
+                                        try:
+                                            novos_topicos = [t for t in topicos if t != topico]
+                                            supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", reg['id']).execute()
+                                            st.success("✅ Assunto removido!")
+                                            time.sleep(1)
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ Erro: {e}")
+                            else:
+                                st.info("Nenhum assunto cadastrado.")
+                            
+                            # Adicionar novo assunto
+                            with st.form(f"add_assunto_{reg['id']}"):
+                                novo_assunto = st.text_input("Novo assunto:", key=f"novo_ass_{reg['id']}")
+                                if st.form_submit_button("➕ Adicionar", use_container_width=True):
+                                    if novo_assunto:
+                                        try:
+                                            if not topicos:
+                                                topicos = []
+                                            if novo_assunto not in topicos:
+                                                topicos.append(novo_assunto)
+                                                supabase.table("editais_materias").update({"topicos": topicos}).eq("id", reg['id']).execute()
+                                                st.success("✅ Assunto adicionado!")
+                                                time.sleep(1)
+                                                st.rerun()
+                                            else:
+                                                st.warning("⚠️ Este assunto já existe.")
+                                        except Exception as e:
+                                            st.error(f"❌ Erro: {e}")
+                                    else:
+                                        st.warning("⚠️ Digite um assunto.")
+                
+                # Adicionar nova matéria
+                st.divider()
+                st.markdown("#### ➕ Nova Matéria")
+                
+                with st.form("form_nova_materia_premium"):
+                    nova_materia = st.text_input("Nome da matéria:", placeholder="Ex: Direito Constitucional")
+                    
+                    if st.form_submit_button("🎯 Adicionar Matéria", use_container_width=True):
+                        if nova_materia:
+                            try:
+                                # Verificar se já existe
+                                res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
+                                if res_existente.data:
+                                    st.error("❌ Matéria já existe!")
+                                else:
+                                    cargo_atual = dados.get('cargo', '')
+                                    payload = {
+                                        "concurso": missao,
+                                        "cargo": cargo_atual,
+                                        "materia": nova_materia,
+                                        "topicos": ["Geral"]
+                                    }
+                                    if data_prova_direta:
+                                        payload["data_prova"] = data_prova_direta
+                                    
+                                    supabase.table("editais_materias").insert(payload).execute()
+                                    st.success(f"✅ Matéria '{nova_materia}' adicionada!")
+                                    time.sleep(1)
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Erro: {e}")
+                        else:
+                            st.warning("⚠️ Digite o nome da matéria.")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        with tab3:
+            with st.container():
+                st.markdown('<div class="premium-card" style="border-color: rgba(255, 75, 75, 0.3); background: linear-gradient(145deg, rgba(255, 75, 75, 0.05), rgba(255, 75, 75, 0.02));">', unsafe_allow_html=True)
+                
+                st.markdown("### ⚠️ Zona de Perigo")
+                st.warning("Esta ação é irreversível e excluirá TODOS os dados desta missão!")
+                
+                # Confirmações em etapas
+                confirm_1 = st.checkbox("✅ Entendo que esta ação não pode ser desfeita")
+                confirm_2 = st.checkbox("✅ Confirmo que quero excluir todos os registros")
+                confirm_3 = st.checkbox("✅ Estou ciente de que perderei todo o progresso")
+                
+                if confirm_1 and confirm_2 and confirm_3:
+                    st.error("🚨 ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos permanentemente!")
+                    
+                    col_btn1, col_btn2 = st.columns(2, gap="20px")
+                    with col_btn1:
+                        if st.button("🗑️ EXCLUIR MISSÃO", type="primary", use_container_width=True):
+                            if excluir_concurso_completo(supabase, missao):
+                                st.success("Missão excluída! Redirecionando...")
+                                st.session_state.missao_ativa = None
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao excluir missão.")
+                    
+                    with col_btn2:
+                        if st.button("❌ Cancelar", type="secondary", use_container_width=True):
+                            st.rerun()
+                else:
+                    st.info("👆 Marque todas as caixas de confirmação para habilitar a exclusão.")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+
+# Funções auxiliares (mantidas do original)
 def calcular_streak(df):
     """Calcula dias consecutivos até hoje baseado na coluna 'data_estudo'."""
     if df is None or df.empty:
@@ -1069,20 +2367,8 @@ def calcular_estudos_semana(df):
     except (ValueError, TypeError, KeyError):
         return 0, 0
 
-# --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
-
-# --- FUNÇÃO REMOVIDA: gerar_numeros_mes (1-31) ---
-# A função gerar_numeros_mes foi REMOVIDA por solicitação
-
-# --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
-    """
-    Calcula o próximo intervalo de revisão baseado na dificuldade e desempenho.
-    
-    Fácil:   → 15 ou 20 dias (aproveita ciclos longos)
-    Médio:   → 7 dias (padrão confiável)
-    Difícil: → 3 dias se acerto < 70%, senão 5
-    """
+    """Calcula o próximo intervalo de revisão."""
     if dificuldade == "🟢 Fácil":
         return 15 if taxa_acerto > 80 else 7
     elif dificuldade == "🟡 Médio":
@@ -1091,7 +2377,7 @@ def calcular_proximo_intervalo(dificuldade, taxa_acerto):
         return 3 if taxa_acerto < 70 else 5
 
 def tempo_recomendado_rev24h(dificuldade):
-    """Retorna tempo sugerido para revisão de 24h (em minutos)."""
+    """Retorna tempo sugerido para revisão de 24h."""
     tempos = {
         "🟢 Fácil": (2, "Apenas releitura rápida dos títulos"),
         "🟡 Médio": (8, "Revise seus grifos + 5 questões"),
@@ -1099,10 +2385,9 @@ def tempo_recomendado_rev24h(dificuldade):
     }
     return tempos.get(dificuldade, (5, "Padrão"))
 
-# --- FUNÇÃO COM CACHE PARA PERFORMANCE ---
 @st.cache_data(ttl=300)
 def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
-    """Calcula revisões pendentes com cache para melhor performance."""
+    """Calcula revisões pendentes com cache."""
     hoje = datetime.date.today()
     pend = []
     
@@ -1127,11 +2412,10 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
                     "dificuldade": dif, "taxa": tx
                 })
         
-        # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
+        # Lógica de Ciclos Longos
         else:  # rev_24h = True
             intervalo = calcular_proximo_intervalo(dif, tx)
             
-            # Determinar qual coluna atualizar
             if intervalo <= 7:
                 col_alv, lbl = "rev_07d", f"Revisão {intervalo}d"
             else:  # 15+ dias
@@ -1153,1504 +2437,3 @@ def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
         pend = [p for p in pend if p['dificuldade'] == filtro_dif]
     
     return pend
-
-# --- 3. LÓGICA DE NAVEGAÇÃO ---
-if st.session_state.missao_ativa is None:
-    st.markdown('<h1 class="main-title">🎯 Central de Comando</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Selecione sua missão ou inicie um novo ciclo</p>', unsafe_allow_html=True)
-    
-    ed = get_editais(supabase)
-    tabs = st.tabs(["🚀 Missões Ativas", "➕ Novo Cadastro"])
-    
-    with tabs[0]:
-        if not ed: 
-            st.info("Nenhuma missão ativa no momento.")
-        else:
-            cols = st.columns(2)
-            for i, (nome, d_concurso) in enumerate(ed.items()):
-                with cols[i % 2]:
-                    st.markdown(f"""
-                        <div class="modern-card">
-                            <h3 style="margin:0; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{nome}</h3>
-                            <p style="color:#94A3B8; font-size:0.9rem; margin-bottom:15px;">{d_concurso['cargo']}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"Acessar Missão", key=f"ac_{nome}", use_container_width=True, type="primary"):
-                        st.session_state.missao_ativa = nome
-                        st.rerun()
-    
-    with tabs[1]:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### Cadastrar Novo Concurso/Edital")
-        with st.form("form_novo_concurso", clear_on_submit=True):
-            nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
-            cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
-            informar_data_prova = st.checkbox("Informar data da prova (opcional)")
-            if informar_data_prova:
-                data_prova_input = st.date_input("Data da Prova")
-            else:
-                data_prova_input = None
-            
-            btn_cadastrar = st.form_submit_button("🚀 INICIAR MISSÃO", use_container_width=True, type="primary")
-            
-            if btn_cadastrar:
-                if nome_concurso and cargo_concurso:
-                    try:
-                        payload = {
-                            "concurso": nome_concurso,
-                            "cargo": cargo_concurso,
-                            "materia": "Geral",
-                            "topicos": ["Introdução"]
-                        }
-                        if data_prova_input:
-                            payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
-                        res_ins = supabase.table("editais_materias").insert(payload).execute()
-                        # confirmar inserção
-                        try:
-                            check = supabase.table("editais_materias").select("data_prova").eq("concurso", nome_concurso).execute()
-                            if check.data and len(check.data) > 0:
-                                st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
-                                time.sleep(1)
-                                st.session_state.missao_ativa = nome_concurso
-                                st.rerun()
-                            else:
-                                st.warning("Missão criada, mas não foi possível confirmar 'data_prova' no banco. Verifique o supabase.")
-                        except Exception:
-                            st.success(f"✅ Missão '{nome_concurso}' criada (não foi possível confirmar via consulta).")
-                            time.sleep(1)
-                            st.session_state.missao_ativa = nome_concurso
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao cadastrar: {e}")
-                else:
-                    st.warning("⚠️ Por favor, preencha o nome e o cargo.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-else:
-    missao = st.session_state.missao_ativa
-    try:
-        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
-        df = pd.DataFrame(res.data)
-    except Exception as e:
-        st.warning(f"Aviso: Não foi possível carregar registros - {e}")
-        df = pd.DataFrame()
-    
-    # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
-    try:
-        res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
-        if res_data_prova.data and len(res_data_prova.data) > 0:
-            data_prova_direta = res_data_prova.data[0].get('data_prova')
-        else:
-            data_prova_direta = None
-    except Exception as e:
-        # Log silencioso do erro, mas continua funcionando
-        data_prova_direta = None
-    
-    dados = get_editais(supabase).get(missao, {})
-
-    with st.sidebar:
-        # Logo Estilizado Moderno e Genérico
-        st.markdown("""
-            <div style='text-align: center; padding: 15px 0 30px 0;'>
-                <div style='
-                    background: rgba(255, 255, 255, 0.05); 
-                    width: 70px; 
-                    height: 70px; 
-                    border-radius: 18px; 
-                    margin: 0 auto 15px auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-                    border: 1px solid rgba(0, 255, 255, 0.1);
-                    backdrop-filter: blur(10px);
-                '>
-                    <span style='font-size: 35px; filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));'>🎯</span>
-                </div>
-                <h1 style='color: white; font-family: "Montserrat", sans-serif; font-weight: 800; font-size: 1.8rem; margin: 0; letter-spacing: -0.5px; line-height: 1.2;'>
-                    MONITOR<span style='color: #00FFFF; padding: 0 6px; border-radius: 6px; margin-left: 4px; font-size: 1.4rem; vertical-align: middle;'>PRO</span>
-                </h1>
-                <p style='color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-top: 8px; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;'>
-                    Alta Performance
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Menu Premium com option_menu
-        menu_selecionado = option_menu(
-            menu_title=None,
-            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "HISTÓRICO", "CONFIGURAR"],
-            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "clock-history", "gear"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {
-                    "padding": "0!important", 
-                    "background-color": "transparent",
-                    "backdrop-filter": "blur(10px)",
-                    "border-radius": "12px",
-                    "border": "1px solid rgba(0, 255, 255, 0.1)",
-                },
-                "icon": {"color": "#8B5CF6", "font-size": "14px", "margin-right": "10px"}, 
-                "nav-link": {
-                    "font-family": "Montserrat, sans-serif",
-                    "font-size": "14px",
-                    "text-align": "left",
-                    "margin": "8px 10px",
-                    "padding": "12px 20px",
-                    "border-radius": "12px",
-                    "--hover-color": "rgba(139, 92, 246, 0.1)",
-                    "letter-spacing": "1px",
-                    "font-weight": "500",
-                    "color": "#94A3B8",
-                    "transition": "all 0.3s ease",
-                    "border": "1px solid transparent"
-                },
-                "nav-link-selected": {
-                    "background-color": "rgba(138, 43, 226, 0.15)",
-                    "color": "#fff",
-                    "font-weight": "700",
-                    "border-left": "4px solid #00FFFF",
-                    "border-radius": "4px 12px 12px 4px",
-                    "box-shadow": "0 0 20px rgba(138, 43, 226, 0.2)",
-                    "border": "1px solid rgba(139, 92, 246, 0.2)"
-                },
-            }
-        )
-        
-        # Informação da missão atual
-        st.markdown(f"""
-            <div style='
-                background: rgba(15, 15, 35, 0.4);
-                backdrop-filter: blur(15px);
-                border-radius: 12px;
-                padding: 15px;
-                margin: 20px 0;
-                border: 1px solid rgba(0, 255, 255, 0.1);
-            '>
-                <p style='color: #94A3B8; font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;'>Missão Ativa</p>
-                <p style='color: #fff; font-weight: 700; font-size: 1rem; margin: 0;'>{missao}</p>
-                <p style='color: #8B5CF6; font-size: 0.8rem; margin-top: 5px;'>{dados.get('cargo', '')}</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Mapeamento do Menu (Opção UI -> Estado Interno)
-        mapa_menu = {
-            "HOME": "Home",
-            "REVISÕES": "Revisões",
-            "REGISTRAR": "Registrar",
-            "DASHBOARD": "Dashboard",
-            "HISTÓRICO": "Histórico",
-            "CONFIGURAR": "Configurar"
-        }
-        
-        menu = mapa_menu.get(menu_selecionado, "Home")
-
-    # --- ABA: HOME (PAINEL GERAL) ---
-    if menu == "Home":
-        # Header compacto com título e botão de trocar missão
-        col_titulo, col_btn = st.columns([5, 1])
-        
-        with col_titulo:
-            st.markdown(f'<h1 class="main-title">{missao}</h1>', unsafe_allow_html=True)
-            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
-        
-        with col_btn:
-            st.write("")  # Espaçamento vertical
-            if st.button("🔄 Trocar", key="btn_trocar_missao", help="Voltar à Central de Comando para selecionar outra missão", use_container_width=True):
-                st.session_state.missao_ativa = None
-                st.rerun()
-        
-        st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
-        
-        if df.empty:
-            st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
-        else:
-            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
-            st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
-            
-            # Calcular métricas
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
-            precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df['tempo'].sum())
-            
-            # Formatar tempo como na imagem (3h45min)
-            tempo_formatado = formatar_minutos(minutos_totais)
-            
-            # Dias para a prova
-            dias_restantes = None
-            if data_prova_direta:
-                try:
-                    dt_prova = pd.to_datetime(data_prova_direta).date()
-                    dias_restantes = (dt_prova - datetime.date.today()).days
-                except Exception:
-                    dias_restantes = None
-            
-            # 4 cartões de métricas com ANÉIS CIRCULARES MODERNOS
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-            
-            # Calcular percentuais para os anéis
-            horas_totais = minutos_totais / 60
-            meta_horas_mes = 80  # Meta de horas por mês
-            pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
-            pct_precisao = min(precisao, 100)
-            meta_questoes_mes = 1000
-            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
-            
-            with c1:
-                render_circular_progress(
-                    percentage=pct_tempo,
-                    label="TEMPO TOTAL",
-                    value=tempo_formatado,
-                    color_start=COLORS["primary"],
-                    color_end=COLORS["secondary"],
-                    icon="⏱️"
-                )
-            with c2:
-                render_circular_progress(
-                    percentage=pct_precisao,
-                    label="PRECISÃO",
-                    value=f"{precisao:.0f}%",
-                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
-                    color_end=COLORS["secondary"],
-                    icon="🎯"
-                )
-            with c3:
-                render_circular_progress(
-                    percentage=pct_questoes,
-                    label="QUESTÕES",
-                    value=f"{int(t_q)}",
-                    color_start=COLORS["accent"],
-                    color_end=COLORS["primary"],
-                    icon="📝"
-                )
-            with c4:
-                if dias_restantes is not None:
-                    # Calcular percentual baseado em 90 dias
-                    pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
-                    cor = COLORS["danger"] if dias_restantes <= 30 else COLORS["warning"] if dias_restantes <= 60 else COLORS["success"]
-                    render_circular_progress(
-                        percentage=pct_dias,
-                        label="DIAS PARA PROVA",
-                        value=f"{dias_restantes}",
-                        color_start=cor,
-                        color_end=COLORS["secondary"],
-                        icon="📅"
-                    )
-                else:
-                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅")
-            
-            st.divider()
-
-            # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
-            st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
-            
-            streak = calcular_streak(df)
-            recorde = calcular_recorde_streak(df)
-            inicio_streak, fim_streak = calcular_datas_streak(df)
-            
-            st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
-            st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
-            
-            # Indicador de performance 
-            performance = "🟢 Excelente" if streak >= 7 else "🟡 Bom" if streak >= 3 else "🔴 Precisa melhorar"
-            st.markdown(f'<div style="color: #06B6D4; font-size: 0.9rem; font-weight: 600;">{performance}</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Stats de constância em 3 colunas
-            col_s1, col_s2, col_s3 = st.columns(3)
-            
-            with col_s1:
-                st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.2); transition: all 0.3s ease; backdrop-filter: blur(10px);">
-                        <div style="color: #8B5CF6; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">STREAK ATUAL</div>
-                        <div style="font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0;">{streak}</div>
-                        <div style="color: #94A3B8; font-size: 0.8rem;">dias consecutivos</div>
-                    </div>
-                ''', unsafe_allow_html=True)
-            
-            with col_s2:
-                st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.2); transition: all 0.3s ease; backdrop-filter: blur(10px);">
-                        <div style="color: #10B981; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">SEU RECORDE</div>
-                        <div style="font-size: 3rem; font-weight: 800; color: #10B981; margin: 10px 0;">{recorde}</div>
-                        <div style="color: #94A3B8; font-size: 0.8rem;">dias seguidos</div>
-                    </div>
-                ''', unsafe_allow_html=True)
-            
-            with col_s3:
-                # Calcular dias estudados no mês
-                hoje = datetime.date.today()
-                dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
-                dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
-                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
-                
-                st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05)); border-radius: 16px; border: 1px solid rgba(6, 182, 212, 0.2); transition: all 0.3s ease; backdrop-filter: blur(10px);">
-                        <div style="color: #06B6D4; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">MÊS ATUAL</div>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #06B6D4; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
-                        <div style="color: #94A3B8; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
-                    </div>
-                ''', unsafe_allow_html=True)
-            
-            # Período do streak atual
-            if inicio_streak and fim_streak:
-                data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
-                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px; backdrop-filter: blur(5px);">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO DE DIAS DO MÊS FOI COMPLETAMENTE REMOVIDA AQUI ---
-            
-            st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
-
-            # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
-            st.markdown('<h3 style="margin-top:2rem; color:#fff; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
-            
-            if not df.empty:
-                # Calcular totais por disciplina
-                df_disciplinas = df.groupby('materia').agg({
-                    'tempo': 'sum',
-                    'acertos': 'sum',
-                    'total': 'sum',
-                    'taxa': 'mean'
-                }).reset_index()
-                
-                df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
-                df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos)
-                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
-                df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
-                
-                # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                
-                # Criar DataFrame para display
-                display_df = pd.DataFrame({
-                    'DISCIPLINAS': df_disciplinas['materia'],
-                    'TEMPO': df_disciplinas['tempo_formatado'],
-                    '✓': df_disciplinas['acertos'].astype(int),
-                    '✗': df_disciplinas['erros'].astype(int),
-                    '🎉': df_disciplinas['total'].astype(int),
-                    '%': df_disciplinas['taxa_formatada']
-                })
-                
-                # Exibir tabela usando st.dataframe com formatação condicional
-                def color_taxa(val):
-                    if val >= 80:
-                        return 'color: #00FF00; font-weight: 700;'
-                    elif val >= 70:
-                        return 'color: #FFD700; font-weight: 700;'
-                    else:
-                        return 'color: #FF4B4B; font-weight: 700;'
-                
-                styled_df = display_df.style.map(color_taxa, subset=['%'])
-                
-                # Mostrar tabela
-                st.dataframe(
-                    styled_df,
-                    column_config={
-                        "DISCIPLINAS": st.column_config.Column(width="large"),
-                        "TEMPO": st.column_config.Column(width="medium"),
-                        "✓": st.column_config.Column(width="small"),
-                        "✗": st.column_config.Column(width="small"),
-                        "🎉": st.column_config.Column(width="small"),
-                        "%": st.column_config.Column(width="small")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
-            st.markdown('<h3 style="margin-top:2rem; color:#fff; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
-            
-            # Estado para controlar a edição das metas
-            if 'editando_metas' not in st.session_state:
-                st.session_state.editando_metas = False
-            
-            horas_semana, questoes_semana = calcular_estudos_semana(df)
-            meta_horas = st.session_state.meta_horas_semana
-            meta_questoes = st.session_state.meta_questoes_semana
-            
-            # Botão para editar metas
-            col_btn1, col_btn2, col_btn3 = st.columns([4, 1, 1])
-            with col_btn2:
-                if st.button("⚙️ Configurar Metas", key="btn_config_metas", use_container_width=True):
-                    st.session_state.editando_metas = not st.session_state.editando_metas
-                    st.rerun()
-            
-            # Modal de edição de metas
-            if st.session_state.editando_metas:
-                with st.container():
-                    st.markdown('<div class="meta-modal">', unsafe_allow_html=True)
-                    st.markdown("##### 📝 Configurar Metas Semanais")
-                    
-                    with st.form("form_metas_semanais"):
-                        col_meta1, col_meta2 = st.columns(2)
-                        
-                        with col_meta1:
-                            nova_meta_horas = st.number_input(
-                                "Horas de estudo semanais",
-                                min_value=1,
-                                max_value=100,
-                                value=meta_horas,
-                                step=1,
-                                help="Meta de horas de estudo por semana"
-                            )
-                        
-                        with col_meta2:
-                            nova_meta_questoes = st.number_input(
-                                "Questões semanais",
-                                min_value=1,
-                                max_value=1000,
-                                value=meta_questoes,
-                                step=10,
-                                help="Meta de questões resolvidas por semana"
-                            )
-                        
-                        col_btn1, col_btn2 = st.columns(2)
-                        
-                        if col_btn1.form_submit_button("💾 Salvar Metas", use_container_width=True, type="primary"):
-                            st.session_state.meta_horas_semana = nova_meta_horas
-                            st.session_state.meta_questoes_semana = nova_meta_questoes
-                            st.session_state.editando_metas = False
-                            st.success("✅ Metas atualizadas com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
-                        
-                        if col_btn2.form_submit_button("❌ Cancelar", use_container_width=True, type="secondary"):
-                            st.session_state.editando_metas = False
-                            st.rerun()
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Cartões de metas
-            col_meta1, col_meta2 = st.columns(2)
-            
-            with col_meta1:
-                progresso_horas = min((horas_semana / meta_horas) * 100, 100) if meta_horas > 0 else 0
-                st.markdown(f'''
-                <div class="meta-card">
-                    <div class="meta-title">Horas de Estudo</div>
-                    <div class="meta-value">{horas_semana:.1f}h/{meta_horas}h</div>
-                    <div class="meta-progress">
-                        <div class="modern-progress-container">
-                            <div class="modern-progress-fill" style="width: {progresso_horas}%;"></div>
-                        </div>
-                    </div>
-                    <div class="meta-subtitle">{progresso_horas:.0f}% da meta alcançada</div>
-                </div>
-                ''', unsafe_allow_html=True)
-            
-            with col_meta2:
-                progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
-                st.markdown(f'''
-                <div class="meta-card">
-                    <div class="meta-title">Questões Resolvidas</div>
-                    <div class="meta-value">{int(questoes_semana)}/{meta_questoes}</div>
-                    <div class="meta-progress">
-                        <div class="modern-progress-container">
-                            <div class="modern-progress-fill" style="width: {progresso_questoes}%;"></div>
-                        </div>
-                    </div>
-                    <div class="meta-subtitle">{progresso_questoes:.0f}% da meta alcançada</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-    # --- ABA: REVISÕES ---
-    elif menu == "Revisões":
-        st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
-        
-        # CORREÇÃO: Filtros organizados corretamente
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1:
-            filtro_rev = st.segmented_control(
-                "Visualizar:", 
-                ["Pendentes/Hoje", "Todas (incluindo futuras)"], 
-                default="Pendentes/Hoje",
-                key="filtro_rev"
-            )
-        with c2:
-            # CORREÇÃO: Ordem corrigida para mostrar Fácil ao lado de Médio
-            filtro_dif = st.segmented_control(
-                "Dificuldade:", 
-                ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], 
-                default="Todas",
-                key="filtro_dif"
-            )
-    
-        # Usar função com cache para melhor performance
-        pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
-        
-        if not pend: 
-            st.success("✨ Tudo em dia! Aproveite para avançar no conteúdo.")
-        else:
-            pend = sorted(pend, key=lambda x: (x['dificuldade'] != "🔴 Difícil", x['data_prevista']))
-            
-            # 📊 Resumo rápido
-            st.markdown("##### 📊 Resumo de Revisões Pendentes")
-            col_res1, col_res2, col_res3 = st.columns(3)
-            
-            # Contar por dificuldade
-            dif_count = len([p for p in pend if p['dificuldade'] == "🔴 Difícil"])
-            med_count = len([p for p in pend if p['dificuldade'] == "🟡 Médio"])
-            fac_count = len([p for p in pend if p['dificuldade'] == "🟢 Fácil"])
-            
-            with col_res1:
-                render_metric_card_modern("🔴 Difícil", dif_count, icon="🔴")
-            with col_res2:
-                render_metric_card_modern("🟡 Médio", med_count, icon="🟡")
-            with col_res3:
-                render_metric_card_modern("🟢 Fácil", fac_count, icon="🟢")
-            
-            st.divider()
-            
-            # Listar revisões pendentes
-            st.markdown("##### 📋 Lista de Revisões")
-            for p in pend:
-                with st.container():
-                    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                    c_info, c_input, c_action = st.columns([2, 1.5, 1])
-                    
-                    with c_info:
-                        badge_class = "badge-red" if p['atraso'] > 0 else "badge-green" if p['atraso'] == 0 else "badge-gray"
-                        status_text = f"⚠️ {p['atraso']}d atraso" if p['atraso'] > 0 else "🎯 Vence hoje" if p['atraso'] == 0 else "📅 Futura"
-                        
-                        # Mostrar dificuldade e recomendação de tempo
-                        tempo_rec, desc = tempo_recomendado_rev24h(p['dificuldade'])
-                        
-                        st.markdown(f"""
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <span class="badge {badge_class}">{status_text}</span>
-                                <span class="badge badge-gray">{p['dificuldade']}</span>
-                                <span style="color: #adb5bd; font-size: 12px;">{p['data_prevista'].strftime('%d/%m/%Y')}</span>
-                            </div>
-                            <h4 style="margin:0; color:#fff;">{p['materia']}</h4>
-                            <p style="color:#adb5bd; font-size:0.85rem; margin:0;">{p['assunto']} • <b>{p['tipo']}</b></p>
-                            <p style="color:#FF8E8E; font-size:0.75rem; margin-top:8px;">⏱️ {desc} (~{tempo_rec}min)</p>
-                        """, unsafe_allow_html=True)
-                        
-                        if p['coment']:
-                            with st.expander("📝 Ver Anotações"):
-                                st.info(p['coment'])
-                    
-                    with c_input:
-                        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
-                        ci1, ci2 = st.columns(2)
-                        acr_rev = ci1.number_input("Acertos", 0, key=f"ac_{p['id']}_{p['col']}", help="Acertos na revisão")
-                        tor_rev = ci2.number_input("Total", 0, key=f"to_{p['id']}_{p['col']}", help="Total de questões na revisão")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with c_action:
-                        st.write("") # Alinhamento
-                        if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
-                            try:
-                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
-                                if res_db.data:
-                                    n_ac = res_db.data[0]['acertos'] + acr_rev
-                                    n_to = res_db.data[0]['total'] + tor_rev
-                                    supabase.table("registros_estudos").update({
-                                        p['col']: True, 
-                                        "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
-                                        "acertos": n_ac, "total": n_to, 
-                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
-                                    }).eq("id", p['id']).execute()
-                                    st.success("✅ Revisão concluída!")
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Erro ao buscar dados do registro.")
-                            except Exception as e:
-                                st.error(f"❌ Erro ao concluir revisão: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- ABA: REGISTRAR ---
-    elif menu == "Registrar":
-        st.markdown('<h2 class="main-title">📝 Novo Registro de Estudo</h2>', unsafe_allow_html=True)
-        mats = list(dados.get('materias', {}).keys())
-        
-        if not mats:
-            st.warning("⚠️ Nenhuma matéria cadastrada. Vá em 'Configurar' para adicionar disciplinas.")
-        else:
-            with st.container():
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                
-                c1, c2 = st.columns([2, 1])
-                dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
-                tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
-                
-                mat_reg = st.selectbox("Disciplina", mats)
-                assuntos_disponiveis = dados['materias'].get(mat_reg, ["Geral"])
-                ass_reg = st.selectbox("Assunto", assuntos_disponiveis, key=f"assunto_select_{mat_reg}")
-                
-                st.divider()
-                
-                with st.form("form_registro_final", clear_on_submit=True):
-                    ca_reg, ct_reg = st.columns(2)
-                    ac_reg = ca_reg.number_input("Questões Acertadas", 0)
-                    to_reg = ct_reg.number_input("Total de Questões", 1)
-                    
-                    # NOVO: Classificação de Dificuldade
-                    st.markdown("##### 🎯 Como foi esse assunto?")
-                    dif_reg = st.segmented_control(
-                        "Classificação:",
-                        ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
-                        default="🟡 Médio"
-                    )
-                    
-                    # Mostrar recomendação baseada na dificuldade
-                    tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
-                    st.info(f"💡 **{dif_reg}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
-                    
-                    st.divider()
-                    
-                    com_reg = st.text_area("Anotações / Comentários", placeholder="O que você aprendeu ou sentiu dificuldade?")
-                    
-                    btn_salvar = st.form_submit_button("💾 SALVAR REGISTRO", use_container_width=True, type="primary")
-                    
-                    if btn_salvar:
-                        try:
-                            t_b = formatar_tempo_para_bigint(tm_reg)
-                            taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
-                            
-                            payload = {
-                                "concurso": missao, 
-                                "materia": mat_reg, 
-                                "assunto": ass_reg, 
-                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
-                                "acertos": ac_reg, 
-                                "total": to_reg, 
-                                "taxa": taxa,
-                                "dificuldade": dif_reg,  # Novo campo
-                                "comentarios": com_reg, 
-                                "tempo": t_b, 
-                                "rev_24h": False, 
-                                "rev_07d": False, 
-                                "rev_15d": False, 
-                                "rev_30d": False
-                            }
-                            supabase.table("registros_estudos").insert(payload).execute()
-                            st.success("✅ Registro salvo com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao salvar: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- ABA: DASHBOARD ---
-    elif menu == "Dashboard":
-        st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
-        
-        if df.empty:
-            t_q, precisao, horas = 0, 0, 0
-        else:
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
-            precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            horas = df['tempo'].sum()/60
-        
-        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
-        m1, m2, m3 = st.columns(3)
-        with m1: render_metric_card_modern("Questões", int(t_q), "📝")
-        with m2: render_metric_card_modern("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card_modern("Horas", f"{horas:.1f}h", "⏱️")
-        
-        st.divider()
-
-        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
-        if not df.empty:
-            st.subheader("📈 Evolução de Acertos")
-            try:
-                # Agrupa pela coluna certa: 'data_estudo'
-                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
-                st.line_chart(df_evo.set_index('data_estudo'))
-            except Exception as e:
-                st.error(f"Erro ao gerar gráfico: {e}")
-        else:
-            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
-
-        # 4. GRÁFICOS PLOTLY (se houver dados)
-        if not df.empty:
-            # Gráficos
-            c_g1, c_g2 = st.columns(2)
-            with c_g1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Distribuição por Matéria")
-                fig_pie = px.pie(df, values='total', names='materia', hole=0.6, 
-                                color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True, 
-                                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                     font=dict(color="#fff"))
-                st.plotly_chart(fig_pie, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            with c_g2:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Evolução de Precisão")
-                df_ev = df.groupby('data_estudo')['taxa'].mean().reset_index()
-                fig_line = px.line(df_ev, x='data_estudo', y='taxa', markers=True)
-                fig_line.update_traces(line_color='#FF4B4B', marker=dict(size=8))
-                fig_line.update_layout(margin=dict(t=20, b=0, l=0, r=0), 
-                                      paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                      font=dict(color="#fff"), xaxis_title=None, yaxis_title="Taxa %")
-                st.plotly_chart(fig_line, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            # Detalhamento por Matéria
-            st.markdown("### 📁 Detalhamento por Disciplina")
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-            
-            for _, m in df_mat.iterrows():
-                with st.expander(f"{m['materia'].upper()} — {m['taxa']:.1f}% de Precisão"):
-                    with st.container(border=True):
-                        df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                        for _, a in df_ass.iterrows():
-                            ca1, ca2 = st.columns([4, 1])
-                            ca1.markdown(f"<span style='color:#fff; font-size:0.9rem; font-weight:600;'>{a['assunto']}</span>", unsafe_allow_html=True)
-                            ca2.markdown(f"<p style='text-align: right; color:#adb5bd; font-size: 0.8rem;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                            st.markdown(f"""
-                                <div class="modern-progress-container" style="margin-top: 5px; margin-bottom: 15px;">
-                                    <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
-                                </div>
-                            """, unsafe_allow_html=True)
-
-    # --- ABA: HISTÓRICO ---
-    elif menu == "Histórico":
-        st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
-        
-        if not df.empty:
-            df_h = df.copy()
-            df_h['data_estudo_display'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
-            
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            
-            # Filtros
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
-            with col_f2:
-                ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], key="ord_hist")
-            with col_f3:
-                st.write("")  # Espaçamento
-            
-            # Aplicar filtros
-            df_filtered = df_h.copy()
-            if mat_filter != "Todas":
-                df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
-            
-            # Aplicar ordenação
-            if ordem == "Mais Recente":
-                df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
-            elif ordem == "Mais Antigo":
-                df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
-            elif ordem == "Maior Taxa":
-                df_filtered = df_filtered.sort_values('taxa', ascending=False)
-            else:  # Menor Taxa
-                df_filtered = df_filtered.sort_values('taxa', ascending=True)
-            
-            st.divider()
-            
-            # Resumo
-            total_registros = len(df_filtered)
-            taxa_media = df_filtered['taxa'].mean()
-            tempo_total = df_filtered['tempo'].sum() / 60
-            
-            col_info1, col_info2, col_info3 = st.columns(3)
-            col_info1.metric("📝 Registros", total_registros)
-            col_info2.metric("🎯 Taxa Média", f"{taxa_media:.1f}%")
-            col_info3.metric("⏱️ Tempo Total", f"{tempo_total:.1f}h")
-            
-            st.divider()
-            
-            # --- MODAL DE EDIÇÃO ---
-            if st.session_state.edit_id is not None:
-                registro_edit = df[df['id'] == st.session_state.edit_id].iloc[0]
-                
-                st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-                st.markdown("### ✏️ Editar Registro")
-                
-                with st.form("form_edit_registro", clear_on_submit=False):
-                    col_e1, col_e2 = st.columns([2, 1])
-                    dt_edit = col_e1.date_input(
-                        "Data do Estudo", 
-                        value=pd.to_datetime(registro_edit['data_estudo']).date(), 
-                        format="DD/MM/YYYY", 
-                        key="dt_edit"
-                    )
-                    tm_edit = col_e2.text_input(
-                        "Tempo (HHMM)", 
-                        value=f"{int(registro_edit['tempo']//60):02d}{int(registro_edit['tempo']%60):02d}", 
-                        key="tm_edit"
-                    )
-                    
-                    mat_edit = st.selectbox(
-                        "Disciplina", 
-                        list(dados.get('materias', {}).keys()), 
-                        index=list(dados.get('materias', {}).keys()).index(registro_edit['materia']), 
-                        key="mat_edit"
-                    )
-                    assuntos_edit = dados['materias'].get(mat_edit, ["Geral"])
-                    ass_edit = st.selectbox(
-                        "Assunto", 
-                        assuntos_edit, 
-                        index=assuntos_edit.index(registro_edit['assunto']) if registro_edit['assunto'] in assuntos_edit else 0, 
-                        key="ass_edit"
-                    )
-                    
-                    st.divider()
-                    
-                    ca_edit, ct_edit = st.columns(2)
-                    ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
-                    to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=1, key="to_edit")
-                    
-                    # Dificuldade
-                    st.markdown("##### 🎯 Classificação de Dificuldade")
-                    dif_edit = st.segmented_control(
-                        "Classificação:",
-                        ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
-                        default=registro_edit.get('dificuldade', '🟡 Médio'),
-                        key="dif_edit"
-                    )
-                    
-                    tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_edit)
-                    st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
-                    
-                    st.divider()
-                    
-                    com_edit = st.text_area(
-                        "Anotações / Comentários", 
-                        value=registro_edit.get('comentarios', ''), 
-                        key="com_edit",
-                        height=100
-                    )
-                    
-                    col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
-                    
-                    if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-                        try:
-                            t_b = formatar_tempo_para_bigint(tm_edit)
-                            taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
-                            
-                            supabase.table("registros_estudos").update({
-                                "data_estudo": dt_edit.strftime('%Y-%m-%d'),
-                                "materia": mat_edit,
-                                "assunto": ass_edit,
-                                "acertos": ac_edit,
-                                "total": to_edit,
-                                "taxa": taxa,
-                                "dificuldade": dif_edit,
-                                "comentarios": com_edit,
-                                "tempo": t_b
-                            }).eq("id", st.session_state.edit_id).execute()
-                            
-                            st.success("✅ Registro atualizado com sucesso!")
-                            time.sleep(1)
-                            st.session_state.edit_id = None
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Erro ao atualizar: {e}")
-                    
-                    if col_btn2.form_submit_button("❌ CANCELAR", use_container_width=True, type="secondary"):
-                        st.session_state.edit_id = None
-                        st.rerun()
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.divider()
-            
-            # --- LISTA DE REGISTROS ---
-            st.markdown("##### 📝 Gerenciar Registros")
-            
-            if len(df_filtered) == 0:
-                st.info("Nenhum registro encontrado com os filtros selecionados.")
-            else:
-                for index, row in df_filtered.iterrows():
-                    with st.container():
-                        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                        
-                        # Layout principal
-                        info_col, metrics_col, action_col = st.columns([3, 1.5, 1.2])
-                        
-                        with info_col:
-                            # Informações do Registro
-                            taxa_color = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 60 else "#FF4B4B"
-                            
-                            st.markdown(f"""
-                                <div style="margin-bottom: 8px;">
-                                    <span style="color: #adb5bd; font-size: 0.85rem; font-weight: 600;">📅 {row['data_estudo_display']}</span>
-                                    <span style="color: {taxa_color}; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
-                                        {row['taxa']:.1f}%
-                                    </span>
-                                    <span style="color: #adb5bd; font-size: 0.85rem; margin-left: 15px;">
-                                        {row.get('dificuldade', '🟡 Médio')}
-                                    </span>
-                                </div>
-                                <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
-                                <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
-                            """, unsafe_allow_html=True)
-                            
-                            # Anotações
-                            if row.get('comentarios'):
-                                with st.expander("📝 Ver Anotações", expanded=False):
-                                    st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
-                        
-                        with metrics_col:
-                            # Métricas - CORREÇÃO: string formatada corretamente
-                            html_metricas = f"""
-                                <div style="text-align: right;">
-                                    <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
-                                    <div style="font-size: 1.3rem; font-weight: 700; color: #fff;">
-                                        {int(row['acertos'])}/{int(row['total'])}
-                                    </div>
-                                    <div style="font-size: 0.75rem; color: #adb5bd;">
-                                        ⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}m
-                                    </div>
-                                </div>
-                            """
-                            st.markdown(html_metricas, unsafe_allow_html=True)
-                        
-                        with action_col:
-                            col_a1, col_a2 = st.columns(2, gap="small")
-                            
-                            # Botão Editar
-                            if col_a1.button("✏️", key=f"edit_{row['id']}", help="Editar registro", use_container_width=True):
-                                st.session_state.edit_id = row['id']
-                                st.rerun()
-                            
-                            # Botão Excluir com confirmação
-                            if col_a2.button("🗑️", key=f"del_{row['id']}", help="Excluir registro", use_container_width=True):
-                                try:
-                                    # Confirmação via dialog
-                                    if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                        supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
-                                        st.toast("✅ Registro excluído com sucesso!", icon="✅")
-                                        time.sleep(0.5)
-                                        st.session_state[f"confirm_delete_{row['id']}"] = False
-                                        st.rerun()
-                                    else:
-                                        st.session_state[f"confirm_delete_{row['id']}"] = True
-                                        st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao excluir: {e}")
-                            
-                            # Confirmação visual
-                            if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar exclusão", icon="⚠️")
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
-
-    # --- ABA: CONFIGURAR ---
-    elif menu == "Configurar":
-        st.markdown('<h2 class="main-title">⚙️ Configurações</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Gerenciar missões e preferências globais</p>', unsafe_allow_html=True)
-
-        # SEÇÃO: TROCAR MISSÃO (Conforme Plano de Profissionalização)
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown('### 📌 Seleção de Missão Foco', unsafe_allow_html=True)
-            
-            ed = get_editais(supabase)
-            if ed:
-                nomes_missoes = list(ed.keys())
-                try:
-                    indice_atual = nomes_missoes.index(missao) if missao in nomes_missoes else 0
-                except (ValueError, IndexError):
-                    indice_atual = 0
-                
-                nova_missao = st.selectbox(
-                    "Selecione o concurso que deseja focar agora:",
-                    options=nomes_missoes,
-                    index=indice_atual,
-                    help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida."
-                )
-                
-                if nova_missao != missao:
-                    st.session_state.missao_ativa = nova_missao
-                    st.success(f"✅ Missão alterada para: {nova_missao}")
-                    time.sleep(1)
-                    st.rerun()
-            else:
-                st.warning("Nenhuma missão cadastrada encontrada.")
-                if st.button("➕ Cadastrar Nova Missão"):
-                    st.session_state.missao_ativa = None
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.divider()
-
-        # Mostrar data atual se existir
-        try:
-            data_prova_atual = pd.to_datetime(data_prova_direta).date() if data_prova_direta else None
-        except Exception:
-            data_prova_atual = None
-
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown('### Dados do Edital', unsafe_allow_html=True)
-            st.write(f"**Concurso:** {missao}")
-            st.write(f"**Cargo:** {dados.get('cargo', '—')}")
-            st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Formulário para editar data da prova
-        with st.form("form_editar_edital"):
-            st.markdown("### 📅 Ajustar Data da Prova")
-            
-            nova_data_escolhida = st.date_input(
-                "Selecione a data da prova", 
-                value=(data_prova_atual or datetime.date.today())
-            )
-            
-            remover = st.checkbox("Remover data da prova (deixar em branco)")
-
-            submitted = st.form_submit_button("Salvar alterações", use_container_width=True, type="primary")
-            
-            if submitted:
-                try:
-                    valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
-                    
-                    # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
-                    res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
-                    
-                    if res.data:
-                        # 2. LIMPA A MEMÓRIA DO APP
-                        st.cache_data.clear() 
-                        
-                        # 3. ATUALIZA O ESTADO PARA FORÇAR RECARREGAMENTO
-                        st.session_state.missao_ativa = missao
-                        
-                        st.success(f"✅ Data atualizada no banco! Recarregando...")
-                        time.sleep(1)
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao salvar: {e}")
-
-        # Seção para adicionar/gerenciar matérias
-        st.divider()
-        st.markdown("### 📚 Gerenciar Matérias e Assuntos")
-        
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            
-            # Buscar matérias do banco de dados
-            try:
-                res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
-                registros_materias = res_materias.data
-            except Exception as e:
-                st.error(f"Erro ao buscar matérias: {e}")
-                registros_materias = []
-            
-            # --- NOVA SEÇÃO: EXCLUSÃO EM MASSA ---
-            if registros_materias:
-                st.markdown("#### 🗑️ Exclusão em Massa de Matérias")
-                st.warning("⚠️ Atenção: Esta ação excluirá permanentemente as matérias selecionadas e TODOS os registros de estudo relacionados!", icon="⚠️")
-                
-                # Criar lista de matérias com checkboxes
-                materias_selecionadas = []
-                
-                for reg in registros_materias:
-                    col_check, col_info = st.columns([0.1, 0.9])
-                    with col_check:
-                        selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
-                    with col_info:
-                        st.write(f"**{reg['materia']}** - {len(reg['topicos'] if reg['topicos'] else [])} assuntos")
-                    
-                    if selecionada:
-                        materias_selecionadas.append(reg)
-                
-                # Botão para excluir matérias selecionadas
-                if materias_selecionadas:
-                    st.error(f"⚠️ **{len(materias_selecionadas)} matéria(s) selecionada(s) para exclusão:**")
-                    for mat in materias_selecionadas:
-                        st.write(f"• {mat['materia']}")
-                    
-                    # Confirmação adicional
-                    confirmacao = st.checkbox("✅ Confirmo que compreendo que esta ação é irreversível e excluirá todos os registros relacionados", 
-                                             key="confirm_exclusao_massa")
-                    
-                    if confirmacao:
-                        col_btn1, col_btn2 = st.columns(2)
-                        with col_btn1:
-                            if st.button("🚨 EXCLUIR MATÉRIAS SELECIONADAS", type="primary", use_container_width=True):
-                                try:
-                                    contador_exclusoes = 0
-                                    contador_registros = 0
-                                    
-                                    for mat in materias_selecionadas:
-                                        # Primeiro, contar registros de estudos associados a esta matéria
-                                        try:
-                                            res_contagem = supabase.table("registros_estudos")\
-                                                .select("id", count="exact")\
-                                                .eq("concurso", missao)\
-                                                .eq("materia", mat['materia'])\
-                                                .execute()
-                                            
-                                            # CORREÇÃO: Verificar se count existe e não é None
-                                            if hasattr(res_contagem, 'count') and res_contagem.count is not None:
-                                                contador_registros += res_contagem.count
-                                        except Exception:
-                                            # Se não conseguir contar, continuar mesmo assim
-                                            pass
-                                        
-                                        # Excluir registros de estudos dessa matéria
-                                        try:
-                                            supabase.table("registros_estudos").delete()\
-                                                .eq("concurso", missao)\
-                                                .eq("materia", mat['materia'])\
-                                                .execute()
-                                        except Exception as e:
-                                            st.warning(f"Aviso: Não foi possível excluir todos os registros de '{mat['materia']}': {e}")
-                                        
-                                        # Excluir a matéria da tabela editais_materias
-                                        try:
-                                            supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
-                                            contador_exclusoes += 1
-                                        except Exception as e:
-                                            st.error(f"Erro ao excluir matéria '{mat['materia']}': {e}")
-                                    
-                                    st.success(f"✅ **{contador_exclusoes} matéria(s) excluída(s) com sucesso!**")
-                                    if contador_registros > 0:
-                                        st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
-                                    
-                                    # Limpar cache e recarregar
-                                    st.cache_data.clear()
-                                    time.sleep(2)
-                                    st.rerun()
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao excluir matérias: {e}")
-                        
-                        with col_btn2:
-                            if st.button("❌ Cancelar Exclusão", type="secondary", use_container_width=True):
-                                st.rerun()
-                
-                st.divider()
-            
-            # Mostrar matérias atuais
-            if registros_materias:
-                st.markdown("#### ✏️ Editar Matérias Individuais")
-                
-                # Para cada matéria, criar um expander com opções de edição
-                for reg in registros_materias:
-                    materia = reg['materia']
-                    topicos = reg['topicos'] if reg['topicos'] else []
-                    id_registro = reg['id']
-                    
-                    with st.expander(f"📖 {materia} ({len(topicos)} assuntos)"):
-                        # Mostrar assuntos atuais
-                        st.markdown("**Assuntos atuais:**")
-                        if topicos:
-                            for i, topico in enumerate(topicos):
-                                col1, col2 = st.columns([5, 1])
-                                col1.write(f"• {topico}")
-                                # Botão para remover assunto
-                                if col2.button("🗑️", key=f"del_{id_registro}_{i}", help="Remover assunto", use_container_width=True):
-                                    try:
-                                        # Remover o tópico da lista
-                                        novos_topicos = [t for t in topicos if t != topico]
-                                        # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).execute()
-                                        st.success(f"✅ Assunto '{topico}' removido!")
-                                        time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao remover assunto: {e}")
-                        else:
-                            st.info("Nenhum assunto cadastrado.")
-                        
-                        st.divider()
-                        
-                        # Formulário para adicionar novos assuntos
-                        with st.form(f"form_novo_assunto_{id_registro}"):
-                            st.markdown("**Adicionar novos assuntos (em massa)**")
-                            
-                            # Opções de entrada
-                            metodo_entrada = st.selectbox(
-                                "Como deseja adicionar os assuntos?",
-                                ["Um por um", "Vários com separador", "Vários por linhas"],
-                                key=f"metodo_{id_registro}"
-                            )
-                            
-                            # Inicializar variável para evitar NameError
-                            assuntos_para_adicionar = []
-                            
-                            if metodo_entrada == "Um por um":
-                                # Modo tradicional
-                                novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_single_{id_registro}")
-                                assuntos_para_adicionar = [novo_assunto] if novo_assunto else []
-                                
-                            elif metodo_entrada == "Vários com separador":
-                                # Modo com separador
-                                col_sep1, col_sep2 = st.columns([2, 1])
-                                with col_sep1:
-                                    texto_assuntos = st.text_area(
-                                        "Digite os assuntos separados por:",
-                                        placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
-                                        key=f"texto_assuntos_{id_registro}",
-                                        height=100
-                                    )
-                                with col_sep2:
-                                    separador = st.selectbox(
-                                        "Separador",
-                                        ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
-                                        key=f"separador_{id_registro}"
-                                    )
-                                    # Mapear separador
-                                    separador_map = {
-                                        "; (ponto e vírgula)": ";",
-                                        ", (vírgula)": ",",
-                                        ". (ponto)": ".",
-                                        "- (hífen)": "-",
-                                        "| (pipe)": "|"
-                                    }
-                                    separador_char = separador_map[separador]
-                                
-                                if texto_assuntos:
-                                    # Processar os assuntos
-                                    assuntos_brutos = texto_assuntos.split(separador_char)
-                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
-                                else:
-                                    assuntos_para_adicionar = []
-                                    
-                                    # Mostrar prévia
-                                    if assuntos_para_adicionar:
-                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
-                                        with st.expander("Ver assuntos"):
-                                            for a in assuntos_para_adicionar:
-                                                st.write(f"• {a}")
-                            else:  # "Vários por linhas"
-                                # Modo com múltiplas linhas
-                                texto_assuntos = st.text_area(
-                                    "Digite um assunto por linha:",
-                                    placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
-                                    key=f"texto_assuntos_linhas_{id_registro}",
-                                    height=120
-                                )
-                                
-                                if texto_assuntos:
-                                    # Processar os assuntos (uma por linha)
-                                    assuntos_brutos = texto_assuntos.split("\n")
-                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
-                                else:
-                                    assuntos_para_adicionar = []
-                                    
-                                    # Mostrar prévia
-                                    if assuntos_para_adicionar:
-                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
-                                        with st.expander("Ver assuntos"):
-                                            for a in assuntos_para_adicionar:
-                                                st.write(f"• {a}")
-                            
-                            col_btn1, col_btn2 = st.columns(2)
-                            if col_btn1.form_submit_button("➕ Adicionar Assuntos", use_container_width=True):
-                                if assuntos_para_adicionar:
-                                    try:
-                                        # Buscar tópicos atuais
-                                        if not topicos:
-                                            topicos = []
-                                        # Adicionar novos tópicos à lista (evitar duplicados)
-                                        for assunto in assuntos_para_adicionar:
-                                            if assunto not in topicos:
-                                                topicos.append(assunto)
-                                            else:
-                                                st.warning(f"Assunto '{assunto}' já existe e foi ignorado.")
-                                        
-                                        # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
-                                        st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
-                                        time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao adicionar assuntos: {e}")
-                                else:
-                                    st.warning("⚠️ Nenhum assunto válido para adicionar.")
-                            
-                            if col_btn2.form_submit_button("✏️ Renomear Matéria", use_container_width=True, type="secondary"):
-                                # Abrir modal para renomear matéria
-                                st.session_state[f"renomear_{id_registro}"] = True
-                                st.rerun()
-                        
-                        # Modal para renomear matéria
-                        if st.session_state.get(f"renomear_{id_registro}", False):
-                            st.markdown('<div style="background: rgba(255, 75, 75, 0.1); padding: 15px; border-radius: 8px; margin-top: 10px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 75, 75, 0.2);">', unsafe_allow_html=True)
-                            novo_nome = st.text_input("Novo nome da matéria", value=materia, key=f"novo_nome_{id_registro}")
-                            
-                            col_r1, col_r2 = st.columns(2)
-                            if col_r1.button("💾 Salvar", key=f"salvar_nome_{id_registro}", use_container_width=True):
-                                if novo_nome and novo_nome != materia:
-                                    try:
-                                        # Atualizar o nome da matéria
-                                        supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).execute()
-                                        
-                                        # Atualizar também nos registros de estudo
-                                        supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
-                                        
-                                        st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
-                                        time.sleep(1)
-                                        st.session_state[f"renomear_{id_registro}"] = False
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao renomear matéria: {e}")
-                            
-                            if col_r2.button("❌ Cancelar", key=f"cancelar_nome_{id_registro}", use_container_width=True):
-                                st.session_state[f"renomear_{id_registro}"] = False
-                                st.rerun()
-                            
-                            st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info("Nenhuma matéria cadastrada ainda.")
-            
-            # Formulário para adicionar nova matéria
-            st.divider()
-            st.markdown("#### ➕ Adicionar Nova Matéria")
-            
-            with st.form("form_nova_materia"):
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    nova_materia = st.text_input("Nome da Matéria", placeholder="Ex: Direito Constitucional")
-                
-                with col2:
-                    st.write("")  # Espaçamento
-                    st.write("")  # Espaçamento
-                
-                # Seção para assuntos iniciais
-                st.markdown("**Assuntos iniciais (opcional):**")
-                
-                metodo_assuntos = st.selectbox(
-                    "Como deseja adicionar os assuntos iniciais?",
-                    ["Sem assuntos iniciais", "Um por um", "Vários com separador", "Vários por linhas"],
-                    key="metodo_assuntos_nova"
-                )
-                
-                assuntos_iniciais = []
-                
-                if metodo_assuntos == "Um por um":
-                    assunto_inicial = st.text_input("Assunto inicial", placeholder="Ex: Princípios fundamentais", key="assunto_inicial_single")
-                    if assunto_inicial:
-                        assuntos_iniciais = [assunto_inicial]
-                        
-                elif metodo_assuntos == "Vários com separador":
-                    col_sep1, col_sep2 = st.columns([2, 1])
-                    with col_sep1:
-                        texto_assuntos = st.text_area(
-                            "Digite os assuntos separados por:",
-                            placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
-                            key="texto_assuntos_nova",
-                            height=100
-                        )
-                    with col_sep2:
-                        separador = st.selectbox(
-                            "Separador",
-                            ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
-                            key="separador_nova"
-                        )
-                        # Mapear separador
-                        separador_map = {
-                            "; (ponto e vírgula)": ";",
-                            ", (vírgula)": ",",
-                            ". (ponto)": ".",
-                            "- (hífen)": "-",
-                            "| (pipe)": "|"
-                        }
-                        separador_char = separador_map[separador]
-                    
-                    if texto_assuntos:
-                        # Processar os assuntos
-                        assuntos_brutos = texto_assuntos.split(separador_char)
-                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-                        
-                elif metodo_assuntos == "Vários por linhas":
-                    texto_assuntos = st.text_area(
-                        "Digite um assunto por linha:",
-                        placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
-                        key="texto_assuntos_linhas_nova",
-                        height=120
-                    )
-                    
-                    if texto_assuntos:
-                        # Processar os assuntos (uma por linha)
-                        assuntos_brutos = texto_assuntos.split("\n")
-                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-                
-                # Mostrar prévia se houver assuntos
-                if assuntos_iniciais and metodo_assuntos != "Sem assuntos iniciais":
-                    st.info(f"**Prévia:** {len(assuntos_iniciais)} assunto(s) inicial(is)")
-                    with st.expander("Ver assuntos"):
-                        for a in assuntos_iniciais:
-                            st.write(f"• {a}")
-                
-                # Botão de envio
-                if st.form_submit_button("Adicionar Matéria", use_container_width=True):
-                    if nova_materia:
-                        try:
-                            # Verificar se já existe
-                            res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
-                            if res_existente.data:
-                                st.error(f"❌ A matéria '{nova_materia}' já existe!")
-                            else:
-                                # Buscar cargo atual
-                                cargo_atual = dados.get('cargo', '')
-                                # Se não houver assuntos definidos, usar "Geral" como padrão
-                                if not assuntos_iniciais:
-                                    assuntos_iniciais = ["Geral"]
-                                
-                                # Adicionar nova matéria
-                                payload = {
-                                    "concurso": missao,
-                                    "cargo": cargo_atual,
-                                    "materia": nova_materia,
-                                    "topicos": assuntos_iniciais
-                                }
-                                # Se houver data_prova, incluir
-                                if data_prova_direta:
-                                    payload["data_prova"] = data_prova_direta
-                                
-                                supabase.table("editais_materias").insert(payload).execute()
-                                st.success(f"✅ Matéria '{nova_materia}' adicionada com {len(assuntos_iniciais)} assunto(s) inicial(is)!")
-                                time.sleep(1)
-                                st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Erro ao adicionar matéria: {e}")
-                    else:
-                        st.warning("⚠️ Por favor, informe o nome da matéria.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Botão para excluir o concurso
-        st.divider()
-        st.markdown("### ⚠️ Zona de Perigo")
-        
-        with st.container():
-            st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-            
-            st.warning("Esta ação é irreversível!")
-            
-            # Checkbox de confirmação ANTES do botão (para funcionar corretamente com Streamlit)
-            confirmacao_exclusao = st.checkbox(
-                "✅ Confirmo que quero excluir TODOS os dados desta missão", 
-                key="confirm_delete_mission"
-            )
-            
-            # Botão só aparece habilitado se checkbox estiver marcado
-            if confirmacao_exclusao:
-                st.error("⚠️ ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos!")
-                if st.button("🗑️ EXCLUIR MISSÃO PERMANENTEMENTE", type="primary", use_container_width=True):
-                    if excluir_concurso_completo(supabase, missao):  # Função do logic.py
-                        st.success("Missão excluída! Redirecionando...")
-                        st.session_state.missao_ativa = None
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao excluir missão. Tente novamente.")
-            else:
-                st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
