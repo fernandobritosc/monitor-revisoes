@@ -1903,33 +1903,56 @@ else:
                 banca_sim = st.text_input("Banca", placeholder="Ex: Cebraspe")
                 data_sim = st.date_input("Data Realização")
                 
-                c_s1, c_s2 = st.columns(2)
-                acertos_sim = c_s1.number_input("Acertos", 0)
-                total_sim = c_s2.number_input("Total Questões", 1)
+                st.markdown("---")
+                st.markdown("##### 📊 Desempenho por Disciplina")
                 
-                if st.form_submit_button("💾 Salvar Nota", use_container_width=True, type="primary"):
-                    if nome_sim:
-                        simulado_data = {
-                            "data_estudo": data_sim.strftime("%Y-%m-%d"),
-                            "materia": "SIMULADO",  # Flag Especial
-                            "assunto": f"{nome_sim} | {banca_sim}",
-                            "tempo": 0, # Opcional
-                            "acertos": acertos_sim,
-                            "total": total_sim,
-                            "taxa": (acertos_sim/total_sim*100 if total_sim > 0 else 0),
-                            "missao": st.session_state.missao_ativa,
-                            "revisao_24h": True, "revisao_7d": True, "revisao_30d": True, # Já conclui revisões pra não poluir
-                            "dificuldade": "Simulado",
-                            "comentarios": f"Banca: {banca_sim}"
-                        }
-                        try:
-                            supabase.table("registros_estudos").insert(simulado_data).execute()
-                            st.success("🏆 Simulado registrado!")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro: {e}")
-                    else:
+                # Campos dinâmicos por matéria
+                notas_por_materia = {}
+                mats_edital = list(dados.get('materias', {}).keys())
+                
+                if not mats_edital:
+                    st.warning("⚠️ Nenhuma matéria cadastrada no edital. Adicione matérias em 'Configurar' primeiro.")
+                else:
+                    for m_name in mats_edital:
+                        c1, c2, c3 = st.columns([2, 1, 1])
+                        c1.markdown(f"<div style='padding-top:25px; font-weight:600;'>{m_name}</div>", unsafe_allow_html=True)
+                        ac = c2.number_input("Acertos", min_value=0, key=f"sim_ac_{m_name}")
+                        to = c3.number_input("Total", min_value=0, key=f"sim_to_{m_name}")
+                        notas_por_materia[m_name] = {"ac": ac, "to": to}
+
+                if st.form_submit_button("💾 Salvar Simulado Completo", use_container_width=True, type="primary"):
+                    if nome_sim and mats_edital:
+                        # Calcular totais
+                        total_acertos = sum(v['ac'] for v in notas_por_materia.values())
+                        total_questoes = sum(v['to'] for v in notas_por_materia.values())
+                        
+                        if total_questoes == 0:
+                            st.error("O total de questões não pode ser zero.")
+                        else:
+                            # Gerar string de detalhes
+                            detalhes = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in notas_por_materia.items() if v['to'] > 0])
+                            
+                            simulado_data = {
+                                "data_estudo": data_sim.strftime("%Y-%m-%d"),
+                                "materia": "SIMULADO",
+                                "assunto": f"{nome_sim} | {banca_sim}",
+                                "tempo": 0,
+                                "acertos": total_acertos,
+                                "total": total_questoes,
+                                "taxa": (total_acertos/total_questoes*100),
+                                "missao": st.session_state.missao_ativa,
+                                "revisao_24h": True, "revisao_7d": True, "revisao_30d": True,
+                                "dificuldade": "Simulado",
+                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
+                            }
+                            try:
+                                supabase.table("registros_estudos").insert(simulado_data).execute()
+                                st.success(f"🏆 Simulado registrado! Total: {total_acertos}/{total_questoes}")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
+                    elif not nome_sim:
                         st.warning("Preencha o nome do simulado.")
             st.markdown('</div>', unsafe_allow_html=True)
         
@@ -1958,11 +1981,12 @@ else:
                 # Tabela Histórico
                 st.markdown("##### Histórico Recente")
                 st.dataframe(
-                    df_sim_chart[['data_estudo', 'assunto', 'acertos', 'total', 'taxa']].sort_values('data_estudo', ascending=False),
+                    df_sim_chart[['data_estudo', 'assunto', 'acertos', 'total', 'taxa', 'comentarios']].sort_values('data_estudo', ascending=False),
                     column_config={
                         "data_estudo": "Data",
                         "assunto": "Prova",
-                        "taxa": st.column_config.ProgressColumn("Nota", format="%.1f%%", min_value=0, max_value=100)
+                        "taxa": st.column_config.ProgressColumn("Nota", format="%.1f%%", min_value=0, max_value=100),
+                        "comentarios": "Detalhamento"
                     },
                     hide_index=True,
                     use_container_width=True
