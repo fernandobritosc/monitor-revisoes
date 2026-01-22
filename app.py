@@ -1654,10 +1654,10 @@ else:
                     )
                     
                     # NOVO: Relevância (Incidência)
-                    rel_reg = st.select_slider(
+                    rel_reg = st.selectbox(
                         "Relevância (Incidência em Prova):",
                         options=list(range(1, 11)),
-                        value=5,
+                        index=4,  # Valor 5 (índice 4)
                         help="De 1 (baixa incidência) a 10 (matéria muito cobrada)"
                     )
                     
@@ -2230,8 +2230,12 @@ else:
                 if mat_filter != "Todas":
                     df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
                 
-                # Filtrar por relevância (considerando 5 como padrão se nulo)
-                df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int)
+                # Filtrar por relevância (considerando 5 como padrão se nulo ou coluna ausente)
+                if 'relevancia' in df_filtered.columns:
+                    df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int)
+                else:
+                    df_filtered['rel_val'] = 5
+                
                 df_filtered = df_filtered[df_filtered['rel_val'] >= rel_filter]
             
                 # Aplicar ordenação
@@ -2311,10 +2315,10 @@ else:
                         )
 
                         # NOVO: Relevância na edição
-                        rel_edit = st.select_slider(
+                        rel_edit = st.selectbox(
                             "Relevância (Incidência em Prova):",
                             options=list(range(1, 11)),
-                            value=int(registro_edit.get('relevancia', 5)),
+                            index=int(registro_edit.get('relevancia', 5)) - 1,
                             key="rel_edit"
                         )
                     
