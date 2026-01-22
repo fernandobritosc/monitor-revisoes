@@ -290,6 +290,61 @@ if 'missao_ativa' not in st.session_state:
     except Exception:
         st.session_state.missao_ativa = None
 
+# Helper function to load all data
+def carregar_dados():
+    if not supabase:
+        return {}, pd.DataFrame()
+    try:
+        # Load editais
+        editais_data = get_editais(supabase)
+        
+        # Load all study records for the active mission
+        if st.session_state.missao_ativa:
+            response = supabase.table("registros_estudos").select("*").eq("concurso", st.session_state.missao_ativa).order("data_estudo", desc=True).execute()
+            df_raw = pd.DataFrame(response.data)
+        else:
+            df_raw = pd.DataFrame()
+        
+        return editais_data, df_raw
+    except Exception as e:
+        st.warning(f"Aviso: Não foi possível carregar dados - {e}")
+        return {}, pd.DataFrame()
+
+# Carregar dados
+dados, df_raw = carregar_dados()
+
+# --- INTEGRAÇÃO: SEPARAÇÃO DE ESTUDOS vs SIMULADOS ---
+if not df_raw.empty:
+    # Garantir que a coluna 'materia' existe e tratar nulos
+    if 'materia' in df_raw.columns:
+        df_raw['materia'] = df_raw['materia'].fillna("Desconhecido")
+        
+        # Filtros
+        df_simulados = df_raw[df_raw['materia'] == 'SIMULADO'].copy()
+        df_estudos = df_raw[df_raw['materia'] != 'SIMULADO'].copy()
+    else:
+        df_simulados = pd.DataFrame()
+        df_estudos = df_raw.copy()
+else:
+    df_simulados = pd.DataFrame()
+    df_estudos = pd.DataFrame()
+
+# Alias para compatibilidade com código existente (que usa 'df')
+# ONDE O CÓDIGO USA 'df', ELE DEVE USAR 'df_estudos' AGORA PARA MÉTRICAS DE ROTINA
+df = df_estudos 
+
+# Definir Missão Ativa
+if not dados.get('missoes'):
+    if 'missao_ativa' not in st.session_state:
+        try:
+            ed = get_editais(supabase)
+            if ed:
+                st.session_state.missao_ativa = list(ed.keys())[0]
+            else:
+                st.session_state.missao_ativa = None
+        except Exception:
+            st.session_state.missao_ativa = None
+
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
@@ -945,15 +1000,15 @@ def tempo_recomendado_rev24h(dificuldade):
 
 # --- FUNÇÃO COM CACHE PARA PERFORMANCE ---
 @st.cache_data(ttl=300)
-def calcular_revisoes_pendentes(df, filtro_rev, filtro_dif):
+def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
     """Calcula revisões pendentes com cache para melhor performance."""
     hoje = datetime.date.today()
     pend = []
     
-    if df.empty:
+    if df_estudos.empty:
         return pend
         
-    for _, row in df.iterrows():
+    for _, row in df_estudos.iterrows():
         dt_est = pd.to_datetime(row['data_estudo']).date()
         dias = (hoje - dt_est).days
         tx = row.get('taxa', 0)
@@ -1072,25 +1127,19 @@ if st.session_state.missao_ativa is None:
 
 else:
     missao = st.session_state.missao_ativa
-    try:
-        res = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
-        df = pd.DataFrame(res.data)
-    except Exception as e:
-        st.warning(f"Aviso: Não foi possível carregar registros - {e}")
-        df = pd.DataFrame()
+    # The `df` variable is now `df_estudos` due to the alias
+    # `dados` is already loaded by `carregar_dados()`
     
     # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
     try:
-        res_data_prova = supabase.table("editais_materias").select("data_prova").eq("concurso", missao).limit(1).execute()
-        if res_data_prova.data and len(res_data_prova.data) > 0:
-            data_prova_direta = res_data_prova.data[0].get('data_prova')
-        else:
-            data_prova_direta = None
+        data_prova_direta = dados.get(missao, {}).get('data_prova')
     except Exception as e:
         # Log silencioso do erro, mas continua funcionando
         data_prova_direta = None
-    
-    dados = get_editais(supabase).get(missao, {})
+        
+    # Garantir que 'dados' se refere à missão ativa
+    dados_global = dados
+    dados = dados_global.get(missao, {})
 
     with st.sidebar:
         # Logo Estilizado Moderno e Genérico
@@ -1121,8 +1170,8 @@ else:
         # Menu Premium com option_menu
         menu_selecionado = option_menu(
             menu_title=None,
-            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "HISTÓRICO", "CONFIGURAR"],
-            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "clock-history", "gear"],
+            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "CONFIGURAR"],
+            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "gear"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -1160,6 +1209,7 @@ else:
             "REVISÕES": "Revisões",
             "REGISTRAR": "Registrar",
             "DASHBOARD": "Dashboard",
+            "SIMULADOS": "Simulados",
             "HISTÓRICO": "Histórico",
             "CONFIGURAR": "Configurar"
         }
@@ -1173,7 +1223,7 @@ else:
         
         with col_titulo:
             st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
-            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get(missao, {}).get("cargo", "")}</p>', unsafe_allow_html=True)
         
         with col_btn:
             st.write("")  # Espaçamento vertical
@@ -1183,17 +1233,17 @@ else:
         
         st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
         
-        if df.empty:
+        if df_estudos.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
         else:
             # --- VISÃO DO MÊS ATUAL (como na imagem) ---
             st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
             # Calcular métricas
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
+            t_q = df_estudos['total'].sum()
+            a_q = df_estudos['acertos'].sum()
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df['tempo'].sum())
+            minutos_totais = int(df_estudos['tempo'].sum())
             
             # Formatar tempo como na imagem (3h45min)
             tempo_formatado = formatar_minutos(minutos_totais)
@@ -1266,9 +1316,9 @@ else:
             # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
-            streak = calcular_streak(df)
-            recorde = calcular_recorde_streak(df)
-            inicio_streak, fim_streak = calcular_datas_streak(df)
+            streak = calcular_streak(df_estudos)
+            recorde = calcular_recorde_streak(df_estudos)
+            inicio_streak, fim_streak = calcular_datas_streak(df_estudos)
             
             st.markdown('<div class="constancia-header">', unsafe_allow_html=True)
             st.markdown('<div class="constancia-title">📊 CONSTÂNCIA NOS ESTUDOS</div>', unsafe_allow_html=True)
@@ -1303,7 +1353,7 @@ else:
                 # Calcular dias estudados no mês
                 hoje = datetime.date.today()
                 dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
-                dias_estudados_mes = len(set(pd.to_datetime(df['data_estudo']).dt.date.unique()))
+                dias_estudados_mes = len(set(pd.to_datetime(df_estudos['data_estudo']).dt.date.unique()))
                 percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
                 
                 st.markdown(f'''
@@ -1326,9 +1376,9 @@ else:
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
             
-            if not df.empty:
+            if not df_estudos.empty:
                 # Calcular totais por disciplina
-                df_disciplinas = df.groupby('materia').agg({
+                df_disciplinas = df_estudos.groupby('materia').agg({
                     'tempo': 'sum',
                     'acertos': 'sum',
                     'total': 'sum',
@@ -1388,7 +1438,7 @@ else:
             if 'editando_metas' not in st.session_state:
                 st.session_state.editando_metas = False
             
-            horas_semana, questoes_semana = calcular_estudos_semana(df)
+            horas_semana, questoes_semana = calcular_estudos_semana(df_estudos)
             meta_horas = st.session_state.meta_horas_semana
             meta_questoes = st.session_state.meta_questoes_semana
             
@@ -1489,7 +1539,7 @@ else:
             filtro_dif = st.segmented_control("Dificuldade:", ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], default="Todas", key="filtro_dif_list")
     
         # Calcular pendentes
-        pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
+        pend = calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif)
         
         if not pend: 
             st.success("✨ Tudo em dia! Nenhuma revisão pendente para os filtros selecionados.")
@@ -1582,7 +1632,7 @@ else:
                 tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
                 
                 mat_reg = st.selectbox("Disciplina", mats)
-                assuntos_disponiveis = dados['materias'].get(mat_reg, ["Geral"])
+                assuntos_disponiveis = dados.get('materias', {}).get(mat_reg, ["Geral"])
                 ass_reg = st.selectbox("Assunto", assuntos_disponiveis, key=f"assunto_select_{mat_reg}")
                 
                 st.divider()
@@ -1643,18 +1693,59 @@ else:
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        if df.empty:
+        # --- NOVO: EDITAL VERTICALIZADO (COBERTURA) ---
+        if dados.get(missao, {}).get('materias'):
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### 📜 Progresso do Edital (Syllabus)")
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Percentual de assuntos únicos estudados por matéria.</p>", unsafe_allow_html=True)
+            
+            # Calcular cobertura para cada materia cadastrada
+            cols_edital = st.columns(3)
+            col_idx = 0
+            
+            for materia, assuntos_previstos in dados.get('materias', {}).items():
+                # Assuntos estudados nessa materia (filtrando do df_estudos)
+                if not df_estudos.empty and 'materia' in df_estudos.columns and 'assunto' in df_estudos.columns:
+                     assuntos_estudados = df_estudos[df_estudos['materia'] == materia]['assunto'].unique()
+                     count_estudados = len(assuntos_estudados)
+                else:
+                    count_estudados = 0
+                
+                count_total = len(assuntos_previstos)
+                porcentagem = (count_estudados / count_total * 100) if count_total > 0 else 0
+                
+                # Cor da barra
+                bar_color = "#EF4444" if porcentagem < 30 else "#F59E0B" if porcentagem < 70 else "#10B981"
+                
+                with cols_edital[col_idx % 3]:
+                    st.markdown(f"""
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; color: #E2E8F0; margin-bottom: 5px;">
+                            <span>{materia}</span>
+                            <span style="color: {bar_color};">{int(porcentagem)}%</span>
+                        </div>
+                        <div class="modern-progress-container">
+                            <div class="modern-progress-fill" style="width: {porcentagem}%; background: {bar_color};"></div>
+                        </div>
+                        <div style="font-size: 0.7rem; color: #64748B; text-align: right; margin-top: 2px;">{count_estudados}/{count_total} tópicos</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                col_idx += 1
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.divider()
+
+        # Métricas Gerais
+        if df_estudos.empty:
             t_q, precisao, horas, ritmo = 0, 0, 0, 0
         else:
-            t_q = df['total'].sum()
-            a_q = df['acertos'].sum()
+            t_q = df_estudos['total'].sum()
+            a_q = df_estudos['acertos'].sum()
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            tempo_min = df['tempo'].sum()
+            tempo_min = df_estudos['tempo'].sum()
             horas = tempo_min/60
-            # Ritmo: Minutos por questão
             ritmo = (tempo_min / t_q) if t_q > 0 else 0
         
-        # 1. MÉTRICAS PRINCIPAIS (Agora 4 cards)
+        # 1. MÉTRICAS PRINCIPAIS
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
@@ -1662,9 +1753,11 @@ else:
         with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         
         st.divider()
+        
+        # Manter restante do Dashboard...
 
         # 2. PONTOS FRACOS & EVOLUÇÃO
-        if not df.empty:
+        if not df_estudos.empty:
             c_main1, c_main2 = st.columns([1, 1])
             
             with c_main1:
@@ -1673,7 +1766,7 @@ else:
                 st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Assuntos que precisam de reforço urgente.</p>", unsafe_allow_html=True)
                 
                 # Calcular performance por assunto
-                df_assuntos = df.groupby(['materia', 'assunto']).agg({
+                df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
                     'total': 'sum', 
                     'acertos': 'sum', 
                     'taxa': 'mean' # Média das taxas dos registros
@@ -1712,12 +1805,12 @@ else:
                 st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Horas de estudo por dia da semana.</p>", unsafe_allow_html=True)
                 
                 # Preparar dados por dia da semana
-                df['weekday'] = pd.to_datetime(df['data_estudo']).dt.day_name()
+                df_estudos['weekday'] = pd.to_datetime(df_estudos['data_estudo']).dt.day_name()
                 # Traduzir dias (opcional, ou usar ordem fixa)
                 dias_ordem = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                 dias_trad = {"Monday": "Seg", "Tuesday": "Ter", "Wednesday": "Qua", "Thursday": "Qui", "Friday": "Sex", "Saturday": "Sáb", "Sunday": "Dom"}
                 
-                df_week = df.groupby('weekday')['tempo'].sum().reindex(dias_ordem).fillna(0).reset_index()
+                df_week = df_estudos.groupby('weekday')['tempo'].sum().reindex(dias_ordem).fillna(0).reset_index()
                 df_week['horas'] = df_week['tempo'] / 60
                 df_week['dia_pt'] = df_week['weekday'].map(dias_trad)
                 
@@ -1739,11 +1832,11 @@ else:
                 st.markdown('</div>', unsafe_allow_html=True)
 
         # 3. GRÁFICO DE EVOLUÇÃO (Mantido)
-        if not df.empty:
+        if not df_estudos.empty:
             st.subheader("📈 Evolução de Acertos")
             try:
                 # Agrupa pela coluna certa: 'data_estudo'
-                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
+                df_evo = df_estudos.groupby('data_estudo')['acertos'].sum().reset_index()
                 st.line_chart(df_evo.set_index('data_estudo'))
             except Exception as e:
                 st.error(f"Erro ao gerar gráfico: {e}")
@@ -1751,13 +1844,13 @@ else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
         # 4. GRÁFICOS PLOTLY (Pizza e Precisão)
-        if not df.empty:
+        if not df_estudos.empty:
             # Gráficos
             c_g1, c_g2 = st.columns(2)
             with c_g1:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 st.markdown("##### Distribuição por Matéria")
-                fig_pie = px.pie(df, values='total', names='materia', hole=0.6, 
+                fig_pie = px.pie(df_estudos, values='total', names='materia', hole=0.6, 
                                 color_discrete_sequence=px.colors.qualitative.Pastel)
                 fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True, 
                                      paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -1768,7 +1861,7 @@ else:
             with c_g2:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 st.markdown("##### Evolução de Precisão")
-                df_ev = df.groupby('data_estudo')['taxa'].mean().reset_index()
+                df_ev = df_estudos.groupby('data_estudo')['taxa'].mean().reset_index()
                 fig_line = px.line(df_ev, x='data_estudo', y='taxa', markers=True)
                 fig_line.update_traces(line_color='#FF4B4B', marker=dict(size=8))
                 fig_line.update_layout(margin=dict(t=20, b=0, l=0, r=0), 
