@@ -1888,316 +1888,316 @@ else:
                                 </div>
                             """, unsafe_allow_html=True)
 
-# --- ABA: SIMULADOS (NOVA) ---
-elif menu == "Simulados":
-    st.markdown('<h2 class="main-title">🏆 Área de Simulados</h2>', unsafe_allow_html=True)
-    
-    col_sim1, col_sim2 = st.columns([1, 2])
-    
-    with col_sim1:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### 📝 Novo Simulado")
+    # --- ABA: SIMULADOS (NOVA) ---
+    elif menu == "Simulados":
+        st.markdown('<h2 class="main-title">🏆 Área de Simulados</h2>', unsafe_allow_html=True)
         
-        with st.form("form_simulado"):
-            nome_sim = st.text_input("Nome da Prova", placeholder="Ex: Simulado PF 01")
-            banca_sim = st.text_input("Banca", placeholder="Ex: Cebraspe")
-            data_sim = st.date_input("Data Realização")
-            
-            c_s1, c_s2 = st.columns(2)
-            acertos_sim = c_s1.number_input("Acertos", 0)
-            total_sim = c_s2.number_input("Total Questões", 1)
-            
-            if st.form_submit_button("💾 Salvar Nota", use_container_width=True, type="primary"):
-                if nome_sim:
-                    simulado_data = {
-                        "data_estudo": data_sim.strftime("%Y-%m-%d"),
-                        "materia": "SIMULADO",  # Flag Especial
-                        "assunto": f"{nome_sim} | {banca_sim}",
-                        "tempo": 0, # Opcional
-                        "acertos": acertos_sim,
-                        "total": total_sim,
-                        "taxa": (acertos_sim/total_sim*100 if total_sim > 0 else 0),
-                        "missao": st.session_state.missao_ativa,
-                        "revisao_24h": True, "revisao_7d": True, "revisao_30d": True, # Já conclui revisões pra não poluir
-                        "dificuldade": "Simulado",
-                        "comentarios": f"Banca: {banca_sim}"
-                    }
-                    try:
-                        supabase.table("registros_estudos").insert(simulado_data).execute()
-                        st.success("🏆 Simulado registrado!")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
-                else:
-                    st.warning("Preencha o nome do simulado.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col_sim2:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### 📈 Evolução de Notas")
+        col_sim1, col_sim2 = st.columns([1, 2])
         
-        if not df_simulados.empty:
-            # Gráfico de Linha das Notas
-            df_sim_chart = df_simulados.sort_values('data_estudo')
-            
-            fig_sim = px.line(df_sim_chart, x='data_estudo', y='taxa', markers=True, 
-                             text=df_sim_chart['taxa'].apply(lambda x: f"{x:.1f}%"),
-                             title=None)
-            fig_sim.update_traces(line_color='#00FFFF', line_width=3, marker=dict(size=10, color='#8B5CF6'))
-            fig_sim.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white'),
-                yaxis_title="Nota (%)",
-                xaxis_title=None,
-                yaxis=dict(range=[0, 105])
-            )
-            st.plotly_chart(fig_sim, use_container_width=True)
-            
-            # Tabela Histórico
-            st.markdown("##### Histórico Recente")
-            st.dataframe(
-                df_sim_chart[['data_estudo', 'assunto', 'acertos', 'total', 'taxa']].sort_values('data_estudo', ascending=False),
-                column_config={
-                    "data_estudo": "Data",
-                    "assunto": "Prova",
-                    "taxa": st.column_config.ProgressColumn("Nota", format="%.1f%%", min_value=0, max_value=100)
-                },
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-            st.info("Nenhum simulado registrado ainda.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# --- ABA: HISTÓRICO ---
-elif menu == "Histórico":
-        st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
-        
-        if not df.empty:
-            df_h = df.copy()
-            df_h['data_estudo_display'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
-            
+        with col_sim1:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### 📝 Novo Simulado")
             
-            # Filtros
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
-            with col_f2:
-                ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], key="ord_hist")
-            with col_f3:
-                st.write("")  # Espaçamento
-            
-            # Aplicar filtros
-            df_filtered = df_h.copy()
-            if mat_filter != "Todas":
-                df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
-            
-            # Aplicar ordenação
-            if ordem == "Mais Recente":
-                df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
-            elif ordem == "Mais Antigo":
-                df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
-            elif ordem == "Maior Taxa":
-                df_filtered = df_filtered.sort_values('taxa', ascending=False)
-            else:  # Menor Taxa
-                df_filtered = df_filtered.sort_values('taxa', ascending=True)
-            
-            st.divider()
-            
-            # Resumo
-            total_registros = len(df_filtered)
-            taxa_media = df_filtered['taxa'].mean()
-            tempo_total = df_filtered['tempo'].sum() / 60
-            
-            col_info1, col_info2, col_info3 = st.columns(3)
-            col_info1.metric("📝 Registros", total_registros)
-            col_info2.metric("🎯 Taxa Média", f"{taxa_media:.1f}%")
-            col_info3.metric("⏱️ Tempo Total", f"{tempo_total:.1f}h")
-            
-            st.divider()
-            
-            # --- MODAL DE EDIÇÃO ---
-            if st.session_state.edit_id is not None:
-                registro_edit = df[df['id'] == st.session_state.edit_id].iloc[0]
+            with st.form("form_simulado"):
+                nome_sim = st.text_input("Nome da Prova", placeholder="Ex: Simulado PF 01")
+                banca_sim = st.text_input("Banca", placeholder="Ex: Cebraspe")
+                data_sim = st.date_input("Data Realização")
                 
-                st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-                st.markdown("### ✏️ Editar Registro")
+                c_s1, c_s2 = st.columns(2)
+                acertos_sim = c_s1.number_input("Acertos", 0)
+                total_sim = c_s2.number_input("Total Questões", 1)
                 
-                with st.form("form_edit_registro", clear_on_submit=False):
-                    col_e1, col_e2 = st.columns([2, 1])
-                    dt_edit = col_e1.date_input(
-                        "Data do Estudo", 
-                        value=pd.to_datetime(registro_edit['data_estudo']).date(), 
-                        format="DD/MM/YYYY", 
-                        key="dt_edit"
-                    )
-                    tm_edit = col_e2.text_input(
-                        "Tempo (HHMM)", 
-                        value=f"{int(registro_edit['tempo']//60):02d}{int(registro_edit['tempo']%60):02d}", 
-                        key="tm_edit"
-                    )
-                    
-                    mat_edit = st.selectbox(
-                        "Disciplina", 
-                        list(dados.get('materias', {}).keys()), 
-                        index=list(dados.get('materias', {}).keys()).index(registro_edit['materia']), 
-                        key="mat_edit"
-                    )
-                    assuntos_edit = dados['materias'].get(mat_edit, ["Geral"])
-                    ass_edit = st.selectbox(
-                        "Assunto", 
-                        assuntos_edit, 
-                        index=assuntos_edit.index(registro_edit['assunto']) if registro_edit['assunto'] in assuntos_edit else 0, 
-                        key="ass_edit"
-                    )
-                    
-                    st.divider()
-                    
-                    ca_edit, ct_edit = st.columns(2)
-                    ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
-                    to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=1, key="to_edit")
-                    
-                    # Dificuldade
-                    st.markdown("##### 🎯 Classificação de Dificuldade")
-                    dif_edit = st.segmented_control(
-                        "Classificação:",
-                        ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
-                        default=registro_edit.get('dificuldade', '🟡 Médio'),
-                        key="dif_edit"
-                    )
-                    
-                    tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_edit)
-                    st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
-                    
-                    st.divider()
-                    
-                    com_edit = st.text_area(
-                        "Anotações / Comentários", 
-                        value=registro_edit.get('comentarios', ''), 
-                        key="com_edit",
-                        height=100
-                    )
-                    
-                    col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
-                    
-                    if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
+                if st.form_submit_button("💾 Salvar Nota", use_container_width=True, type="primary"):
+                    if nome_sim:
+                        simulado_data = {
+                            "data_estudo": data_sim.strftime("%Y-%m-%d"),
+                            "materia": "SIMULADO",  # Flag Especial
+                            "assunto": f"{nome_sim} | {banca_sim}",
+                            "tempo": 0, # Opcional
+                            "acertos": acertos_sim,
+                            "total": total_sim,
+                            "taxa": (acertos_sim/total_sim*100 if total_sim > 0 else 0),
+                            "missao": st.session_state.missao_ativa,
+                            "revisao_24h": True, "revisao_7d": True, "revisao_30d": True, # Já conclui revisões pra não poluir
+                            "dificuldade": "Simulado",
+                            "comentarios": f"Banca: {banca_sim}"
+                        }
                         try:
-                            t_b = formatar_tempo_para_bigint(tm_edit)
-                            taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
-                            
-                            supabase.table("registros_estudos").update({
-                                "data_estudo": dt_edit.strftime('%Y-%m-%d'),
-                                "materia": mat_edit,
-                                "assunto": ass_edit,
-                                "acertos": ac_edit,
-                                "total": to_edit,
-                                "taxa": taxa,
-                                "dificuldade": dif_edit,
-                                "comentarios": com_edit,
-                                "tempo": t_b
-                            }).eq("id", st.session_state.edit_id).execute()
-                            
-                            st.success("✅ Registro atualizado com sucesso!")
+                            supabase.table("registros_estudos").insert(simulado_data).execute()
+                            st.success("🏆 Simulado registrado!")
                             time.sleep(1)
-                            st.session_state.edit_id = None
                             st.rerun()
                         except Exception as e:
-                            st.error(f"❌ Erro ao atualizar: {e}")
-                    
-                    if col_btn2.form_submit_button("❌ CANCELAR", use_container_width=True, type="secondary"):
-                        st.session_state.edit_id = None
-                        st.rerun()
+                            st.error(f"Erro: {e}")
+                    else:
+                        st.warning("Preencha o nome do simulado.")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_sim2:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### 📈 Evolução de Notas")
+            
+            if not df_simulados.empty:
+                # Gráfico de Linha das Notas
+                df_sim_chart = df_simulados.sort_values('data_estudo')
                 
-                st.markdown('</div>', unsafe_allow_html=True)
+                fig_sim = px.line(df_sim_chart, x='data_estudo', y='taxa', markers=True, 
+                                 text=df_sim_chart['taxa'].apply(lambda x: f"{x:.1f}%"),
+                                 title=None)
+                fig_sim.update_traces(line_color='#00FFFF', line_width=3, marker=dict(size=10, color='#8B5CF6'))
+                fig_sim.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white'),
+                    yaxis_title="Nota (%)",
+                    xaxis_title=None,
+                    yaxis=dict(range=[0, 105])
+                )
+                st.plotly_chart(fig_sim, use_container_width=True)
+                
+                # Tabela Histórico
+                st.markdown("##### Histórico Recente")
+                st.dataframe(
+                    df_sim_chart[['data_estudo', 'assunto', 'acertos', 'total', 'taxa']].sort_values('data_estudo', ascending=False),
+                    column_config={
+                        "data_estudo": "Data",
+                        "assunto": "Prova",
+                        "taxa": st.column_config.ProgressColumn("Nota", format="%.1f%%", min_value=0, max_value=100)
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+            else:
+                st.info("Nenhum simulado registrado ainda.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+# --- ABA: HISTÓRICO ---
+    elif menu == "Histórico":
+            st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
+        
+            if not df.empty:
+                df_h = df.copy()
+                df_h['data_estudo_display'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
+            
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            
+                # Filtros
+                col_f1, col_f2, col_f3 = st.columns(3)
+                with col_f1:
+                    mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
+                with col_f2:
+                    ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], key="ord_hist")
+                with col_f3:
+                    st.write("")  # Espaçamento
+            
+                # Aplicar filtros
+                df_filtered = df_h.copy()
+                if mat_filter != "Todas":
+                    df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
+            
+                # Aplicar ordenação
+                if ordem == "Mais Recente":
+                    df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
+                elif ordem == "Mais Antigo":
+                    df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
+                elif ordem == "Maior Taxa":
+                    df_filtered = df_filtered.sort_values('taxa', ascending=False)
+                else:  # Menor Taxa
+                    df_filtered = df_filtered.sort_values('taxa', ascending=True)
+            
                 st.divider()
             
-            # --- LISTA DE REGISTROS ---
-            st.markdown("##### 📝 Gerenciar Registros")
+                # Resumo
+                total_registros = len(df_filtered)
+                taxa_media = df_filtered['taxa'].mean()
+                tempo_total = df_filtered['tempo'].sum() / 60
             
-            if len(df_filtered) == 0:
-                st.info("Nenhum registro encontrado com os filtros selecionados.")
-            else:
-                for index, row in df_filtered.iterrows():
-                    with st.container():
-                        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                        
-                        # Layout principal
-                        info_col, metrics_col, action_col = st.columns([3, 1.5, 1.2])
-                        
-                        with info_col:
-                            # Informações do Registro
-                            taxa_color = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 60 else "#FF4B4B"
+                col_info1, col_info2, col_info3 = st.columns(3)
+                col_info1.metric("📝 Registros", total_registros)
+                col_info2.metric("🎯 Taxa Média", f"{taxa_media:.1f}%")
+                col_info3.metric("⏱️ Tempo Total", f"{tempo_total:.1f}h")
+            
+                st.divider()
+            
+                # --- MODAL DE EDIÇÃO ---
+                if st.session_state.edit_id is not None:
+                    registro_edit = df[df['id'] == st.session_state.edit_id].iloc[0]
+                
+                    st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
+                    st.markdown("### ✏️ Editar Registro")
+                
+                    with st.form("form_edit_registro", clear_on_submit=False):
+                        col_e1, col_e2 = st.columns([2, 1])
+                        dt_edit = col_e1.date_input(
+                            "Data do Estudo", 
+                            value=pd.to_datetime(registro_edit['data_estudo']).date(), 
+                            format="DD/MM/YYYY", 
+                            key="dt_edit"
+                        )
+                        tm_edit = col_e2.text_input(
+                            "Tempo (HHMM)", 
+                            value=f"{int(registro_edit['tempo']//60):02d}{int(registro_edit['tempo']%60):02d}", 
+                            key="tm_edit"
+                        )
+                    
+                        mat_edit = st.selectbox(
+                            "Disciplina", 
+                            list(dados.get('materias', {}).keys()), 
+                            index=list(dados.get('materias', {}).keys()).index(registro_edit['materia']), 
+                            key="mat_edit"
+                        )
+                        assuntos_edit = dados['materias'].get(mat_edit, ["Geral"])
+                        ass_edit = st.selectbox(
+                            "Assunto", 
+                            assuntos_edit, 
+                            index=assuntos_edit.index(registro_edit['assunto']) if registro_edit['assunto'] in assuntos_edit else 0, 
+                            key="ass_edit"
+                        )
+                    
+                        st.divider()
+                    
+                        ca_edit, ct_edit = st.columns(2)
+                        ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
+                        to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=1, key="to_edit")
+                    
+                        # Dificuldade
+                        st.markdown("##### 🎯 Classificação de Dificuldade")
+                        dif_edit = st.segmented_control(
+                            "Classificação:",
+                            ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
+                            default=registro_edit.get('dificuldade', '🟡 Médio'),
+                            key="dif_edit"
+                        )
+                    
+                        tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_edit)
+                        st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
+                    
+                        st.divider()
+                    
+                        com_edit = st.text_area(
+                            "Anotações / Comentários", 
+                            value=registro_edit.get('comentarios', ''), 
+                            key="com_edit",
+                            height=100
+                        )
+                    
+                        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
+                    
+                        if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
+                            try:
+                                t_b = formatar_tempo_para_bigint(tm_edit)
+                                taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
                             
-                            st.markdown(f"""
-                                <div style="margin-bottom: 8px;">
-                                    <span style="color: #adb5bd; font-size: 0.85rem; font-weight: 600;">📅 {row['data_estudo_display']}</span>
-                                    <span style="color: {taxa_color}; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
-                                        {row['taxa']:.1f}%
-                                    </span>
-                                    <span style="color: #adb5bd; font-size: 0.85rem; margin-left: 15px;">
-                                        {row.get('dificuldade', '🟡 Médio')}
-                                    </span>
-                                </div>
-                                <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
-                                <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
-                            """, unsafe_allow_html=True)
+                                supabase.table("registros_estudos").update({
+                                    "data_estudo": dt_edit.strftime('%Y-%m-%d'),
+                                    "materia": mat_edit,
+                                    "assunto": ass_edit,
+                                    "acertos": ac_edit,
+                                    "total": to_edit,
+                                    "taxa": taxa,
+                                    "dificuldade": dif_edit,
+                                    "comentarios": com_edit,
+                                    "tempo": t_b
+                                }).eq("id", st.session_state.edit_id).execute()
                             
-                            # Anotações
-                            if row.get('comentarios'):
-                                with st.expander("📝 Ver Anotações", expanded=False):
-                                    st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
-                        
-                        with metrics_col:
-                            # Métricas - CORREÇÃO: string formatada corretamente
-                            html_metricas = f"""
-                                <div style="text-align: right;">
-                                    <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
-                                    <div style="font-size: 1.3rem; font-weight: 700; color: #fff;">
-                                        {int(row['acertos'])}/{int(row['total'])}
-                                    </div>
-                                    <div style="font-size: 0.75rem; color: #adb5bd;">
-                                        ⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}m
-                                    </div>
-                                </div>
-                            """
-                            st.markdown(html_metricas, unsafe_allow_html=True)
-                        
-                        with action_col:
-                            col_a1, col_a2 = st.columns(2, gap="small")
-                            
-                            # Botão Editar
-                            if col_a1.button("✏️", key=f"edit_{row['id']}", help="Editar registro", use_container_width=True):
-                                st.session_state.edit_id = row['id']
+                                st.success("✅ Registro atualizado com sucesso!")
+                                time.sleep(1)
+                                st.session_state.edit_id = None
                                 st.rerun()
-                            
-                            # Botão Excluir com confirmação
-                            if col_a2.button("🗑️", key=f"del_{row['id']}", help="Excluir registro", use_container_width=True):
-                                try:
-                                    # Confirmação via dialog
-                                    if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                        supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
-                                        st.toast("✅ Registro excluído com sucesso!", icon="✅")
-                                        time.sleep(0.5)
-                                        st.session_state[f"confirm_delete_{row['id']}"] = False
-                                        st.rerun()
-                                    else:
-                                        st.session_state[f"confirm_delete_{row['id']}"] = True
-                                        st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao excluir: {e}")
-                            
-                            # Confirmação visual
-                            if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar exclusão", icon="⚠️")
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
+                            except Exception as e:
+                                st.error(f"❌ Erro ao atualizar: {e}")
+                    
+                        if col_btn2.form_submit_button("❌ CANCELAR", use_container_width=True, type="secondary"):
+                            st.session_state.edit_id = None
+                            st.rerun()
+                
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.divider()
             
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
+                # --- LISTA DE REGISTROS ---
+                st.markdown("##### 📝 Gerenciar Registros")
+            
+                if len(df_filtered) == 0:
+                    st.info("Nenhum registro encontrado com os filtros selecionados.")
+                else:
+                    for index, row in df_filtered.iterrows():
+                        with st.container():
+                            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                        
+                            # Layout principal
+                            info_col, metrics_col, action_col = st.columns([3, 1.5, 1.2])
+                        
+                            with info_col:
+                                # Informações do Registro
+                                taxa_color = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 60 else "#FF4B4B"
+                            
+                                st.markdown(f"""
+                                    <div style="margin-bottom: 8px;">
+                                        <span style="color: #adb5bd; font-size: 0.85rem; font-weight: 600;">📅 {row['data_estudo_display']}</span>
+                                        <span style="color: {taxa_color}; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
+                                            {row['taxa']:.1f}%
+                                        </span>
+                                        <span style="color: #adb5bd; font-size: 0.85rem; margin-left: 15px;">
+                                            {row.get('dificuldade', '🟡 Médio')}
+                                        </span>
+                                    </div>
+                                    <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
+                                    <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
+                                """, unsafe_allow_html=True)
+                            
+                                # Anotações
+                                if row.get('comentarios'):
+                                    with st.expander("📝 Ver Anotações", expanded=False):
+                                        st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
+                        
+                            with metrics_col:
+                                # Métricas - CORREÇÃO: string formatada corretamente
+                                html_metricas = f"""
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
+                                        <div style="font-size: 1.3rem; font-weight: 700; color: #fff;">
+                                            {int(row['acertos'])}/{int(row['total'])}
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: #adb5bd;">
+                                            ⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}m
+                                        </div>
+                                    </div>
+                                """
+                                st.markdown(html_metricas, unsafe_allow_html=True)
+                        
+                            with action_col:
+                                col_a1, col_a2 = st.columns(2, gap="small")
+                            
+                                # Botão Editar
+                                if col_a1.button("✏️", key=f"edit_{row['id']}", help="Editar registro", use_container_width=True):
+                                    st.session_state.edit_id = row['id']
+                                    st.rerun()
+                            
+                                # Botão Excluir com confirmação
+                                if col_a2.button("🗑️", key=f"del_{row['id']}", help="Excluir registro", use_container_width=True):
+                                    try:
+                                        # Confirmação via dialog
+                                        if st.session_state.get(f"confirm_delete_{row['id']}", False):
+                                            supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                            st.toast("✅ Registro excluído com sucesso!", icon="✅")
+                                            time.sleep(0.5)
+                                            st.session_state[f"confirm_delete_{row['id']}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.session_state[f"confirm_delete_{row['id']}"] = True
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao excluir: {e}")
+                            
+                                # Confirmação visual
+                                if st.session_state.get(f"confirm_delete_{row['id']}", False):
+                                    st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar exclusão", icon="⚠️")
+                        
+                            st.markdown('</div>', unsafe_allow_html=True)
+            
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
@@ -2208,7 +2208,7 @@ elif menu == "Histórico":
         with st.container():
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             st.markdown('### 📌 Seleção de Missão Foco', unsafe_allow_html=True)
-            
+        
             ed = get_editais(supabase)
             if ed:
                 nomes_missoes = list(ed.keys())
@@ -2216,14 +2216,14 @@ elif menu == "Histórico":
                     indice_atual = nomes_missoes.index(missao) if missao in nomes_missoes else 0
                 except (ValueError, IndexError):
                     indice_atual = 0
-                
+            
                 nova_missao = st.selectbox(
                     "Selecione o concurso que deseja focar agora:",
                     options=nomes_missoes,
                     index=indice_atual,
                     help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida."
                 )
-                
+            
                 if nova_missao != missao:
                     st.session_state.missao_ativa = nova_missao
                     st.success(f"✅ Missão alterada para: {nova_missao}")
@@ -2255,30 +2255,30 @@ elif menu == "Histórico":
         # Formulário para editar data da prova
         with st.form("form_editar_edital"):
             st.markdown("### 📅 Ajustar Data da Prova")
-            
+        
             nova_data_escolhida = st.date_input(
                 "Selecione a data da prova", 
                 value=(data_prova_atual or datetime.date.today())
             )
-            
+        
             remover = st.checkbox("Remover data da prova (deixar em branco)")
 
             submitted = st.form_submit_button("Salvar alterações", use_container_width=True, type="primary")
-            
+        
             if submitted:
                 try:
                     valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
-                    
+                
                     # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
                     res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
-                    
+                
                     if res.data:
                         # 2. LIMPA A MEMÓRIA DO APP
                         st.cache_data.clear() 
-                        
+                    
                         # 3. ATUALIZA O ESTADO PARA FORÇAR RECARREGAMENTO
                         st.session_state.missao_ativa = missao
-                        
+                    
                         st.success(f"✅ Data atualizada no banco! Recarregando...")
                         time.sleep(1)
                         st.rerun()
@@ -2288,10 +2288,10 @@ elif menu == "Histórico":
         # Seção para adicionar/gerenciar matérias
         st.divider()
         st.markdown("### 📚 Gerenciar Matérias e Assuntos")
-        
+    
         with st.container():
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            
+        
             # Buscar matérias do banco de dados
             try:
                 res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
@@ -2299,35 +2299,35 @@ elif menu == "Histórico":
             except Exception as e:
                 st.error(f"Erro ao buscar matérias: {e}")
                 registros_materias = []
-            
+        
             # --- NOVA SEÇÃO: EXCLUSÃO EM MASSA ---
             if registros_materias:
                 st.markdown("#### 🗑️ Exclusão em Massa de Matérias")
                 st.warning("⚠️ Atenção: Esta ação excluirá permanentemente as matérias selecionadas e TODOS os registros de estudo relacionados!", icon="⚠️")
-                
+            
                 # Criar lista de matérias com checkboxes
                 materias_selecionadas = []
-                
+            
                 for reg in registros_materias:
                     col_check, col_info = st.columns([0.1, 0.9])
                     with col_check:
                         selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
                     with col_info:
                         st.write(f"**{reg['materia']}** - {len(reg['topicos'] if reg['topicos'] else [])} assuntos")
-                    
+                
                     if selecionada:
                         materias_selecionadas.append(reg)
-                
+            
                 # Botão para excluir matérias selecionadas
                 if materias_selecionadas:
                     st.error(f"⚠️ **{len(materias_selecionadas)} matéria(s) selecionada(s) para exclusão:**")
                     for mat in materias_selecionadas:
                         st.write(f"• {mat['materia']}")
-                    
+                
                     # Confirmação adicional
                     confirmacao = st.checkbox("✅ Confirmo que compreendo que esta ação é irreversível e excluirá todos os registros relacionados", 
                                             key="confirm_exclusao_massa")
-                    
+                
                     if confirmacao:
                         col_btn1, col_btn2 = st.columns(2)
                         with col_btn1:
@@ -2335,7 +2335,7 @@ elif menu == "Histórico":
                                 try:
                                     contador_exclusoes = 0
                                     contador_registros = 0
-                                    
+                                
                                     for mat in materias_selecionadas:
                                         # Primeiro, contar registros de estudos associados a esta matéria
                                         try:
@@ -2344,14 +2344,14 @@ elif menu == "Histórico":
                                                 .eq("concurso", missao)\
                                                 .eq("materia", mat['materia'])\
                                                 .execute()
-                                            
+                                        
                                             # CORREÇÃO: Verificar se count existe e não é None
                                             if hasattr(res_contagem, 'count') and res_contagem.count is not None:
                                                 contador_registros += res_contagem.count
                                         except Exception:
                                             # Se não conseguir contar, continuar mesmo assim
                                             pass
-                                        
+                                    
                                         # Excluir registros de estudos dessa matéria
                                         try:
                                             supabase.table("registros_estudos").delete()\
@@ -2360,42 +2360,42 @@ elif menu == "Histórico":
                                                 .execute()
                                         except Exception as e:
                                             st.warning(f"Aviso: Não foi possível excluir todos os registros de '{mat['materia']}': {e}")
-                                        
+                                    
                                         # Excluir a matéria da tabela editais_materias
                                         try:
                                             supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
                                             contador_exclusoes += 1
                                         except Exception as e:
                                             st.error(f"Erro ao excluir matéria '{mat['materia']}': {e}")
-                                    
+                                
                                     st.success(f"✅ **{contador_exclusoes} matéria(s) excluída(s) com sucesso!**")
                                     if contador_registros > 0:
                                         st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
-                                    
+                                
                                     # Limpar cache e recarregar
                                     st.cache_data.clear()
                                     time.sleep(2)
                                     st.rerun()
-                                    
+                                
                                 except Exception as e:
                                     st.error(f"❌ Erro ao excluir matérias: {e}")
-                        
+                    
                         with col_btn2:
                             if st.button("❌ Cancelar Exclusão", type="secondary", use_container_width=True):
                                 st.rerun()
-                
-                st.divider()
             
+                st.divider()
+        
             # Mostrar matérias atuais
             if registros_materias:
                 st.markdown("#### ✏️ Editar Matérias Individuais")
-                
+            
                 # Para cada matéria, criar um expander com opções de edição
                 for reg in registros_materias:
                     materia = reg['materia']
                     topicos = reg['topicos'] if reg['topicos'] else []
                     id_registro = reg['id']
-                    
+                
                     with st.expander(f"📖 {materia} ({len(topicos)} assuntos)"):
                         # Mostrar assuntos atuais
                         st.markdown("**Assuntos atuais:**")
@@ -2418,28 +2418,28 @@ elif menu == "Histórico":
                                         st.error(f"❌ Erro ao remover assunto: {e}")
                         else:
                             st.info("Nenhum assunto cadastrado.")
-                        
+                    
                         st.divider()
-                        
+                    
                         # Formulário para adicionar novos assuntos
                         with st.form(f"form_novo_assunto_{id_registro}"):
                             st.markdown("**Adicionar novos assuntos (em massa)**")
-                            
+                        
                             # Opções de entrada
                             metodo_entrada = st.selectbox(
                                 "Como deseja adicionar os assuntos?",
                                 ["Um por um", "Vários com separador", "Vários por linhas"],
                                 key=f"metodo_{id_registro}"
                             )
-                            
+                        
                             # Inicializar variável para evitar NameError
                             assuntos_para_adicionar = []
-                            
+                        
                             if metodo_entrada == "Um por um":
                                 # Modo tradicional
                                 novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_single_{id_registro}")
                                 assuntos_para_adicionar = [novo_assunto] if novo_assunto else []
-                                
+                            
                             elif metodo_entrada == "Vários com separador":
                                 # Modo com separador
                                 col_sep1, col_sep2 = st.columns([2, 1])
@@ -2465,14 +2465,14 @@ elif menu == "Histórico":
                                         "| (pipe)": "|"
                                     }
                                     separador_char = separador_map[separador]
-                                
+                            
                                 if texto_assuntos:
                                     # Processar os assuntos
                                     assuntos_brutos = texto_assuntos.split(separador_char)
                                     assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
                                 else:
                                     assuntos_para_adicionar = []
-                                    
+                                
                                     # Mostrar prévia
                                     if assuntos_para_adicionar:
                                         st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
@@ -2487,21 +2487,21 @@ elif menu == "Histórico":
                                     key=f"texto_assuntos_linhas_{id_registro}",
                                     height=120
                                 )
-                                
+                            
                                 if texto_assuntos:
                                     # Processar os assuntos (uma por linha)
                                     assuntos_brutos = texto_assuntos.split("\n")
                                     assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
                                 else:
                                     assuntos_para_adicionar = []
-                                    
+                                
                                     # Mostrar prévia
                                     if assuntos_para_adicionar:
                                         st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
                                         with st.expander("Ver assuntos"):
                                             for a in assuntos_para_adicionar:
                                                 st.write(f"• {a}")
-                            
+                        
                             col_btn1, col_btn2 = st.columns(2)
                             if col_btn1.form_submit_button("➕ Adicionar Assuntos", use_container_width=True):
                                 if assuntos_para_adicionar:
@@ -2515,7 +2515,7 @@ elif menu == "Histórico":
                                                 topicos.append(assunto)
                                             else:
                                                 st.warning(f"Assunto '{assunto}' já existe e foi ignorado.")
-                                        
+                                    
                                         # Atualizar no banco
                                         supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
                                         st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
@@ -2526,27 +2526,27 @@ elif menu == "Histórico":
                                         st.error(f"❌ Erro ao adicionar assuntos: {e}")
                                 else:
                                     st.warning("⚠️ Nenhum assunto válido para adicionar.")
-                            
+                        
                             if col_btn2.form_submit_button("✏️ Renomear Matéria", use_container_width=True, type="secondary"):
                                 # Abrir modal para renomear matéria
                                 st.session_state[f"renomear_{id_registro}"] = True
                                 st.rerun()
-                        
+                    
                         # Modal para renomear matéria
                         if st.session_state.get(f"renomear_{id_registro}", False):
                             st.markdown('<div style="background: rgba(255, 75, 75, 0.1); padding: 15px; border-radius: 8px; margin-top: 10px;">', unsafe_allow_html=True)
                             novo_nome = st.text_input("Novo nome da matéria", value=materia, key=f"novo_nome_{id_registro}")
-                            
+                        
                             col_r1, col_r2 = st.columns(2)
                             if col_r1.button("💾 Salvar", key=f"salvar_nome_{id_registro}", use_container_width=True):
                                 if novo_nome and novo_nome != materia:
                                     try:
                                         # Atualizar o nome da matéria
                                         supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).execute()
-                                        
+                                    
                                         # Atualizar também nos registros de estudo
                                         supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
-                                        
+                                    
                                         st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
                                         time.sleep(1)
                                         st.session_state[f"renomear_{id_registro}"] = False
@@ -2554,45 +2554,45 @@ elif menu == "Histórico":
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao renomear matéria: {e}")
-                            
+                        
                             if col_r2.button("❌ Cancelar", key=f"cancelar_nome_{id_registro}", use_container_width=True):
                                 st.session_state[f"renomear_{id_registro}"] = False
                                 st.rerun()
-                            
+                        
                             st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("Nenhuma matéria cadastrada ainda.")
-            
+        
             # Formulário para adicionar nova matéria
             st.divider()
             st.markdown("#### ➕ Adicionar Nova Matéria")
-            
+        
             with st.form("form_nova_materia"):
                 col1, col2 = st.columns([3, 1])
-                
+            
                 with col1:
                     nova_materia = st.text_input("Nome da Matéria", placeholder="Ex: Direito Constitucional")
-                
+            
                 with col2:
                     st.write("")  # Espaçamento
                     st.write("")  # Espaçamento
-                
+            
                 # Seção para assuntos iniciais
                 st.markdown("**Assuntos iniciais (opcional):**")
-                
+            
                 metodo_assuntos = st.selectbox(
                     "Como deseja adicionar os assuntos iniciais?",
                     ["Sem assuntos iniciais", "Um por um", "Vários com separador", "Vários por linhas"],
                     key="metodo_assuntos_nova"
                 )
-                
+            
                 assuntos_iniciais = []
-                
+            
                 if metodo_assuntos == "Um por um":
                     assunto_inicial = st.text_input("Assunto inicial", placeholder="Ex: Princípios fundamentais", key="assunto_inicial_single")
                     if assunto_inicial:
                         assuntos_iniciais = [assunto_inicial]
-                        
+                    
                 elif metodo_assuntos == "Vários com separador":
                     col_sep1, col_sep2 = st.columns([2, 1])
                     with col_sep1:
@@ -2617,12 +2617,12 @@ elif menu == "Histórico":
                             "| (pipe)": "|"
                         }
                         separador_char = separador_map[separador]
-                    
+                
                     if texto_assuntos:
                         # Processar os assuntos
                         assuntos_brutos = texto_assuntos.split(separador_char)
                         assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-                        
+                    
                 elif metodo_assuntos == "Vários por linhas":
                     texto_assuntos = st.text_area(
                         "Digite um assunto por linha:",
@@ -2630,19 +2630,19 @@ elif menu == "Histórico":
                         key="texto_assuntos_linhas_nova",
                         height=120
                     )
-                    
+                
                     if texto_assuntos:
                         # Processar os assuntos (uma por linha)
                         assuntos_brutos = texto_assuntos.split("\n")
                         assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-                
+            
                 # Mostrar prévia se houver assuntos
                 if assuntos_iniciais and metodo_assuntos != "Sem assuntos iniciais":
                     st.info(f"**Prévia:** {len(assuntos_iniciais)} assunto(s) inicial(is)")
                     with st.expander("Ver assuntos"):
                         for a in assuntos_iniciais:
                             st.write(f"• {a}")
-                
+            
                 # Botão de envio
                 if st.form_submit_button("Adicionar Matéria", use_container_width=True):
                     if nova_materia:
@@ -2657,7 +2657,7 @@ elif menu == "Histórico":
                                 # Se não houver assuntos definidos, usar "Geral" como padrão
                                 if not assuntos_iniciais:
                                     assuntos_iniciais = ["Geral"]
-                                
+                            
                                 # Adicionar nova matéria
                                 payload = {
                                     "concurso": missao,
@@ -2668,7 +2668,7 @@ elif menu == "Histórico":
                                 # Se houver data_prova, incluir
                                 if data_prova_direta:
                                     payload["data_prova"] = data_prova_direta
-                                
+                            
                                 supabase.table("editais_materias").insert(payload).execute()
                                 st.success(f"✅ Matéria '{nova_materia}' adicionada com {len(assuntos_iniciais)} assunto(s) inicial(is)!")
                                 time.sleep(1)
@@ -2678,24 +2678,24 @@ elif menu == "Histórico":
                             st.error(f"❌ Erro ao adicionar matéria: {e}")
                     else:
                         st.warning("⚠️ Por favor, informe o nome da matéria.")
-            
+        
             st.markdown('</div>', unsafe_allow_html=True)
 
         # Botão para excluir o concurso
         st.divider()
         st.markdown("### ⚠️ Zona de Perigo")
-        
+    
         with st.container():
             st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-            
+        
             st.warning("Esta ação é irreversível!")
-            
+        
             # Checkbox de confirmação ANTES do botão (para funcionar corretamente com Streamlit)
             confirmacao_exclusao = st.checkbox(
                 "✅ Confirmo que quero excluir TODOS os dados desta missão", 
                 key="confirm_delete_mission"
             )
-            
+        
             # Botão só aparece habilitado se checkbox estiver marcado
             if confirmacao_exclusao:
                 st.error("⚠️ ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos!")
@@ -2709,5 +2709,5 @@ elif menu == "Histórico":
                         st.error("❌ Erro ao excluir missão. Tente novamente.")
             else:
                 st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
-            
+        
             st.markdown('</div>', unsafe_allow_html=True)
