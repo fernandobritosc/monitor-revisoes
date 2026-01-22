@@ -203,76 +203,9 @@ def formatar_tempo_para_bigint(tempo_str):
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
 
-# --- INTEGRAÇÃO: SUPABASE ---
-from supabase import create_client, Client
-
-def init_supabase():
-    url = st.secrets.get("supabase", {}).get("url")
-    key = st.secrets.get("supabase", {}).get("key")
-    
-    if not url or not key or url == "SUA_URL_SUPABASE_AQUI":
-        return None
-    
-    try:
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"Erro ao conectar ao Supabase: {e}")
-        return None
-
-try:
-    supabase: Client = init_supabase()
-except Exception:
-    supabase = None
-
-# --- INTEGRAÇÃO: LÓGICA ---
-def get_editais(supabase):
-    if not supabase: return {}
-    try:
-        response = supabase.table("editais_materias").select("*").execute()
-        data = response.data
-        editais = {}
-        if data:
-            for item in data:
-                concurso = item.get("concurso")
-                if not concurso: continue
-                if concurso not in editais:
-                    editais[concurso] = {
-                        "cargo": item.get("cargo", ""),
-                        "data_prova": item.get("data_prova"),
-                        "materias": {}
-                    }
-                materia = item.get("materia")
-                topicos = item.get("topicos", [])
-                if materia:
-                    editais[concurso]["materias"][materia] = topicos
-        return editais
-    except Exception:
-        return {}
-
-def excluir_concurso_completo(supabase, missao):
-    if not supabase or not missao: return False
-    try:
-        supabase.table("registros_estudos").delete().eq("concurso", missao).execute()
-        supabase.table("editais_materias").delete().eq("concurso", missao).execute()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao excluir concurso: {e}")
-        return False
-
-# --- INTEGRAÇÃO: ESTILOS ---
-def apply_styles():
-    st.markdown("""
-        <style>
-        .block-container { padding-top: 2rem !important; padding-bottom: 5rem !important; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-        .badge-green { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .badge-red { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .badge-gray { background-color: rgba(148, 163, 184, 0.2); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
-        .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
-        .modern-progress-container { width: 100%; background-color: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 6px; overflow: hidden; }
-        .modern-progress-fill { height: 100%; background: linear-gradient(90deg, #8B5CF6, #06B6D4); border-radius: 10px; transition: width 0.5s ease; }
-        </style>
-    """, unsafe_allow_html=True)
+from database import supabase
+from logic import get_editais, excluir_concurso_completo
+from styles import apply_styles
 
 # --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
 if 'missao_ativa' not in st.session_state:
