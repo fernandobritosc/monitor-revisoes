@@ -1957,27 +1957,8 @@ else:
         
         with col_sim2:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📈 Evolução de Notas")
-            
             if not df_simulados.empty:
-                # 📈 Evolução e Médias
-                df_sim_chart = df_simulados.sort_values('data_estudo')
-                fig_sim = px.line(df_sim_chart, x='data_estudo', y='taxa', markers=True, 
-                                 text=df_sim_chart['taxa'].apply(lambda x: f"{x:.1f}%"),
-                                 title=None)
-                fig_sim.update_traces(line_color='#00FFFF', line_width=3, marker=dict(size=10, color='#8B5CF6'))
-                fig_sim.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    yaxis_title="Nota (%)",
-                    xaxis_title=None,
-                    yaxis=dict(range=[0, 105]),
-                    height=300
-                )
-                st.plotly_chart(fig_sim, use_container_width=True)
-                
-                # --- NOVO: MÉTRICAS ACUMULATIVAS ---
+                # --- MÉTRICAS ACUMULATIVAS ---
                 st.markdown("##### 🏛️ Desempenho Acumulado")
                 c_ac1, c_ac2, c_ac3 = st.columns(3)
                 tot_ac = df_simulados['acertos'].sum()
@@ -1990,11 +1971,13 @@ else:
                 
                 st.divider()
                 
-                # --- NOVO: HISTÓRICO VERTICAL (CARDS) ---
+                # --- HISTÓRICO VERTICAL (CARDS) COM SCROLL ---
                 st.markdown("##### 📜 Histórico de Provas")
                 
-                for _, row in df_sim_chart.sort_values('data_estudo', ascending=False).iterrows():
-                    with st.container():
+                df_sim_hist = df_simulados.sort_values('data_estudo', ascending=False)
+                
+                with st.container(height=600): # Container scrollável
+                    for _, row in df_sim_hist.iterrows():
                         st.markdown(f"""
                         <div style="
                             background: rgba(30, 41, 59, 0.4);
