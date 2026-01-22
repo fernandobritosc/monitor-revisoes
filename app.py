@@ -1941,8 +1941,7 @@ else:
                                 "total": total_questoes,
                                 "taxa": (total_acertos/total_questoes*100),
                                 "concurso": st.session_state.missao_ativa,
-                                "revisao_24h": True, "revisao_7d": True, "revisao_30d": True,
-                                "dificuldade": "Simulado",
+                                "rev_24h": True, "rev_07d": True, "rev_30d": True,                          "dificuldade": "Simulado",
                                 "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
                             }
                             try:
