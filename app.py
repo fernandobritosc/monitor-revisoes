@@ -1960,9 +1960,7 @@ else:
             st.markdown("##### 📈 Evolução de Notas")
             
             if not df_simulados.empty:
-                # Gráfico de Linha das Notas
-                df_sim_chart = df_simulados.sort_values('data_estudo')
-                
+                # 📈 Evolução e Médias
                 fig_sim = px.line(df_sim_chart, x='data_estudo', y='taxa', markers=True, 
                                  text=df_sim_chart['taxa'].apply(lambda x: f"{x:.1f}%"),
                                  title=None)
@@ -1973,23 +1971,84 @@ else:
                     font=dict(color='white'),
                     yaxis_title="Nota (%)",
                     xaxis_title=None,
-                    yaxis=dict(range=[0, 105])
+                    yaxis=dict(range=[0, 105]),
+                    height=300
                 )
                 st.plotly_chart(fig_sim, use_container_width=True)
                 
-                # Tabela Histórico
-                st.markdown("##### Histórico Recente")
-                st.dataframe(
-                    df_sim_chart[['data_estudo', 'assunto', 'acertos', 'total', 'taxa', 'comentarios']].sort_values('data_estudo', ascending=False),
-                    column_config={
-                        "data_estudo": "Data",
-                        "assunto": "Prova",
-                        "taxa": st.column_config.ProgressColumn("Nota", format="%.1f%%", min_value=0, max_value=100),
-                        "comentarios": "Detalhamento"
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
+                # --- NOVO: MÉTRICAS ACUMULATIVAS ---
+                st.markdown("##### 🏛️ Desempenho Acumulado")
+                c_ac1, c_ac2, c_ac3 = st.columns(3)
+                tot_ac = df_simulados['acertos'].sum()
+                tot_to = df_simulados['total'].sum()
+                prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
+                
+                with c_ac1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
+                with c_ac2: render_metric_card("Total Questões", int(tot_to), "📝")
+                with c_ac3: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
+                
+                st.divider()
+                
+                # --- NOVO: HISTÓRICO VERTICAL (CARDS) ---
+                st.markdown("##### 📜 Histórico de Provas")
+                
+                for _, row in df_sim_chart.sort_values('data_estudo', ascending=False).iterrows():
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="
+                            background: rgba(30, 41, 59, 0.4);
+                            border-left: 5px solid #8B5CF6;
+                            padding: 20px;
+                            border-radius: 12px;
+                            margin-bottom: 20px;
+                        ">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div>
+                                    <div style="font-size: 0.8rem; color: #94A3B8;">{pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')}</div>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color: white;">{row['assunto']}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.8rem; font-weight: 900; color: #00FFFF;">{row['taxa']:.1f}%</div>
+                                    <div style="font-size: 0.8rem; color: #94A3B8;">{int(row['acertos'])}/{int(row['total'])} acertos</div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Extrair detalhamento do comentário
+                        # Formato: "Banca: X | Detalhes: Materia: A/B | Materia2: C/D"
+                        comentario = row.get('comentarios', '')
+                        if "Detalhes:" in comentario:
+                            try:
+                                detalhes_str = comentario.split("Detalhes:")[1].strip()
+                                items = [it.strip() for it in detalhes_str.split("|")]
+                                
+                                st.markdown("<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px;'>", unsafe_allow_html=True)
+                                for item in items:
+                                    if ":" in item:
+                                        mat, score = item.split(":", 1)
+                                        if "/" in score:
+                                            ac, to = score.split("/")
+                                            perc = (int(ac)/int(to)*100) if int(to) > 0 else 0
+                                            bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
+                                            
+                                            st.markdown(f"""
+                                            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #E2E8F0; margin-bottom: 4px;">
+                                                    <span>{mat}</span>
+                                                    <span style="font-weight: 700;">{score.strip()} ({int(perc)}%)</span>
+                                                </div>
+                                                <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                                                    <div style="width: {perc}%; height: 100%; background: {bar_color};"></div>
+                                                </div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            except Exception:
+                                st.write(f"Ref: {comentario}")
+                        else:
+                            st.write(f"Notas: {comentario}")
+                            
+                        st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.info("Nenhum simulado registrado ainda.")
             st.markdown('</div>', unsafe_allow_html=True)
