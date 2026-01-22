@@ -1026,7 +1026,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                     "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                     "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
                     "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                    "dificuldade": dif, "taxa": tx
+                    "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
                 })
         
         # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
@@ -1047,7 +1047,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                         "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                         "tipo": lbl, "col": col_alv, "atraso": atraso, 
                         "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                        "dificuldade": dif, "taxa": tx
+                        "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
                     })
     
     # Filtrar por dificuldade
@@ -1576,7 +1576,9 @@ else:
                                 <span style="background: {border_color}20; color: {border_color}; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">{status_badge}</span>
                                 <span style="color: #94A3B8; font-size: 0.75rem; margin-left: 8px;">{p['materia']}</span>
                             </div>
-                            <div style="color: #64748B; font-size: 0.8rem;">Rev de {p['tipo']}</div>
+                             <div style="color: #64748B; font-size: 0.8rem;">
+                                 ⭐ R{int(p.get('relevancia', 5))} | Rev de {p['tipo']}
+                             </div>
                         </div>
                         <div style="font-size: 1.1rem; font-weight: 600; color: white;">{p['assunto']}</div>
                         <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 4px;">📝 {p['coment'] if p['coment'] else 'Sem anotações'}</div>
@@ -1769,7 +1771,37 @@ else:
         
         st.divider()
         
-        # Manter restante do Dashboard...
+        # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
+        if not df_estudos.empty and 'relevancia' in df_estudos.columns:
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### ⭐ Desempenho por Nível de Relevância")
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão média agrupada pela importância da matéria (1-10).</p>", unsafe_allow_html=True)
+            
+            # Agrupar por relevância
+            df_rel_dash = df_estudos.groupby('relevancia').agg({
+                'taxa': 'mean',
+                'total': 'sum'
+            }).reset_index()
+            df_rel_dash['relevancia'] = df_rel_dash['relevancia'].astype(int)
+            df_rel_dash = df_rel_dash.sort_values('relevancia', ascending=False)
+            
+            c_rel = st.columns(len(df_rel_dash) if len(df_rel_dash) > 0 else 1)
+            for idx, row in enumerate(df_rel_dash.iterrows()):
+                r_val = row[1]['relevancia']
+                r_taxa = row[1]['taxa']
+                r_total = row[1]['total']
+                
+                with c_rel[idx % len(c_rel)]:
+                    color = "#10B981" if r_taxa >= 75 else "#F59E0B" if r_taxa >= 50 else "#EF4444"
+                    st.markdown(f"""
+                        <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02);">
+                            <div style="font-size: 0.7rem; color: #94A3B8;">NÍVEL {r_val}</div>
+                            <div style="font-size: 1.2rem; font-weight: 800; color: {color};">{r_taxa:.1f}%</div>
+                            <div style="font-size: 0.65rem; color: #64748B;">{int(r_total)} questões</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.divider()
 
         # 2. PONTOS FRACOS & EVOLUÇÃO
         if not df_estudos.empty:
@@ -2219,7 +2251,8 @@ else:
                 with col_f1:
                     mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
                 with col_f2:
-                    rel_filter = st.selectbox("Relevância Mínima:", list(range(1, 11)), index=0, key="rel_hist_filter")
+                    rel_options = ["Todas"] + list(range(1, 11))
+                    rel_filter = st.selectbox("Relevância Mínima:", rel_options, index=0, key="rel_hist_filter")
                 with col_f3:
                     ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
                 with col_f4:
@@ -2231,12 +2264,10 @@ else:
                     df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
                 
                 # Filtrar por relevância (considerando 5 como padrão se nulo ou coluna ausente)
-                if 'relevancia' in df_filtered.columns:
-                    df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int)
-                else:
-                    df_filtered['rel_val'] = 5
+                df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int) if 'relevancia' in df_filtered.columns else 5
                 
-                df_filtered = df_filtered[df_filtered['rel_val'] >= rel_filter]
+                if rel_filter != "Todas":
+                    df_filtered = df_filtered[df_filtered['rel_val'] >= int(rel_filter)]
             
                 # Aplicar ordenação
                 if ordem == "Mais Recente":
