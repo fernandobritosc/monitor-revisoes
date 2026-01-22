@@ -348,6 +348,9 @@ if not dados.get('missoes'):
 if 'edit_id' not in st.session_state:
     st.session_state.edit_id = None
 
+if 'edit_id_simulado' not in st.session_state:
+    st.session_state.edit_id_simulado = None
+
 # Inicializar estados das metas semanais
 if 'meta_horas_semana' not in st.session_state:
     st.session_state.meta_horas_semana = 22
@@ -1901,7 +1904,9 @@ else:
             with st.form("form_simulado"):
                 nome_sim = st.text_input("Nome da Prova", placeholder="Ex: Simulado PF 01")
                 banca_sim = st.text_input("Banca", placeholder="Ex: Cebraspe")
-                data_sim = st.date_input("Data Realização")
+                col_sd1, col_sd2 = st.columns(2)
+                data_sim = col_sd1.date_input("Data Realização")
+                tempo_sim = col_sd2.text_input("Tempo (HHMM)", value="0400", help="Ex: 0400 para 4h00min")
                 
                 st.markdown("---")
                 st.markdown("##### 📊 Desempenho por Disciplina")
@@ -1932,16 +1937,19 @@ else:
                             # Gerar string de detalhes
                             detalhes = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in notas_por_materia.items() if v['to'] > 0])
                             
+                            t_b_sim = formatar_tempo_para_bigint(tempo_sim)
+                            
                             simulado_data = {
                                 "data_estudo": data_sim.strftime("%Y-%m-%d"),
                                 "materia": "SIMULADO",
                                 "assunto": f"{nome_sim} | {banca_sim}",
-                                "tempo": 0,
+                                "tempo": t_b_sim,
                                 "acertos": total_acertos,
                                 "total": total_questoes,
                                 "taxa": (total_acertos/total_questoes*100),
                                 "concurso": st.session_state.missao_ativa,
-                                "rev_24h": True, "rev_07d": True, "rev_30d": True,                          "dificuldade": "Simulado",
+                                "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
+                                "dificuldade": "Simulado",
                                 "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
                             }
                             try:
@@ -1976,6 +1984,74 @@ else:
                 
                 df_sim_hist = df_simulados.sort_values('data_estudo', ascending=False)
                 
+                # --- MODAL DE EDIÇÃO DE SIMULADO ---
+                if st.session_state.edit_id_simulado is not None:
+                    registro_sim_edit = df_simulados[df_simulados['id'] == st.session_state.edit_id_simulado].iloc[0]
+                    
+                    st.markdown('<div class="modern-card" style="border: 2px solid rgba(0, 255, 255, 0.3); background: rgba(0, 255, 255, 0.05);">', unsafe_allow_html=True)
+                    st.markdown("### ✏️ Editar Simulado")
+                    
+                    with st.form("form_edit_simulado"):
+                        nome_sim_ed = st.text_input("Nome da Prova", value=registro_sim_edit['assunto'].split(' | ')[0])
+                        banca_sim_ed = st.text_input("Banca", value=registro_sim_edit['assunto'].split(' | ')[1] if ' | ' in registro_sim_edit['assunto'] else "")
+                        
+                        col_ed_sim1, col_ed_sim2 = st.columns(2)
+                        data_sim_ed = col_ed_sim1.date_input("Data Realização", value=pd.to_datetime(registro_sim_edit['data_estudo']).date())
+                        tempo_sim_ed = col_ed_sim2.text_input("Tempo (HHMM)", value=f"{int(registro_sim_edit['tempo']//60):02d}{int(registro_sim_edit['tempo']%60):02d}")
+                        
+                        st.divider()
+                        st.markdown("##### 📊 Desempenho por Disciplina")
+                        
+                        # Extrair notas atuais dos comentários
+                        coments = registro_sim_edit.get('comentarios', '')
+                        notas_atuais = {}
+                        if "Detalhes:" in coments:
+                            det_str = coments.split("Detalhes:")[1].strip()
+                            for item in det_str.split("|"):
+                                if ":" in item:
+                                    m, s = item.split(":", 1)
+                                    if "/" in s:
+                                        notas_atuais[m.strip()] = s.strip().split("/")
+                        
+                        novas_notas = {}
+                        for m_name in mats_edital:
+                            c1, c2, c3 = st.columns([2, 1, 1])
+                            c1.markdown(f"<div style='padding-top:25px; font-weight:600;'>{m_name}</div>", unsafe_allow_html=True)
+                            val_ac = int(notas_atuais.get(m_name, [0, 0])[0])
+                            val_to = int(notas_atuais.get(m_name, [0, 0])[1])
+                            ac = c2.number_input("Acertos", min_value=0, value=val_ac, key=f"edit_sim_ac_{m_name}")
+                            to = c3.number_input("Total", min_value=0, value=val_to, key=f"edit_sim_to_{m_name}")
+                            novas_notas[m_name] = {"ac": ac, "to": to}
+                        
+                        col_edit_btn1, col_edit_btn2 = st.columns(2)
+                        if col_edit_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
+                            tot_ac = sum(v['ac'] for v in novas_notas.values())
+                            tot_to = sum(v['to'] for v in novas_notas.values())
+                            
+                            if tot_to > 0:
+                                det_novos = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in novas_notas.items() if v['to'] > 0])
+                                t_b_ed = formatar_tempo_para_bigint(tempo_sim_ed)
+                                
+                                supabase.table("registros_estudos").update({
+                                    "data_estudo": data_sim_ed.strftime("%Y-%m-%d"),
+                                    "assunto": f"{nome_sim_ed} | {banca_sim_ed}",
+                                    "tempo": t_b_ed,
+                                    "acertos": tot_ac,
+                                    "total": tot_to,
+                                    "taxa": (tot_ac/tot_to*100),
+                                    "comentarios": f"Banca: {banca_sim_ed} | Detalhes: {det_novos}"
+                                }).eq("id", st.session_state.edit_id_simulado).execute()
+                                
+                                st.success("✅ Simulado atualizado!")
+                                time.sleep(1)
+                                st.session_state.edit_id_simulado = None
+                                st.rerun()
+                        
+                        if col_edit_btn2.form_submit_button("❌ CANCELAR", use_container_width=True):
+                            st.session_state.edit_id_simulado = None
+                            st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
                 with st.container(height=600): # Container scrollável
                     for _, row in df_sim_hist.iterrows():
                         st.markdown(f"""
@@ -1988,7 +2064,10 @@ else:
                         ">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <div>
-                                    <div style="font-size: 0.8rem; color: #94A3B8;">{pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')}</div>
+                                    <div style="font-size: 0.8rem; color: #94A3B8;">
+                                        {pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')} 
+                                        <span style="margin-left: 10px; color: #00FFFF;">⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}min</span>
+                                    </div>
                                     <div style="font-size: 1.2rem; font-weight: 700; color: white;">{row['assunto']}</div>
                                 </div>
                                 <div style="text-align: right;">
@@ -2032,6 +2111,31 @@ else:
                         else:
                             st.write(f"Notas: {comentario}")
                             
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        
+                        # Adicionar botões de ação para Simulado
+                        col_act1, col_act2, col_act3 = st.columns([1, 1, 4])
+                        if col_act1.button("✏️", key=f"edit_sim_{row['id']}", help="Editar simulado", use_container_width=True):
+                            st.session_state.edit_id_simulado = row['id']
+                            st.rerun()
+                        
+                        if col_act2.button("🗑️", key=f"del_sim_{row['id']}", help="Excluir simulado", use_container_width=True):
+                            if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
+                                try:
+                                    supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                    st.toast("✅ Simulado excluído!")
+                                    st.session_state[f"confirm_del_sim_{row['id']}"] = False
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao excluir: {e}")
+                            else:
+                                st.session_state[f"confirm_del_sim_{row['id']}"] = True
+                                st.rerun()
+                        
+                        if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
+                            st.warning("⚠️ Clique em 🗑️ novamente para confirmar")
+
                         st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.info("Nenhum simulado registrado ainda.")
