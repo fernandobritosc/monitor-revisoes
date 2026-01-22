@@ -1657,6 +1657,9 @@ else:
                     tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
                     st.info(f"💡 **{dif_reg}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
                     
+                    # NOVO: Checkbox para controlar se gera revisões
+                    gerar_rev_reg = st.checkbox("🔄 Gerar ciclo de revisões para este registro?", value=True, help="Se desmarcado, este registro será salvo apenas para estatísticas e não aparecerá no radar de revisões.")
+                    
                     st.divider()
                     
                     com_reg = st.text_area("Anotações / Comentários", placeholder="O que você aprendeu ou sentiu dificuldade?")
@@ -1679,10 +1682,10 @@ else:
                                 "dificuldade": dif_reg,  # Novo campo
                                 "comentarios": com_reg, 
                                 "tempo": t_b, 
-                                "rev_24h": False, 
-                                "rev_07d": False, 
-                                "rev_15d": False, 
-                                "rev_30d": False
+                                "rev_24h": not gerar_rev_reg, 
+                                "rev_07d": not gerar_rev_reg, 
+                                "rev_15d": not gerar_rev_reg, 
+                                "rev_30d": not gerar_rev_reg
                             }
                             supabase.table("registros_estudos").insert(payload).execute()
                             st.success("✅ Registro salvo com sucesso!")
