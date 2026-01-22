@@ -1968,15 +1968,66 @@ else:
             if not df_simulados.empty:
                 # --- MÉTRICAS ACUMULATIVAS ---
                 st.markdown("##### 🏛️ Desempenho Acumulado")
-                c_ac1, c_ac2, c_ac3 = st.columns(3)
+                c_ac1, c_ac2, c_ac3, c_ac4 = st.columns(4)
                 tot_ac = df_simulados['acertos'].sum()
                 tot_to = df_simulados['total'].sum()
                 prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
+                tempo_medio = df_simulados['tempo'].mean() if not df_simulados.empty else 0
                 
                 with c_ac1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
                 with c_ac2: render_metric_card("Total Questões", int(tot_to), "📝")
                 with c_ac3: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
+                with c_ac4: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
                 
+                st.divider()
+                
+                # --- ANÁLISE VERTICAL ACUMULADA ---
+                st.markdown("##### 📈 Análise Vertical Acumulada")
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8; margin-bottom: 15px;'>Desempenho consolidado de todas as disciplinas em todos os simulados.</p>", unsafe_allow_html=True)
+                
+                # Consolidar dados de todas as matérias de todos os simulados
+                consolidado = {}
+                for _, row in df_simulados.iterrows():
+                    coments = row.get('comentarios', '')
+                    if "Detalhes:" in coments:
+                        try:
+                            det_str = coments.split("Detalhes:")[1].strip()
+                            items = [it.strip() for it in det_str.split("|")]
+                            for item in items:
+                                if ":" in item:
+                                    mat, score = item.split(":", 1)
+                                    if "/" in score:
+                                        ac, to = score.split("/")
+                                        m_name = mat.strip()
+                                        if m_name not in consolidado:
+                                            consolidado[m_name] = {"ac": 0, "to": 0}
+                                        consolidado[m_name]["ac"] += int(ac)
+                                        consolidado[m_name]["to"] += int(to)
+                        except Exception:
+                            continue
+                
+                if consolidado:
+                    st.markdown("<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;'>", unsafe_allow_html=True)
+                    # Ordenar por maior número de questões/importância
+                    for m_name, vals in sorted(consolidado.items(), key=lambda x: x[1]['to'], reverse=True):
+                        perc = (vals['ac'] / vals['to'] * 100) if vals['to'] > 0 else 0
+                        bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
+                        
+                        st.markdown(f"""
+                        <div style="background: rgba(139, 92, 246, 0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.1);">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #E2E8F0; margin-bottom: 8px;">
+                                <span style="font-weight: 600;">{m_name}</span>
+                                <span style="font-weight: 800; color: {bar_color};">{vals['ac']}/{vals['to']} ({int(perc)}%)</span>
+                            </div>
+                            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                                <div style="width: {perc}%; height: 100%; background: {bar_color}; box-shadow: 0 0 10px {bar_color}40;"></div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                else:
+                    st.info("Cadastre simulados com detalhamento por matéria para habilitar a análise vertical.")
+
                 st.divider()
                 
                 # --- HISTÓRICO VERTICAL (CARDS) COM SCROLL ---
