@@ -1530,30 +1530,35 @@ else:
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Área de Ação (Inputs e Botão) - Alinhada abaixo do card visual
+                    # Área de Ação (Inputs, Tempo e Botão)
                     c_input, c_btn = st.columns([3, 1])
                     
                     with c_input:
-                        ci1, ci2 = st.columns(2)
+                        ci1, ci2, ci3 = st.columns(3)
                         acertos = ci1.number_input("Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}", label_visibility="collapsed", placeholder="Acertos")
                         total = ci2.number_input("Total", min_value=0, key=f"to_{p['id']}_{p['col']}", label_visibility="collapsed", placeholder="Total")
+                        tempo_rev = ci3.number_input("Minutos", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}", label_visibility="collapsed", help="Tempo gasto nesta revisão (min)", placeholder="Min")
                     
                     with c_btn:
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             try:
-                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
+                                res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
                                 if res_db.data:
                                     n_ac = res_db.data[0]['acertos'] + acertos
                                     n_to = res_db.data[0]['total'] + total
+                                    # Soma o tempo antigo com o novo tempo de revisão
+                                    n_tempo = (res_db.data[0].get('tempo') or 0) + tempo_rev
                                     
                                     supabase.table("registros_estudos").update({
                                         p['col']: True, 
-                                        "comentarios": f"{p['coment']} | Rev: {acertos}/{total}", 
-                                        "acertos": n_ac, "total": n_to, 
+                                        "comentarios": f"{p['coment']} | Rev: {acertos}/{total} ({tempo_rev}min)", 
+                                        "acertos": n_ac, 
+                                        "total": n_to, 
+                                        "tempo": n_tempo,
                                         "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
                                     }).eq("id", p['id']).execute()
                                     
-                                    st.toast(f"Revisão de {p['assunto']} concluída!")
+                                    st.toast(f"Revisão de {p['assunto']} concluída (+{tempo_rev}min)!")
                                     time.sleep(1)
                                     st.rerun()
                             except Exception as e:
