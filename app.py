@@ -2331,10 +2331,10 @@ else:
                                     "dificuldade": dif_edit,
                                     "comentarios": com_edit,
                                     "tempo": t_b,
-                                    "rev_24h": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_24h'],
-                                    "rev_07d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_07d'],
-                                    "rev_15d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_15d'],
-                                    "rev_30d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_30d']
+                                    "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_24h']),
+                                    "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_07d']),
+                                    "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_15d']),
+                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_30d'])
                                 }).eq("id", st.session_state.edit_id).execute()
                             
                                 st.success("✅ Registro atualizado com sucesso!")
