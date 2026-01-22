@@ -1961,6 +1961,7 @@ else:
             
             if not df_simulados.empty:
                 # 📈 Evolução e Médias
+                df_sim_chart = df_simulados.sort_values('data_estudo')
                 fig_sim = px.line(df_sim_chart, x='data_estudo', y='taxa', markers=True, 
                                  text=df_sim_chart['taxa'].apply(lambda x: f"{x:.1f}%"),
                                  title=None)
