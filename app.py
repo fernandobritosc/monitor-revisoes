@@ -1653,6 +1653,14 @@ else:
                         default="🟡 Médio"
                     )
                     
+                    # NOVO: Relevância (Incidência)
+                    rel_reg = st.select_slider(
+                        "Relevância (Incidência em Prova):",
+                        options=list(range(1, 11)),
+                        value=5,
+                        help="De 1 (baixa incidência) a 10 (matéria muito cobrada)"
+                    )
+                    
                     # Mostrar recomendação baseada na dificuldade
                     tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
                     st.info(f"💡 **{dif_reg}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
@@ -1679,7 +1687,8 @@ else:
                                 "acertos": ac_reg, 
                                 "total": to_reg, 
                                 "taxa": taxa,
-                                "dificuldade": dif_reg,  # Novo campo
+                                "dificuldade": dif_reg, 
+                                "relevancia": rel_reg,  # Novo campo
                                 "comentarios": com_reg, 
                                 "tempo": t_b, 
                                 "rev_24h": not gerar_rev_reg, 
@@ -2206,18 +2215,24 @@ else:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             
                 # Filtros
-                col_f1, col_f2, col_f3 = st.columns(3)
+                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
                 with col_f1:
                     mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
                 with col_f2:
-                    ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa"], key="ord_hist")
+                    rel_filter = st.selectbox("Relevância Mínima:", list(range(1, 11)), index=0, key="rel_hist_filter")
                 with col_f3:
+                    ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
+                with col_f4:
                     st.write("")  # Espaçamento
             
                 # Aplicar filtros
                 df_filtered = df_h.copy()
                 if mat_filter != "Todas":
                     df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
+                
+                # Filtrar por relevância (considerando 5 como padrão se nulo)
+                df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int)
+                df_filtered = df_filtered[df_filtered['rel_val'] >= rel_filter]
             
                 # Aplicar ordenação
                 if ordem == "Mais Recente":
@@ -2226,8 +2241,10 @@ else:
                     df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
                 elif ordem == "Maior Taxa":
                     df_filtered = df_filtered.sort_values('taxa', ascending=False)
-                else:  # Menor Taxa
+                elif ordem == "Menor Taxa":
                     df_filtered = df_filtered.sort_values('taxa', ascending=True)
+                elif ordem == "Maior Relevância":
+                    df_filtered = df_filtered.sort_values('rel_val', ascending=False)
             
                 st.divider()
             
@@ -2292,6 +2309,14 @@ else:
                             default=registro_edit.get('dificuldade', '🟡 Médio'),
                             key="dif_edit"
                         )
+
+                        # NOVO: Relevância na edição
+                        rel_edit = st.select_slider(
+                            "Relevância (Incidência em Prova):",
+                            options=list(range(1, 11)),
+                            value=int(registro_edit.get('relevancia', 5)),
+                            key="rel_edit"
+                        )
                     
                         tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_edit)
                         st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
@@ -2329,6 +2354,7 @@ else:
                                     "total": to_edit,
                                     "taxa": taxa,
                                     "dificuldade": dif_edit,
+                                    "relevancia": rel_edit, # Novo campo
                                     "comentarios": com_edit,
                                     "tempo": t_b,
                                     "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
@@ -2376,6 +2402,9 @@ else:
                                         </span>
                                         <span style="color: #adb5bd; font-size: 0.85rem; margin-left: 15px;">
                                             {row.get('dificuldade', '🟡 Médio')}
+                                        </span>
+                                        <span style="color: #F59E0B; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
+                                            ⭐ R{int(row.get('relevancia', 5))}
                                         </span>
                                     </div>
                                     <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
