@@ -206,11 +206,15 @@ st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial
 # --- INTEGRAÇÃO: SUPABASE ---
 from supabase import create_client, Client
 
+# Credenciais do Supabase (Hardcoded para arquivo único)
+SUPABASE_URL = "https://dyxtalcvjcprmhuktyfd.supabase.co"
+SUPABASE_KEY = "sb_secret_uEyhPGa8T-JUw0X1m5JyOA_PygMIKW3"
+
 def init_supabase():
-    url = st.secrets.get("supabase", {}).get("url")
-    key = st.secrets.get("supabase", {}).get("key")
+    url = SUPABASE_URL
+    key = SUPABASE_KEY
     
-    if not url or not key or url == "SUA_URL_SUPABASE_AQUI":
+    if not url or not key:
         return None
     
     try:
