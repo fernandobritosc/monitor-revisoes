@@ -1756,13 +1756,44 @@ else:
                 st.plotly_chart(fig_bar, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICO DE EVOLUÇÃO (Mantido)
+        # 3. GRÁFICO DE EVOLUÇÃO (MELHORADO)
         if not df.empty:
-            st.subheader("📈 Evolução de Acertos")
+            st.subheader("📈 Evolução de Performance")
             try:
-                # Agrupa pela coluna certa: 'data_estudo'
-                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
-                st.line_chart(df_evo.set_index('data_estudo'))
+                # Agrupar dados por data
+                df_evo = df.groupby('data_estudo').agg({
+                    'acertos': 'sum', 
+                    'total': 'sum'
+                }).reset_index()
+                
+                # Calcular Taxa Real Diária
+                df_evo['Taxa Diária'] = (df_evo['acertos'] / df_evo['total']) * 100
+                
+                # Calcular Média Móvel (Tendência) - Suaviza picos
+                df_evo['Tendência'] = df_evo['Taxa Diária'].rolling(window=3, min_periods=1).mean()
+                
+                # Criar gráfico interativo com Plotly
+                fig_evo = px.line(df_evo, x='data_estudo', y=['Taxa Diária', 'Tendência'], 
+                                 markers=True,
+                                 title="Histórico de Precisão (%) vs Tendência",
+                                 color_discrete_map={'Taxa Diária': '#06B6D4', 'Tendência': '#8B5CF6'})
+                
+                fig_evo.update_layout(
+                    xaxis_title=None,
+                    yaxis_title="Taxa de Acerto (%)",
+                    yaxis=dict(range=[0, 105]), # Fixar escala até 100%
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color="#fff"),
+                    hovermode="x unified",
+                    legend=dict(orientation="h", y=1.1, title=None)
+                )
+                
+                # Melhorar tooltip
+                fig_evo.update_traces(hovertemplate='%{y:.1f}%')
+                
+                st.plotly_chart(fig_evo, use_container_width=True)
+                
             except Exception as e:
                 st.error(f"Erro ao gerar gráfico: {e}")
         else:
