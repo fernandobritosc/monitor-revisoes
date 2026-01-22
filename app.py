@@ -1662,22 +1662,101 @@ else:
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
         if df.empty:
-            t_q, precisao, horas = 0, 0, 0
+            t_q, precisao, horas, ritmo = 0, 0, 0, 0
         else:
             t_q = df['total'].sum()
             a_q = df['acertos'].sum()
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            horas = df['tempo'].sum()/60
+            tempo_min = df['tempo'].sum()
+            horas = tempo_min/60
+            # Ritmo: Minutos por questão
+            ritmo = (tempo_min / t_q) if t_q > 0 else 0
         
-        # Exibe os cartões - APENAS 3 CARTÕES, SEM DATA DA PROVA
-        m1, m2, m3 = st.columns(3)
+        # 1. MÉTRICAS PRINCIPAIS (Agora 4 cards)
+        m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
         with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
+        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         
         st.divider()
 
-        # 3. GRÁFICO DE EVOLUÇÃO (CORRIGIDO)
+        # 2. PONTOS FRACOS & EVOLUÇÃO
+        if not df.empty:
+            c_main1, c_main2 = st.columns([1, 1])
+            
+            with c_main1:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("##### 🚨 Radar de Pontos Fracos (< 70%)")
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Assuntos que precisam de reforço urgente.</p>", unsafe_allow_html=True)
+                
+                # Calcular performance por assunto
+                df_assuntos = df.groupby(['materia', 'assunto']).agg({
+                    'total': 'sum', 
+                    'acertos': 'sum', 
+                    'taxa': 'mean' # Média das taxas dos registros
+                }).reset_index()
+                
+                # Recalcular taxa global do assunto para precisão
+                df_assuntos['taxa_global'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100)
+                
+                # Filtrar pontos fracos (Taxa < 70% e mínimo de 5 questões para relevância)
+                pontos_fracos = df_assuntos[(df_assuntos['taxa_global'] < 70) & (df_assuntos['total'] >= 5)].sort_values('taxa_global')
+                
+                if not pontos_fracos.empty:
+                    # Tabela Customizada
+                    for _, row in pontos_fracos.iterrows():
+                        st.markdown(f"""
+                            <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #EF4444; padding: 10px; margin-bottom: 8px; border-radius: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; color: #fff; font-size: 0.9rem;">{row['assunto']}</div>
+                                        <div style="font-size: 0.75rem; color: #94A3B8;">{row['materia']}</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="color: #EF4444; font-weight: 800; font-size: 1.1rem;">{row['taxa_global']:.1f}%</div>
+                                        <div style="font-size: 0.7rem; color: #94A3B8;">{int(row['acertos'])}/{int(row['total'])}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.success("🎉 Nenhum ponto fraco crítico identificado! Continue assim.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with c_main2:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("##### 📅 Produtividade Semanal")
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Horas de estudo por dia da semana.</p>", unsafe_allow_html=True)
+                
+                # Preparar dados por dia da semana
+                df['weekday'] = pd.to_datetime(df['data_estudo']).dt.day_name()
+                # Traduzir dias (opcional, ou usar ordem fixa)
+                dias_ordem = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                dias_trad = {"Monday": "Seg", "Tuesday": "Ter", "Wednesday": "Qua", "Thursday": "Qui", "Friday": "Sex", "Saturday": "Sáb", "Sunday": "Dom"}
+                
+                df_week = df.groupby('weekday')['tempo'].sum().reindex(dias_ordem).fillna(0).reset_index()
+                df_week['horas'] = df_week['tempo'] / 60
+                df_week['dia_pt'] = df_week['weekday'].map(dias_trad)
+                
+                fig_bar = px.bar(df_week, x='dia_pt', y='horas', 
+                                template="plotly_dark",
+                                color='horas',
+                                color_continuous_scale=["#8B5CF6", "#06B6D4"])
+                
+                fig_bar.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=10, b=0, l=0, r=0),
+                    xaxis_title=None,
+                    yaxis_title="Horas",
+                    coloraxis_showscale=False,
+                    height=250
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # 3. GRÁFICO DE EVOLUÇÃO (Mantido)
         if not df.empty:
             st.subheader("📈 Evolução de Acertos")
             try:
@@ -1689,7 +1768,7 @@ else:
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
-        # 4. GRÁFICOS PLOTLY (se houver dados)
+        # 4. GRÁFICOS PLOTLY (Pizza e Precisão)
         if not df.empty:
             # Gráficos
             c_g1, c_g2 = st.columns(2)
