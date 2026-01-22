@@ -2297,12 +2297,21 @@ else:
                         st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
                     
                         st.divider()
-                    
                         com_edit = st.text_area(
                             "Anotações / Comentários", 
                             value=registro_edit.get('comentarios', ''), 
                             key="com_edit",
                             height=100
+                        )
+                    
+                        # NOVO: Controle de ciclo de revisões na edição
+                        st.markdown("##### 🔄 Ciclo de Revisões")
+                        foi_concluido = all([registro_edit.get('rev_24h'), registro_edit.get('rev_07d'), registro_edit.get('rev_15d')])
+                        gerar_rev_edit = st.checkbox(
+                            "Manter ciclo de revisões ativo?", 
+                            value=not foi_concluido,
+                            help="Se desmarcado, as revisões deste registro serão marcadas como concluídas.",
+                            key="gerar_rev_edit"
                         )
                     
                         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
@@ -2321,7 +2330,11 @@ else:
                                     "taxa": taxa,
                                     "dificuldade": dif_edit,
                                     "comentarios": com_edit,
-                                    "tempo": t_b
+                                    "tempo": t_b,
+                                    "rev_24h": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_24h'],
+                                    "rev_07d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_07d'],
+                                    "rev_15d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_15d'],
+                                    "rev_30d": not gerar_rev_edit if not gerar_rev_edit else registro_edit['rev_30d']
                                 }).eq("id", st.session_state.edit_id).execute()
                             
                                 st.success("✅ Registro atualizado com sucesso!")
