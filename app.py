@@ -1,4 +1,4 @@
-# app.py (com correção para exclusão em massa)
+                # app.py (com correção para exclusão em massa)
 
 import streamlit as st
 import pandas as pd
@@ -1477,112 +1477,136 @@ else:
                 </div>
                 ''', unsafe_allow_html=True)
 
-    # --- ABA: REVISÕES ---
+    # --- ABA: REVISÕES (MODO FLASHCARD) ---
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
         
-        # CORREÇÃO: Filtros organizados corretamente
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1:
-            filtro_rev = st.segmented_control(
-                "Visualizar:", 
-                ["Pendentes/Hoje", "Todas (incluindo futuras)"], 
-                default="Pendentes/Hoje",
-                key="filtro_rev"
-            )
-        with c2:
-            # CORREÇÃO: Ordem corrigida para mostrar Fácil ao lado de Médio
-            filtro_dif = st.segmented_control(
-                "Dificuldade:", 
-                ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], 
-                default="Todas",
-                key="filtro_dif"
-            )
-    
-        # Usar função com cache para melhor performance
-        pend = calcular_revisoes_pendentes(df, filtro_rev, filtro_dif)
+        # 1. Filtros e Cálculo
+        pend = calcular_revisoes_pendentes(df, "Pendentes/Hoje", "Todas")
         
-        if not pend: 
-            st.success("✨ Tudo em dia! Aproveite para avançar no conteúdo.")
+        if not pend:
+             st.markdown("""
+                <div style="text-align: center; padding: 50px;">
+                    <div style="font-size: 60px;">🎉</div>
+                    <h3 style="color: #10B981;">Tudo Limpo!</h3>
+                    <p style="color: #94A3B8;">Você zerou suas revisões por hoje.</p>
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            pend = sorted(pend, key=lambda x: (x['dificuldade'] != "🔴 Difícil", x['data_prevista']))
+            # Ordenar: Atrasadas Primeiro -> Depois Data Prevista
+            pend = sorted(pend, key=lambda x: (x['atraso'] <= 0, x['data_prevista']))
             
-            # 📊 Resumo rápido
-            st.markdown("##### 📊 Resumo de Revisões Pendentes")
-            col_res1, col_res2, col_res3 = st.columns(3)
+            # Separar grupos
+            atrasadas = [p for p in pend if p['atraso'] > 0]
+            hoje = [p for p in pend if p['atraso'] == 0]
             
-            # Contar por dificuldade
-            dif_count = len([p for p in pend if p['dificuldade'] == "🔴 Difícil"])
-            med_count = len([p for p in pend if p['dificuldade'] == "🟡 Médio"])
-            fac_count = len([p for p in pend if p['dificuldade'] == "🟢 Fácil"])
+            # --- PROGRESSO DO DIA ---
+            total_hoje = len(pend)
+            st.write(f"**Faltam {total_hoje} revisões** ({len(atrasadas)} atrasadas)")
+            st.progress(max(0, min(100, int((sum(1 for p in pend if p['atraso']==0)/total_hoje)*100))) if total_hoje > 0 else 100)
             
-            with col_res1:
-                st.metric("🔴 Difícil", dif_count)
-            with col_res2:
-                st.metric("🟡 Médio", med_count)
-            with col_res3:
-                st.metric("🟢 Fácil", fac_count)
+            # --- MODO FLASHCARD (PEGA A PRIMEIRA DA FILA) ---
+            atual = pend[0]
             
+            st.markdown("---")
+            
+            # Container Centralizado do Flashcard
+            with st.container():
+                # Cor da borda baseada na urgência
+                border_color = "#EF4444" if atual['atraso'] > 0 else "#10B981"
+                bg_gradient = "linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(15, 23, 42, 1))" if atual['atraso'] > 0 else "linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(15, 23, 42, 1))"
+                
+                st.markdown(f"""
+                <div style="
+                    border: 2px solid {border_color};
+                    background: {bg_gradient};
+                    border-radius: 24px;
+                    padding: 40px;
+                    text-align: center;
+                    box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+                    margin-bottom: 30px;
+                ">
+                    <div style="color: #94A3B8; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; margin-bottom: 15px;">
+                        {atual['materia']}
+                    </div>
+                    <div style="font-size: 2rem; font-weight: 800; color: white; margin-bottom: 20px;">
+                        {atual['assunto']}
+                    </div>
+                    <div style="display: inline-block; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 50px; font-size: 0.9rem; color: #fff; margin-bottom: 10px;">
+                        Revisão de {atual['tipo']}
+                    </div>
+                    <div style="color: {border_color}; font-weight: 600; margin-top: 10px;">
+                        {f"⚠️ {atual['atraso']} dias de atraso" if atual['atraso'] > 0 else "📅 Meta para Hoje"}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # --- AÇÕES RÁPIDAS ---
+                c_act1, c_act2 = st.columns(2)
+                
+                with c_act1:
+                    # OPÇÃO 1: APENAS LEITURA (Mais rápido)
+                    if st.button("📖 Apenas Li / Resumo", use_container_width=True, type="secondary"):
+                        try:
+                            supabase.table("registros_estudos").update({
+                                atual['col']: True, 
+                                "comentarios": f"{atual['coment']} | Leitura Rápida ({datetime.date.today().strftime('%d/%m')})"
+                            }).eq("id", atual['id']).execute()
+                            st.toast("✅ Revisão registrada (Leitura)!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro: {e}")
+                            
+                with c_act2:
+                    # OPÇÃO 2: ABRE FORMULÁRIO DE QUESTÕES
+                    if st.button("📝 Fiz Questões", use_container_width=True, type="primary"):
+                        st.session_state.show_questions_input = True
+                
+                # --- INPUT DE QUESTÕES (CONDICIONAL) ---
+                if st.session_state.get('show_questions_input', False):
+                    st.markdown('<div class="modern-card" style="margin-top: 20px;">', unsafe_allow_html=True)
+                    st.markdown("##### Registrar Desempenho")
+                    with st.form(key="form_rev_questoes"):
+                        cq1, cq2 = st.columns(2)
+                        n_acertos = cq1.number_input("Acertos", min_value=0, step=1)
+                        n_total = cq2.number_input("Total Feito", min_value=1, step=1)
+                        
+                        submit_q = st.form_submit_button("💾 Salvar Resultado", use_container_width=True)
+                        
+                        if submit_q:
+                            try:
+                                # Buscar dados atuais para somar
+                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", atual['id']).execute()
+                                current_ac = res_db.data[0]['acertos'] if res_db.data else 0
+                                current_to = res_db.data[0]['total'] if res_db.data else 0
+                                
+                                novos_ac = current_ac + n_acertos
+                                novos_to = current_to + n_total
+                                nova_taxa = (novos_ac / novos_to * 100) if novos_to > 0 else 0
+                                
+                                supabase.table("registros_estudos").update({
+                                    atual['col']: True, 
+                                    "acertos": novos_ac,
+                                    "total": novos_to,
+                                    "taxa": nova_taxa,
+                                    "comentarios": f"{atual['coment']} | Rev: {n_acertos}/{n_total}"
+                                }).eq("id", atual['id']).execute()
+                                
+                                st.session_state.show_questions_input = False # Reset
+                                st.success("✅ Desempenho registrado!")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar: {e}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
             st.divider()
             
-            # Listar revisões pendentes
-            st.markdown("##### 📋 Lista de Revisões")
-            for p in pend:
-                with st.container():
-                    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                    c_info, c_input, c_action = st.columns([2, 1.5, 1])
-                    
-                    with c_info:
-                        badge_class = "badge-red" if p['atraso'] > 0 else "badge-green" if p['atraso'] == 0 else "badge-gray"
-                        status_text = f"⚠️ {p['atraso']}d atraso" if p['atraso'] > 0 else "🎯 Vence hoje" if p['atraso'] == 0 else "📅 Futura"
-                        
-                        # Mostrar dificuldade e recomendação de tempo
-                        tempo_rec, desc = tempo_recomendado_rev24h(p['dificuldade'])
-                        
-                        st.markdown(f"""
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <span class="badge {badge_class}">{status_text}</span>
-                                <span class="badge badge-gray">{p['dificuldade']}</span>
-                                <span style="color: #adb5bd; font-size: 12px;">{p['data_prevista'].strftime('%d/%m/%Y')}</span>
-                            </div>
-                            <h4 style="margin:0; color:#fff;">{p['materia']}</h4>
-                            <p style="color:#adb5bd; font-size:0.85rem; margin:0;">{p['assunto']} • <b>{p['tipo']}</b></p>
-                            <p style="color:#FF8E8E; font-size:0.75rem; margin-top:8px;">⏱️ {desc} (~{tempo_rec}min)</p>
-                        """, unsafe_allow_html=True)
-                        
-                        if p['coment']:
-                            with st.expander("📝 Ver Anotações"):
-                                st.info(p['coment'])
-                    
-                    with c_input:
-                        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
-                        ci1, ci2 = st.columns(2)
-                        acr_rev = ci1.number_input("Acertos", 0, key=f"ac_{p['id']}_{p['col']}", help="Acertos na revisão")
-                        tor_rev = ci2.number_input("Total", 0, key=f"to_{p['id']}_{p['col']}", help="Total de questões na revisão")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with c_action:
-                        st.write("") # Alinhamento
-                        if st.button("CONCLUIR", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
-                            try:
-                                res_db = supabase.table("registros_estudos").select("acertos, total").eq("id", p['id']).execute()
-                                if res_db.data:
-                                    n_ac = res_db.data[0]['acertos'] + acr_rev
-                                    n_to = res_db.data[0]['total'] + tor_rev
-                                    supabase.table("registros_estudos").update({
-                                        p['col']: True, 
-                                        "comentarios": f"{p['coment']} | {p['tipo']}: {acr_rev}/{tor_rev}", 
-                                        "acertos": n_ac, "total": n_to, 
-                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
-                                    }).eq("id", p['id']).execute()
-                                    st.success("✅ Revisão concluída!")
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Erro ao buscar dados do registro.")
-                            except Exception as e:
-                                st.error(f"❌ Erro ao concluir revisão: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
+            # Lista Completa (Accordion) para quem quiser ver o futuro
+            with st.expander("🔎 Ver lista completa de pendências"):
+                 for p in pend:
+                    st.markdown(f"- **{p['materia']}** - {p['assunto']} ({p['tipo']}) - {p['data_prevista'].strftime('%d/%m')}")
 
     # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
@@ -1756,44 +1780,13 @@ else:
                 st.plotly_chart(fig_bar, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICO DE EVOLUÇÃO (MELHORADO)
+        # 3. GRÁFICO DE EVOLUÇÃO (Mantido)
         if not df.empty:
-            st.subheader("📈 Evolução de Performance")
+            st.subheader("📈 Evolução de Acertos")
             try:
-                # Agrupar dados por data
-                df_evo = df.groupby('data_estudo').agg({
-                    'acertos': 'sum', 
-                    'total': 'sum'
-                }).reset_index()
-                
-                # Calcular Taxa Real Diária
-                df_evo['Taxa Diária'] = (df_evo['acertos'] / df_evo['total']) * 100
-                
-                # Calcular Média Móvel (Tendência) - Suaviza picos
-                df_evo['Tendência'] = df_evo['Taxa Diária'].rolling(window=3, min_periods=1).mean()
-                
-                # Criar gráfico interativo com Plotly
-                fig_evo = px.line(df_evo, x='data_estudo', y=['Taxa Diária', 'Tendência'], 
-                                 markers=True,
-                                 title="Histórico de Precisão (%) vs Tendência",
-                                 color_discrete_map={'Taxa Diária': '#06B6D4', 'Tendência': '#8B5CF6'})
-                
-                fig_evo.update_layout(
-                    xaxis_title=None,
-                    yaxis_title="Taxa de Acerto (%)",
-                    yaxis=dict(range=[0, 105]), # Fixar escala até 100%
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color="#fff"),
-                    hovermode="x unified",
-                    legend=dict(orientation="h", y=1.1, title=None)
-                )
-                
-                # Melhorar tooltip
-                fig_evo.update_traces(hovertemplate='%{y:.1f}%')
-                
-                st.plotly_chart(fig_evo, use_container_width=True)
-                
+                # Agrupa pela coluna certa: 'data_estudo'
+                df_evo = df.groupby('data_estudo')['acertos'].sum().reset_index()
+                st.line_chart(df_evo.set_index('data_estudo'))
             except Exception as e:
                 st.error(f"Erro ao gerar gráfico: {e}")
         else:
