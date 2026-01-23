@@ -2252,7 +2252,7 @@ else:
                     mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
                 with col_f2:
                     rel_options = ["Todas"] + list(range(1, 11))
-                    rel_filter = st.selectbox("Relevância Mínima:", rel_options, index=0, key="rel_hist_filter")
+                    rel_filter = st.selectbox("Filtrar por Relevância:", rel_options, index=0, key="rel_hist_filter")
                 with col_f3:
                     ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
                 with col_f4:
@@ -2267,7 +2267,7 @@ else:
                 df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int) if 'relevancia' in df_filtered.columns else 5
                 
                 if rel_filter != "Todas":
-                    df_filtered = df_filtered[df_filtered['rel_val'] >= int(rel_filter)]
+                    df_filtered = df_filtered[df_filtered['rel_val'] == int(rel_filter)]
             
                 # Aplicar ordenação
                 if ordem == "Mais Recente":
