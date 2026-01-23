@@ -183,10 +183,10 @@ def gerar_pdf_estratégico(df_estudos, missao):
             pdf.cell(0, 5, "Nenhuma disciplina nesta categoria.", 0, 1)
         pdf.ln(3)
 
-    write_section("❌ FOCO CRÍTICO (Baixo acerto + Alto volume de questões):", focar, (239, 68, 68))
-    write_section("✅ MANUTENÇÃO (Bom acerto + Alto volume):", manter, (16, 185, 129))
-    write_section("📚 VOLTAR NA BASE (Baixo acerto + Poucas questões):", revisar_base, (245, 158, 11))
-    write_section("⚡ OTIMIZAR (Excelente acerto + Poucas questões):", otimizar, (6, 182, 212))
+    write_section("FOCO CRÍTICO (Baixo acerto + Alto volume de questões):", focar, (239, 68, 68))
+    write_section("MANUTENÇÃO (Bom acerto + Alto volume):", manter, (16, 185, 129))
+    write_section("VOLTAR NA BASE (Baixo acerto + Poucas questões):", revisar_base, (245, 158, 11))
+    write_section("OTIMIZAR (Excelente acerto + Poucas questões):", otimizar, (6, 182, 212))
     
     pdf.ln(5)
     
