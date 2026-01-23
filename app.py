@@ -373,38 +373,49 @@ def gerar_pdf_carga_horaria(df, missao):
     
     pdf.ln(10)
     
-    # 2. LOG DETALHADO DE SESSÕES
+    # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, '2. DIÁRIO DE ESTUDOS (LOG DE SESSÕES)', 0, 1, 'L')
+    pdf.cell(0, 10, '2. DETALHAMENTO DE TEMPO INVESTIDO', 0, 1, 'L')
+    pdf.ln(2)
     
-    # Cabeçalho da Tabela
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(25, 7, 'Data', 1, 0, 'C', True)
-    pdf.cell(60, 7, 'Matéria', 1, 0, 'C', True)
-    pdf.cell(80, 7, 'Assunto', 1, 0, 'C', True)
-    pdf.cell(25, 7, 'Tempo', 1, 1, 'C', True)
+    # Lógica de Agrupamento
+    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
+    df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
     
-    pdf.set_font('Arial', '', 8)
-    # Ordenar por data (mais recente)
-    df_sorted = df.sort_values('data_estudo', ascending=False)
-    
-    for _, row in df_sorted.iterrows():
-        dt_fmt = pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')
-        tempo_h = row['tempo'] / 60
+    for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
+        # Bloco de Título da Matéria
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
         
-        # Manter altura da linha baseada no multi_cell do assunto se necessário, 
-        # mas aqui vamos truncar para manter uma linha por registro para ficar cara de planilha
-        pdf.cell(25, 6, dt_fmt, 1, 0, 'C')
-        pdf.cell(60, 6, row['materia'][:35], 1, 0, 'L')
-        pdf.cell(80, 6, row['assunto'][:50], 1, 0, 'L')
-        pdf.cell(25, 6, f"{tempo_h:.1f}h", 1, 1, 'C')
+        # Total da matéria
+        pdf.set_font('Arial', 'I', 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h", 0, 1, 'L')
         
-    pdf.ln(10)
+        # Listagem de Assuntos
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(60, 60, 60)
+        assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
+        
+        for _, row_ass in assuntos_da_materia.iterrows():
+            nome_ass = row_ass['assunto']
+            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            
+            texto_esq = f"      - {nome_ass}"
+            texto_dir = f"{row_ass['tempo']/60:.1f}h"
+            
+            pdf.cell(160, 6, texto_esq, 0, 0, 'L')
+            pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+            
+        pdf.ln(4)
+        
+    pdf.ln(5)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 5, "Este relatório apresenta o registro cronológico de todas as suas horas líquidas. Use-o para auditar sua constância e garantir que as metas semanais estão sendo cumpridas.")
+    pdf.multi_cell(0, 5, "Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade.")
 
     return bytes(pdf.output())
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
