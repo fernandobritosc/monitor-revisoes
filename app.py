@@ -169,13 +169,19 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
     pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 10, '2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)', 0, 1, 'L')
     
-    # Lógica da Matriz
+    # Lógica de Dados
     df_matriz = df_estudos.groupby('materia').agg({
         'acertos': 'sum',
         'total': 'sum',
         'tempo': 'sum'
     }).reset_index()
     df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
+    
+    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
+        'acertos': 'sum',
+        'total': 'sum'
+    }).reset_index()
+    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
     
     media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
     media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
@@ -221,24 +227,40 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
     
     pdf.ln(5)
     
-    # 3. DETALHAMENTO POR MATÉRIA
+    # 3. DETALHAMENTO POR MATÉRIA E ASSUNTO
     pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, '3. DETALHAMENTO POR MATÉRIA', 0, 1, 'L')
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, '3. DETALHAMENTO POR MATÉRIA E ASSUNTO', 0, 1, 'L')
     
     # Cabeçalho da Tabela
     pdf.set_font('Arial', 'B', 9)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(80, 7, 'Matéria', 1, 0, 'C', True)
-    pdf.cell(30, 7, 'Questões', 1, 0, 'C', True)
-    pdf.cell(30, 7, 'Acertos', 1, 0, 'C', True)
-    pdf.cell(30, 7, 'Precisão', 1, 1, 'C', True)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(85, 7, ' Matéria / Assunto', 1, 0, 'L', True)
+    pdf.cell(25, 7, 'Questões', 1, 0, 'C', True)
+    pdf.cell(25, 7, 'Acertos', 1, 0, 'C', True)
+    pdf.cell(25, 7, 'Precisão', 1, 1, 'C', True)
     
-    pdf.set_font('Arial', '', 8)
-    for _, row in df_matriz.sort_values('taxa', ascending=False).iterrows():
-        pdf.cell(80, 6, row['materia'][:45], 1, 0, 'L')
-        pdf.cell(30, 6, str(int(row['total'])), 1, 0, 'C')
-        pdf.cell(30, 6, str(int(row['acertos'])), 1, 0, 'C')
-        pdf.cell(30, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
+    for _, row_mat in df_matriz.sort_values('taxa').iterrows():
+        # Linha da Matéria (Destaque)
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(248, 248, 255)
+        pdf.set_text_color(139, 92, 246) # Roxo para matéria
+        pdf.cell(85, 7, f" {row_mat['materia'][:45]}", 1, 0, 'L', True)
+        pdf.cell(25, 7, str(int(row_mat['total'])), 1, 0, 'C', True)
+        pdf.cell(25, 7, str(int(row_mat['acertos'])), 1, 0, 'C', True)
+        pdf.cell(25, 7, f"{row_mat['taxa']:.1f}%", 1, 1, 'C', True)
+        
+        # Linhas dos Assuntos
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(60, 60, 60)
+        topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
+        for _, row_ass in topicos_da_materia.iterrows():
+            pdf.cell(85, 6, f"      - {row_ass['assunto'][:40]}", 1, 0, 'L')
+            pdf.cell(25, 6, str(int(row_ass['total'])), 1, 0, 'C')
+            pdf.cell(25, 6, str(int(row_ass['acertos'])), 1, 0, 'C')
+            pdf.cell(25, 6, f"{row_ass['taxa']:.1f}%", 1, 1, 'C')
+        pdf.ln(1)
         
     # 4. PROJEÇÃO DE CONCLUSÃO
     if proj:
@@ -292,13 +314,6 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
     pdf.set_text_color(100, 100, 100)
     pdf.multi_cell(0, 6, "Abaixo estão listados os tópicos específicos onde sua precisão está abaixo de 70%. Estes são os seus maiores gargalos e merecem uma revisão teórica antes de novos exercícios.")
     pdf.ln(5)
-    
-    # Lógica de Assuntos Críticos
-    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
-        'acertos': 'sum',
-        'total': 'sum'
-    }).reset_index()
-    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
     
     # Filtrar assuntos críticos (taxa < 70% e total > 0)
     df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
