@@ -6,4 +6,4 @@ supabase>=2.0.0
 numpy
 scipy
 python-dotenv
-+fpdf2
+fpdf2
