@@ -201,7 +201,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     
     pdf.ln(30) # Espaço após o card
     
-    # --- 2. ANÁLISE DE PRIORIDADES (Side by Side) ---
+    # --- 2. ANÁLISE DE PRIORIDADES (3 Columns Layout) ---
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(139, 92, 246)
     pdf.cell(0, 10, fix_text('ANÁLISE DE PRIORIDADES'), 0, 1, 'L')
@@ -209,50 +209,50 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     df_matriz = df_estudos.groupby('materia').agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
     df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
     
-    # Classificação
-    criticos = df_matriz[(df_matriz['taxa'] < 75)].sort_values('taxa')
-    bons = df_matriz[(df_matriz['taxa'] >= 75)].sort_values('taxa', ascending=False)
+    # Classificação em 3 Níveis
+    prioridade = df_matriz[df_matriz['taxa'] <= 75].sort_values('taxa')
+    ok = df_matriz[(df_matriz['taxa'] > 75) & (df_matriz['taxa'] <= 85)].sort_values('taxa')
+    forte = df_matriz[df_matriz['taxa'] > 85].sort_values('taxa', ascending=False)
     
     y_start_cols = pdf.get_y()
     
-    # Coluna 1: Pontos de Atenção (Esquerda)
-    pdf.set_xy(10, y_start_cols)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(220, 38, 38) # Vermelho
-    # Substituído emoji por [!]
-    pdf.cell(90, 8, fix_text("[!] ATENÇÃO (Taxa < 75%)"), 0, 1, 'L')
+    # Função auxiliar para renderizar colunas
+    def render_col(title, rgb_color, df_data, x_pos):
+        pdf.set_xy(x_pos, y_start_cols)
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_text_color(*rgb_color)
+        pdf.cell(60, 8, fix_text(title), 0, 1, 'L')
+        
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(60, 60, 60)
+        
+        start_y_items = pdf.get_y()
+        if df_data.empty:
+            pdf.set_xy(x_pos, start_y_items)
+            pdf.cell(60, 6, fix_text("-"), 0, 1)
+        else:
+            for _, row in df_data.iterrows():
+                pdf.set_xy(x_pos, pdf.get_y())
+                # Truncar nome se muito longo para a coluna estreita
+                nome_mat = row['materia']
+                if len(nome_mat) > 28: nome_mat = nome_mat[:25] + ".."
+                
+                pdf.cell(60, 6, fix_text(f"- {nome_mat}: {row['taxa']:.0f}%"), 0, 1)
+        return pdf.get_y()
+
+    # Coluna 1: Prioridade (<= 75%) - Vermelho
+    y1 = render_col("[!] PRIORIDADE (<=75%)", (220, 38, 38), prioridade, 10)
     
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(60, 60, 60)
-    if criticos.empty:
-        pdf.cell(90, 6, fix_text("Nenhum ponto crítico identificado!"), 0, 1)
-    else:
-        for _, row in criticos.iterrows():
-            # Substituído bullet por hífen
-            pdf.cell(90, 6, fix_text(f"- {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
-            
-    # Coluna 2: Pontos Fortes (Direita)
-    pdf.set_xy(105, y_start_cols)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(22, 163, 74) # Verde
-    # Substituído emoji por [OK]
-    pdf.cell(90, 8, fix_text("[OK] PONTOS FORTES (Taxa >= 75%)"), 0, 1, 'L')
+    # Coluna 2: OK (76-85%) - Laranja (Âmbar)
+    y2 = render_col("[~] OK (76%-85%)", (217, 119, 6), ok, 75)
     
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(60, 60, 60)
-    if bons.empty:
-        pdf.set_xy(105, pdf.get_y())
-        pdf.cell(90, 6, fix_text("Ainda sem matérias nesta faixa."), 0, 1)
-    else:
-        for _, row in bons.iterrows():
-            pdf.set_xy(105, pdf.get_y())
-            # Substituído bullet por hífen
-            pdf.cell(90, 6, fix_text(f"- {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
-            
-    # Restaurar posição Y para continuar o fluxo
-    pdf.set_y(max(pdf.get_y(), y_start_cols + 20)) 
+    # Coluna 3: Ponto Forte (>85%) - Verde
+    y3 = render_col("[+] PONTO FORTE (>85%)", (22, 163, 74), forte, 140)
+    
+    # Restaurar posição Y para continuar o fluxo (o maior Y das 3 colunas)
+    pdf.set_y(max(y1, y2, y3) + 10) 
     pdf.set_x(10)
-    pdf.ln(5)
+    pdf.ln(2)
 
     # --- 3. DETALHAMENTO TÁTICO ---
     pdf.set_font('Arial', 'B', 12)
