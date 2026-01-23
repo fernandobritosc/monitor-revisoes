@@ -3324,14 +3324,15 @@ else:
         
         st.divider()
         
-        col_rel1, col_rel2, col_rel3 = st.columns(3)
-        
         # Calcular Projeção
         proj = calcular_projecao_conclusao(df_estudos, dados)
         
-        with col_rel1:
+        # Layout responsivo: 2 colunas principais (evita erro com download_button)
+        col_rel_row1_1, col_rel_row1_2 = st.columns(2)
+        
+        with col_rel_row1_1:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
                     <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
                     <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                         Análise de priorização (Esforço x Resultado), 
@@ -3341,22 +3342,30 @@ else:
             """, unsafe_allow_html=True)
             
             if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
-                try:
-                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
-                    st.success("✅ Relatório gerado!")
-                    st.download_button(
-                        label="📥 Baixar (PDF)",
-                        data=pdf_bytes,
-                        file_name=f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Erro: {e}")
+                # Gerar PDF fora das colunas para evitar erro de espaço
+                with st.spinner("Gerando relatório..."):
+                    try:
+                        pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
+                        st.session_state['pdf_relatorio'] = pdf_bytes
+                        st.session_state['pdf_relatorio_nome'] = f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
+                    except Exception as e:
+                        st.error(f"Erro ao gerar PDF: {e}")
+            
+            # Mostrar botão de download fora do if (após geração)
+            if 'pdf_relatorio' in st.session_state:
+                st.success("✅ Relatório gerado!")
+                st.download_button(
+                    label="📥 Baixar (PDF)",
+                    data=st.session_state['pdf_relatorio'],
+                    file_name=st.session_state['pdf_relatorio_nome'],
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_relatorio"
+                )
 
-        with col_rel2:
+        with col_rel_row1_2:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
                     <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
                     <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                         Planilha detalhada com todas as suas sessões de estudo e horas líquidas acumuladas.
@@ -3365,24 +3374,33 @@ else:
             """, unsafe_allow_html=True)
             
             if st.button("📊 Gerar Log Detalhado", use_container_width=True, key="btn_gerar_pdf_horas"):
-                try:
-                    pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
-                    st.success("✅ Log gerado!")
-                    st.download_button(
-                        label="📥 Baixar Diário (PDF)",
-                        data=pdf_bytes_h,
-                        file_name=f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-
-        with col_rel3:
-            if proj:
-                # Layout de Projeção na Interface
-                st.markdown(f"""
-                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
+                with st.spinner("Gerando log..."):
+                    try:
+                        pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
+                        st.session_state['pdf_horas'] = pdf_bytes_h
+                        st.session_state['pdf_horas_nome'] = f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
+                    except Exception as e:
+                        st.error(f"Erro ao gerar log: {e}")
+            
+            # Mostrar botão de download fora do if
+            if 'pdf_horas' in st.session_state:
+                st.success("✅ Log gerado!")
+                st.download_button(
+                    label="📥 Baixar Diário (PDF)",
+                    data=st.session_state['pdf_horas'],
+                    file_name=st.session_state['pdf_horas_nome'],
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_horas"
+                )
+        
+        # Terceira seção: Previsão (largura completa)
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        
+        if proj:
+            # Layout de Projeção na Interface
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; max-width: 500px; margin: 0 auto;">
                         <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
                         <div style="margin: 10px 0;">
                             <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
@@ -3400,8 +3418,8 @@ else:
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-            else:
-                st.info("Cadastre o edital para ver a previsão.")
+        else:
+            st.info("Cadastre o edital para ver a previsão.")
 
         st.divider()
 
