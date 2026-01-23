@@ -169,7 +169,7 @@ class EstudoPDF(FPDF):
         self.set_text_color(150, 150, 150)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
-def gerar_pdf_estratégico_minimalista(df_estudos, missao, df_bruto, proj=None):
+def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     """
     Versão MINIMALISTA e ROBUSTA da geração de PDF
     À PROVA DE ERROS de largura horizontal
