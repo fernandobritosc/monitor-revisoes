@@ -209,7 +209,7 @@ def gerar_pdf_estratégico(df_estudos, missao):
         pdf.cell(30, 6, str(int(row['acertos'])), 1, 0, 'C')
         pdf.cell(30, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
         
-    return pdf.output(dest='S')
+    return bytes(pdf.output())
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
     if color is None:
