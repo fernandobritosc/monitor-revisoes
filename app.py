@@ -1820,8 +1820,6 @@ else:
                     dias_restantes = None
             
             # Métricas com ANÉIS CIRCULARES - Layout responsivo (2x2)
-            # Linha 1: Tempo e Precisão
-            row1_col1, row1_col2 = st.columns(2)
             
             # Calcular percentuais para os anéis
             horas_totais = minutos_totais / 60
@@ -1831,7 +1829,10 @@ else:
             meta_questoes_mes = 1000
             pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
             
-            with c1:
+            # Linha 1: Tempo e Precisão
+            row1_col1, row1_col2 = st.columns(2)
+            
+            with row1_col1:
                 render_circular_progress(
                     percentage=pct_tempo,
                     label="TEMPO TOTAL",
@@ -1840,7 +1841,8 @@ else:
                     color_end=COLORS["secondary"],
                     icon="⏱️"
                 )
-            with c2:
+            
+            with row1_col2:
                 render_circular_progress(
                     percentage=pct_precisao,
                     label="PRECISÃO",
@@ -1849,7 +1851,11 @@ else:
                     color_end=COLORS["secondary"],
                     icon="🎯"
                 )
-            with c3:
+            
+            # Linha 2: Questões e Média
+            row2_col1, row2_col2 = st.columns(2)
+            
+            with row2_col1:
                 render_circular_progress(
                     percentage=pct_questoes,
                     label="QUESTÕES",
@@ -1858,7 +1864,8 @@ else:
                     color_end=COLORS["primary"],
                     icon="📝"
                 )
-            with c4:
+            
+            with row2_col2:
                 if dias_restantes is not None:
                     # Calcular percentual baseado em 90 dias
                     pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
@@ -2811,6 +2818,13 @@ else:
             if not df_simulados.empty:
                 # --- MÉTRICAS ACUMULATIVAS ---
                 st.markdown("##### 🏛️ Desempenho Acumulado")
+                
+                # Calcular métricas acumulativas
+                tot_ac = df_simulados['acertos'].sum()
+                tot_to = df_simulados['total'].sum()
+                prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
+                tempo_medio = df_simulados['tempo'].mean() if not df_simulados.empty else 0
+                
                 # Layout responsivo: 2 linhas de 2 colunas (corrigido)
                 # Linha 1: Total Acertos e Total Questões
                 row1_col1, row1_col2 = st.columns(2)
@@ -2821,9 +2835,6 @@ else:
                 row2_col1, row2_col2 = st.columns(2)
                 with row2_col1: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
                 with row2_col2: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
-                with c_ac2: render_metric_card("Total Questões", int(tot_to), "📝")
-                with c_ac3: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
-                with c_ac4: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
                 
                 st.divider()
                 
