@@ -2150,104 +2150,75 @@ else:
                         """, unsafe_allow_html=True)
             
             with col_rec2:
-                st.markdown('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">', unsafe_allow_html=True)
-                st.markdown("#### ⚡ Check-list Estratégico", unsafe_allow_html=True)
-                
-                status_missao = st.session_state.missao_semanal_status
-                badge_color = "#94A3B8" if status_missao == "PLANEJAMENTO" else "#8B5CF6"
-                if completed == total_checks and total_checks > 0:
-                    status_missao = "CONCLUÍDA"
-                    badge_color = "#10B981"
-                
-                st.markdown(f'<span class="badge" style="background: {badge_color}22; color: {badge_color}; border: 1px solid {badge_color}44;">{status_missao}</span>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('<p style="color: #94A3B8; font-size: 0.85rem; margin-top: -10px;">Transforme as sugestões da IA em metas cumpridas.</p>', unsafe_allow_html=True)
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                
-                # --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+                # 1. LÓGICA DE DADOS (Cálculos de Metas)
                 hoje = get_br_date()
-                inicio_semana = hoje - timedelta(days=hoje.weekday())
+                in_sem = hoje - timedelta(days=hoje.weekday())
                 
-                # Dados da semana atual
-                df_semana = df_raw[pd.to_datetime(df_raw['data_estudo']).dt.date >= inicio_semana]
-                df_est_sem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_semana]
-                df_sim_sem = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= inicio_semana]
+                df_s = df_raw[pd.to_datetime(df_raw['data_estudo']).dt.date >= in_sem] if not df_raw.empty else pd.DataFrame()
+                df_e = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= in_sem] if not df_estudos.empty else pd.DataFrame()
+                df_sim_s = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= in_sem] if not df_simulados.empty else pd.DataFrame()
                 
-                # Validações
-                simulado_feito = not df_sim_sem.empty
-                questoes_batidas = df_semana['total'].sum() >= st.session_state.get('meta_questoes_semana', 350)
-                novos_topicos = len(df_est_sem['assunto'].unique()) >= 2
-                
-                # Gerar checks com estados automáticos ou salvos
-                checks = []
-                status_auto = {} # Dicionário para guardar se foi batido via dado
+                # Definir itens do checklist
+                m_labels = []
+                st_auto = {}
                 
                 if not criticos.empty:
-                    pior_mat = criticos.iloc[0]['materia']
-                    label_crit = f"Revisar {pior_mat}"
-                    checks.append(label_crit)
-                    # Verificar se estudou a pior materia na semana
-                    status_auto[label_crit] = not df_est_sem[df_est_sem['materia'] == pior_mat].empty
+                    pm = criticos.iloc[0]['materia']
+                    lbl_c = f"Revisar {pm}"
+                    m_labels.append(lbl_c)
+                    st_auto[lbl_c] = not df_e[df_e['materia'] == pm].empty if not df_e.empty else False
                 
-                checks.extend([
-                    "Realizar 1 Simulado de Elite",
-                    "Manter meta de questões diária",
-                    "Zerar 2 novos tópicos do edital"
-                ])
+                m_labels.extend(["Realizar 1 Simulado de Elite", "Manter meta de questões diária", "Zerar 2 novos tópicos do edital"])
+                st_auto["Realizar 1 Simulado de Elite"] = not df_sim_s.empty
+                st_auto["Manter meta de questões diária"] = df_s['total'].sum() >= st.session_state.get('meta_questoes_semana', 350) if not df_s.empty else False
+                st_auto["Zerar 2 novos tópicos do edital"] = len(df_e['assunto'].unique()) >= 2 if not df_e.empty else False
+
+                # Contagem de Progresso (Calculado ANTES de desenhar a UI)
+                v_done = 0
+                for i, m in enumerate(m_labels):
+                    if st_auto.get(m, False) or st.session_state.checklist_status.get(f"check_{i}_{m[:10]}", False):
+                        v_done += 1
+                v_total = len(m_labels)
+
+                # 2. RENDERIZAÇÃO DA UI
+                st.markdown('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">', unsafe_allow_html=True)
+                st.markdown("#### ⚡ Checklist", unsafe_allow_html=True)
                 
-                status_auto["Realizar 1 Simulado de Elite"] = simulado_feito
-                status_auto["Manter meta de questões diária"] = questoes_batidas
-                status_auto["Zerar 2 novos tópicos do edital"] = novos_topicos
+                m_status = st.session_state.missao_semanal_status
+                m_color = "#94A3B8" if m_status == "PLANEJAMENTO" else "#8B5CF6"
+                if v_done == v_total and v_total > 0:
+                    m_status = "CONCLUÍDA"
+                    m_color = "#10B981"
+                st.markdown(f'<span class="badge" style="background: {m_color}22; color: {m_color}; border: 1px solid {m_color}44;">{m_status}</span>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Renderizar e salvar estados
-                check_values = []
-                for i, c in enumerate(checks):
-                    # Prioridade: 1. Dado Reais (Auto) | 2. Salvo Manual | 3. Falso
-                    auto_val = status_auto.get(c, False)
-                    saved_val = st.session_state.checklist_status.get(f"check_{i}_{c[:10]}", False)
-                    
-                    # Se o dado real diz que fez, FORCE o True. Se não, use o salvo.
-                    display_val = auto_val or saved_val
-                    
-                    res = st.checkbox(
-                        f"{'✅ ' if auto_val else ''}{c}", 
-                        value=display_val, 
-                        key=f"check_{i}_{c[:10]}",
-                        help="Marcado automaticamente se o sistema detectar a ação nos seus registros." if auto_val else None
-                    )
-                    check_values.append(res)
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
-                # Calcular progresso
-                completed = sum(check_values)
-                total_checks = len(checks)
-                progress_pct = (completed / total_checks) if total_checks > 0 else 0
+                # Renderizar checkboxes
+                for i, m in enumerate(m_labels):
+                    is_a = st_auto.get(m, False)
+                    is_m = st.session_state.checklist_status.get(f"check_{i}_{m[:10]}", False)
+                    st.checkbox(f"{'✅ ' if is_a else ''}{m}", value=(is_a or is_m), key=f"guia_check_{i}")
                 
+                # Barra de Progresso Real
+                p_pct = (v_done / v_total) if v_total > 0 else 0
                 st.markdown(f"""
-                    <div style='margin-top: 10px; margin-bottom: 5px;'>
-                        <div style='display: flex; justify-content: space-between; font-size: 0.8rem; color: #94A3B8; margin-bottom: 4px;'>
-                            <span>Progresso da Estratégia</span>
-                            <span>{completed}/{total_checks}</span>
+                    <div style='margin-top: 15px;'>
+                        <div style='display: flex; justify-content: space-between; font-size: 0.75rem; color: #94A3B8; margin-bottom: 4px;'>
+                            <span>Evolução</span><span>{v_done}/{v_total}</span>
                         </div>
-                        <div class="modern-progress-container">
-                            <div class="modern-progress-fill" style="width: {progress_pct*100}%;"></div>
-                        </div>
+                        <div class="modern-progress-container"><div class="modern-progress-fill" style="width: {p_pct*100}%;"></div></div>
                     </div>
                 """, unsafe_allow_html=True)
 
                 st.divider()
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Este checklist é seu contrato semanal. O objetivo é garantir que você ataque seus piores pontos antes de avançar.</p>", unsafe_allow_html=True)
-                
-                if st.button("💾 Salvar Foco da Semana", use_container_width=True):
-                    # Salvar todos os estados atuais no dicionário de persistência
-                    for i, c in enumerate(checks):
-                        key = f"check_{i}_{c[:10]}"
-                        st.session_state.checklist_status[key] = st.session_state[key]
-                    
+                if st.button("💾 Salvar Planejamento", use_container_width=True):
+                    for i, m in enumerate(m_labels):
+                        st.session_state.checklist_status[f"check_{i}_{m[:10]}"] = st.session_state[f"guia_check_{i}"]
                     st.session_state.missao_semanal_status = "EM EXECUÇÃO"
-                    st.toast("Planejamento salvo! Foco total na execução.", icon="🚀")
+                    st.toast("Plano Ativado!", icon="🚀")
                     st.rerun()
-                
-            st.divider()
+                st.markdown('</div>', unsafe_allow_html=True)
             
             # Gráfico de Alocação de Tempo Sugerida
             st.markdown("#### 📊 Alocação de Tempo Recomendada")
