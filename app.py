@@ -1,5 +1,3 @@
-# app.py (com correção para exclusão em massa e PDF)
-
 import streamlit as st
 import pandas as pd
 import datetime
@@ -104,28 +102,26 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
 def fix_text(text):
     """
     Corrige problemas de encoding para o FPDF (Arial/Core fonts).
-    Converte UTF-8 para Latin-1 e substitui caracteres não suportados (como emojis) por '?'.
+    Converte UTF-8 para Latin-1 e substitui caracteres não suportados.
     """
     if text is None:
         return ""
     try:
-        # Tenta converter string para latin-1, substituindo erros
+        # Normalizar para Latin-1, substituindo erros por '?'
         return str(text).encode('latin-1', 'replace').decode('latin-1')
     except Exception:
         return str(text)
 
 class EstudoPDF(FPDF):
     def header(self):
-        # Título principal
         self.set_font('Arial', 'B', 16)
-        self.set_text_color(139, 92, 246) # Roxo do tema
+        self.set_text_color(139, 92, 246) # Roxo
         self.cell(0, 10, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), 0, 1, 'C')
         
-        # Horário de Brasília
         agora_br = (datetime.datetime.utcnow() - datetime.timedelta(hours=3))
         self.set_font('Arial', '', 9)
         self.set_text_color(120, 120, 120)
-        self.cell(0, 5, fix_text(f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horário de Brasília)'), 0, 1, 'C')
+        self.cell(0, 5, fix_text(f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")}'), 0, 1, 'C')
         self.ln(10)
 
     def footer(self):
@@ -134,29 +130,45 @@ class EstudoPDF(FPDF):
         self.set_text_color(150, 150, 150)
         self.cell(0, 10, fix_text(f'Página {self.page_no()}'), 0, 0, 'C')
 
+def safe_pdf_output(pdf):
+    """
+    Retorna os bytes do PDF de forma segura, compatível com diferentes versões do FPDF.
+    """
+    try:
+        # FPDF2 pode retornar bytearray ou str dependendo da versão/config
+        output = pdf.output(dest='S')
+        
+        # Se for string (versões antigas), codifica para latin-1
+        if isinstance(output, str):
+            return output.encode('latin-1', 'replace')
+        
+        # Se for bytearray ou bytes (versões novas), converte para bytes
+        return bytes(output)
+    except Exception as e:
+        # Fallback de emergência
+        return str(e).encode('utf-8')
+
 def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # Calcular métricas principais
+    # Métricas
     t_q = df_estudos['total'].sum()
     a_q = df_estudos['acertos'].sum()
     precisao = (a_q / t_q * 100) if t_q > 0 else 0
     tempo_total = df_estudos['tempo'].sum() / 60
     
-    # 1. RESUMO GERAL (Layout em Grid/Tabela)
+    # 1. RESUMO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 10, fix_text('1. RESUMO GERAL'), 0, 1, 'L')
     
-    # Grid de métricas
     pdf.set_font('Arial', 'B', 9)
     pdf.set_fill_color(248, 248, 255)
     pdf.set_text_color(100, 100, 100)
     
-    # Linha 1
-    pdf.cell(95, 8, fix_text(' MISSÃO ATIVA'), 1, 0, 'L', True)
+    pdf.cell(95, 8, fix_text(' MISSÃO'), 1, 0, 'L', True)
     pdf.cell(95, 8, fix_text(' TEMPO TOTAL'), 1, 1, 'L', True)
     
     pdf.set_font('Arial', '', 11)
@@ -164,321 +176,107 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.cell(95, 10, f' {fix_text(missao)}', 1, 0, 'L')
     pdf.cell(95, 10, f' {tempo_total:.1f} horas', 1, 1, 'L')
     
-    # Linha 2
     pdf.set_font('Arial', 'B', 9)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(95, 8, fix_text(' TOTAL DE QUESTÕES'), 1, 0, 'L', True)
-    pdf.cell(95, 8, fix_text(' PRECISÃO MÉDIA'), 1, 1, 'L', True)
+    pdf.cell(95, 8, fix_text(' QUESTÕES'), 1, 0, 'L', True)
+    pdf.cell(95, 8, fix_text(' PRECISÃO'), 1, 1, 'L', True)
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(95, 10, f' {int(t_q)}', 1, 0, 'L')
     pdf.cell(95, 10, f' {precisao:.1f}%', 1, 1, 'L')
-    
     pdf.ln(10)
     
-    # 2. MATRIZ DE PRIORIZAÇÃO
+    # 2. MATRIZ
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('2. MATRIZ DE PRIORIZAÇÃO'), 0, 1, 'L')
     
-    # Lógica de Dados
-    df_matriz = df_estudos.groupby('materia').agg({
-        'acertos': 'sum',
-        'total': 'sum',
-        'tempo': 'sum'
-    }).reset_index()
+    df_matriz = df_estudos.groupby('materia').agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
     df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
-    
-    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
-        'acertos': 'sum',
-        'total': 'sum'
-    }).reset_index()
-    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
-    
-    media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
     media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
     
     focar = []
     manter = []
-    revisar_base = []
-    otimizar = []
     
     for _, row in df_matriz.iterrows():
         if row['taxa'] < 75 and row['total'] >= media_volume:
             focar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        elif row['taxa'] >= 75 and row['total'] >= media_volume:
+        elif row['taxa'] >= 75:
             manter.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        elif row['taxa'] < 75 and row['total'] < media_volume:
-            revisar_base.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        else:
-            otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
             
-    # Escrever no PDF com design melhorado
-    def write_block(title, items, border_color, bg_color):
-        pdf.set_fill_color(*bg_color)
-        pdf.set_draw_color(*border_color)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(*border_color)
-        
-        # Cabeçalho do Bloco
-        pdf.cell(0, 8, f"  {fix_text(title)}", 1, 1, 'L', True)
-        
-        # Conteúdo do Bloco
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_fill_color(255, 255, 255)
-        
-        content = ", ".join(items) if items else "Nenhuma disciplina nesta categoria."
-        pdf.multi_cell(0, 6, f"  {fix_text(content)}\n ", 1, 'L')
-        pdf.ln(5)
-
-    write_block("FOCO CRÍTICO: Baixo acerto + Alto volume", focar, (239, 68, 68), (254, 242, 242))
-    write_block("MANUTENÇÃO: Bom acerto + Alto volume", manter, (16, 185, 129), (240, 253, 244))
-    write_block("REVISAR BASE: Baixo acerto + Poucas questões", revisar_base, (245, 158, 11), (255, 251, 235))
-    write_block("OTIMIZAR: Excelente acerto + Poucas questões", otimizar, (6, 182, 212), (236, 254, 255))
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(0, 0, 0)
     
+    if focar:
+        pdf.set_fill_color(254, 242, 242)
+        pdf.multi_cell(0, 6, fix_text(f"FOCO CRÍTICO (Prioridade Alta): {', '.join(focar)}"), 1, 'L', True)
+        pdf.ln(2)
+    
+    if manter:
+        pdf.set_fill_color(240, 253, 244)
+        pdf.multi_cell(0, 6, fix_text(f"MANUTENÇÃO (Bom desempenho): {', '.join(manter)}"), 1, 'L', True)
+        
     pdf.ln(5)
     
-    # 3. DETALHAMENTO POR MATÉRIA E ASSUNTO
+    # 3. DETALHAMENTO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('3. DESEMPENHO DETALHADO (POR MATÉRIA E ASSUNTO)'), 0, 1, 'L')
-    pdf.ln(2)
+    pdf.cell(0, 10, fix_text('3. DETALHAMENTO'), 0, 1, 'L')
+    
+    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
+    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
     
     for _, row_mat in df_matriz.sort_values('taxa').iterrows():
-        # Bloco de Título da Matéria
         pdf.set_font('Arial', 'B', 10)
         pdf.set_fill_color(240, 240, 245)
         pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
+        pdf.cell(0, 8, f" {fix_text(row_mat['materia'])}", 1, 1, 'L', True)
         
-        # Sub-cabeçalho das métricas da matéria
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, fix_text(f"  Média Geral: {row_mat['taxa']:.1f}% | Total de Questões: {int(row_mat['total'])}"), 0, 1, 'L')
-        
-        # Listagem de Assuntos
+        topicos = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
         pdf.set_font('Arial', '', 9)
         pdf.set_text_color(60, 60, 60)
-        topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
         
-        for _, row_ass in topicos_da_materia.iterrows():
-            # Formatar linha do assunto: Assunto ............. % (Questoes)
-            nome_ass = row_ass['assunto']
-            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+        for _, row_ass in topicos.iterrows():
+            nome = row_ass['assunto']
+            # Truncar nome muito longo para evitar quebra de layout
+            if len(nome) > 75: nome = nome[:72] + "..."
             
-            # Usamos uma lógica de preenchimento de pontos para ficar elegante
-            texto_esq = f"      - {nome_ass}"
-            texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
-            
-            pdf.cell(150, 6, fix_text(texto_esq), 0, 0, 'L')
-            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
-            
-        pdf.ln(4)
-        
-    # 4. PROJEÇÃO DE CONCLUSÃO
-    if proj:
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 10, fix_text('4. PROJEÇÃO DE CONCLUSÃO DO EDITAL'), 0, 1, 'L')
-        
-        pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 7, fix_text(f"Com base no seu ritmo de estudo dos últimos 30 dias (ou histórico total), aqui está a estimativa para conclusão do seu edital:"))
-        pdf.ln(5)
-        
-        # Grid de Projeção
-        pdf.set_fill_color(240, 253, 244) # Verde bem claro
-        pdf.set_draw_color(16, 185, 129)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(95, 10, fix_text(' PROGRESSO DO EDITAL'), 1, 0, 'L', True)
-        pdf.cell(95, 10, fix_text(' RITMO (PACE) ATUAL'), 1, 1, 'L', True)
-        
-        pdf.set_font('Arial', '', 12)
-        pdf.cell(95, 12, fix_text(f" {proj['estudados']} de {proj['total']} tópicos ({proj['progresso']:.1f}%)"), 1, 0, 'L')
-        pdf.cell(95, 12, fix_text(f" {proj['ritmo']:.1f} tópicos por semana"), 1, 1, 'L')
-        
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(95, 10, fix_text(' DIAS RESTANTES ESTIMADOS'), 1, 0, 'L', True)
-        pdf.cell(95, 10, fix_text(' DATA PREVISTA PARA TERMINAR'), 1, 1, 'L', True)
-        
-        pdf.set_font('Arial', '', 12)
-        pdf.cell(95, 12, f" {proj['dias_para_fim']} dias", 1, 0, 'L')
-        pdf.cell(95, 12, f" {proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else '—'}", 1, 1, 'L')
-        
-        pdf.ln(10)
-        pdf.set_font('Arial', 'I', 10)
-        pdf.set_text_color(100, 100, 100)
-        if proj['progresso'] > 80:
-            msg = "Você está na reta final! Mantenha a constância para garantir a memorização dos últimos detalhes."
-        elif proj['ritmo'] < 1:
-            msg = "Atenção: Seu ritmo atual está baixo. Tente zerar ao menos 2-3 novos tópicos por semana para acelerar a conclusão."
-        else:
-            msg = "Continue assim! O segredo da aprovação é a regularidade. Cada tópico zerado é um passo rumo à vaga."
-        pdf.multi_cell(0, 7, fix_text(f"Insight: {msg}"))
+            pdf.cell(140, 6, fix_text(f"  - {nome}"), 0, 0, 'L')
+            pdf.cell(0, 6, f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])})", 0, 1, 'R')
+        pdf.ln(2)
 
-    # 5. ASSUNTOS QUE EXIGEM ATENÇÃO (GARGALOS)
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('5. ASSUNTOS QUE EXIGEM ATENÇÃO (GARGALOS)'), 0, 1, 'L')
-    
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 6, fix_text("Abaixo estão listados os tópicos específicos onde sua precisão está abaixo de 70%. Estes são os seus maiores gargalos e merecem uma revisão teórica antes de novos exercícios."))
-    pdf.ln(5)
-    
-    # Filtrar assuntos críticos (taxa < 70% e total > 0)
-    df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
-    
-    if not df_criticos.empty:
-        materias_criticas = df_criticos['materia'].unique()
-        for mat in materias_criticas:
-            pdf.set_font('Arial', 'B', 10)
-            pdf.set_text_color(139, 92, 246)
-            pdf.cell(0, 8, f"  > {fix_text(mat)}", 0, 1)
-            
-            topicos_da_materia = df_criticos[df_criticos['materia'] == mat]
-            pdf.set_font('Arial', '', 9)
-            pdf.set_text_color(60, 60, 60)
-            for _, row in topicos_da_materia.iterrows():
-                bullet = f"      - {row['assunto']}: {row['taxa']:.0f}% de acerto ({int(row['total'])} questões)"
-                pdf.multi_cell(0, 5, fix_text(bullet))
-            pdf.ln(2)
-    else:
-        pdf.set_font('Arial', 'I', 10)
-        pdf.set_text_color(16, 185, 129)
-        pdf.cell(0, 10, fix_text("Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%."), 0, 1, 'L')
-
-    # 6. BENCHMARK DE SIMULADOS
-    # Usar filtro flexível no dataframe bruto para capturar variações (Simulado, SIMULADOS, etc)
-    df_sim = df_bruto[df_bruto['materia'].str.upper().str.contains('SIMULADO', na=False)].sort_values('data_estudo')
-    if not df_sim.empty:
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 10, fix_text('6. BENCHMARK DE SIMULADOS (EVOLUÇÃO)'), 0, 1, 'L')
-        
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(100, 100, 100)
-        pdf.multi_cell(0, 6, fix_text("Acompanhamento cronológico do seu desempenho em provas completas (Simulados)."))
-        pdf.ln(5)
-        
-        # Cabeçalho da Tabela
-        pdf.set_font('Arial', 'B', 9)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(40, 7, fix_text(' Data'), 1, 0, 'C', True)
-        pdf.cell(100, 7, fix_text(' Simulado'), 1, 0, 'C', True)
-        pdf.cell(40, 7, fix_text(' Pontuação (%)'), 1, 1, 'C', True)
-        
-        pdf.set_font('Arial', '', 8)
-        pdf.set_text_color(60, 60, 60)
-        for _, row in df_sim.iterrows():
-            pdf.cell(40, 6, pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y'), 1, 0, 'C')
-            pdf.cell(100, 6, f" {fix_text(row['assunto'][:55])}", 1, 0, 'L')
-            pdf.cell(40, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
-            
-        # Insights de Tendência no PDF
-        pdf.ln(5)
-        ult_nota = df_sim['taxa'].iloc[-1]
-        med_nota = df_sim['taxa'].mean()
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 8, fix_text(f"Resumo: Última Nota: {ult_nota:.1f}% | Precisão Média: {med_nota:.1f}%"), 0, 1)
-        
-        pdf.set_font('Arial', 'I', 9)
-        pdf.set_text_color(100, 100, 100)
-        if len(df_sim) >= 2:
-            gap = df_sim['taxa'].iloc[-1] - df_sim['taxa'].iloc[-2]
-            tendencia = "em ascensão" if gap > 0 else "em queda" if gap < 0 else "estabilizado"
-            msg_sim = f"Seu desempenho está {tendencia} em relação ao último simulado ({'+' if gap>0 else ''}{gap:.1f}%)."
-        else:
-            msg_sim = "Continue realizando simulados regularmente para consolidar sua curva de aprendizado."
-        pdf.multi_cell(0, 6, fix_text(f"Análise: {msg_sim}"))
-
-    # Retorna string de bytes codificada corretamente para FPDF
-    return pdf.output(dest='S').encode('latin-1')
+    # Retorna bytes seguros
+    return safe_pdf_output(pdf)
 
 def gerar_pdf_carga_horaria(df, missao):
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # 1. RESUMO DE CARGA HORÁRIA
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('1. RESUMO DE CARGA HORÁRIA'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('1. DIÁRIO DE CARGA HORÁRIA'), 0, 1, 'L')
     
-    minutos_totais = df['tempo'].sum()
-    horas_totais = minutos_totais / 60
-    dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
-    media_diaria = horas_totais / dias_estudados if dias_estudados > 0 else 0
-    
-    # Grid de métricas
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(248, 248, 255)
-    pdf.set_text_color(100, 100, 100)
-    
-    pdf.cell(63, 8, fix_text(' TOTAL DE HORAS'), 1, 0, 'L', True)
-    pdf.cell(63, 8, fix_text(' DIAS ESTUDADOS'), 1, 0, 'L', True)
-    pdf.cell(64, 8, fix_text(' MÉDIA DIÁRIA'), 1, 1, 'L', True)
-    
+    minutos = df['tempo'].sum()
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
-    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
-    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
-    
-    pdf.ln(10)
-    
-    # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
-    pdf.set_font('Arial', 'B', 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('2. DETALHAMENTO DE TEMPO INVESTIDO'), 0, 1, 'L')
-    pdf.ln(2)
-    
-    # Lógica de Agrupamento
-    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
-    df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
-    
-    for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
-        # Bloco de Título da Matéria
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
-        
-        # Total da matéria
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, fix_text(f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h"), 0, 1, 'L')
-        
-        # Listagem de Assuntos
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(60, 60, 60)
-        assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
-        
-        for _, row_ass in assuntos_da_materia.iterrows():
-            nome_ass = row_ass['assunto']
-            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
-            
-            texto_esq = f"      - {nome_ass}"
-            texto_dir = f"{row_ass['tempo']/60:.1f}h"
-            
-            pdf.cell(160, 6, fix_text(texto_esq), 0, 0, 'L')
-            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
-            
-        pdf.ln(4)
-        
+    pdf.cell(0, 10, fix_text(f"Total Acumulado: {minutos/60:.1f} horas"), 0, 1, 'L')
     pdf.ln(5)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 5, fix_text("Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade."))
-
-    return pdf.output(dest='S').encode('latin-1')
+    
+    df_agrup = df.groupby('materia').agg({'tempo': 'sum'}).reset_index().sort_values('tempo', ascending=False)
+    
+    pdf.set_fill_color(240, 240, 245)
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(140, 8, fix_text(' MATÉRIA'), 1, 0, 'L', True)
+    pdf.cell(0, 8, fix_text(' TEMPO'), 1, 1, 'R', True)
+    
+    pdf.set_font('Arial', '', 10)
+    for _, row in df_agrup.iterrows():
+        pdf.cell(140, 8, fix_text(f" {row['materia']}"), 1, 0, 'L')
+        pdf.cell(0, 8, f"{row['tempo']/60:.1f}h ", 1, 1, 'R')
+        
+    return safe_pdf_output(pdf)
 
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
