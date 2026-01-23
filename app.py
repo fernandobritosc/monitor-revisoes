@@ -1708,7 +1708,7 @@ else:
                 with st.form("form_registro_final", clear_on_submit=True):
                     ca_reg, ct_reg = st.columns(2)
                     ac_reg = ca_reg.number_input("Questões Acertadas", 0)
-                    to_reg = ct_reg.number_input("Total de Questões", 1)
+                    to_reg = ct_reg.number_input("Total de Questões", 0)
                     
                     # NOVO: Classificação de Dificuldade
                     st.markdown("##### 🎯 Como foi esse assunto?")
@@ -2395,7 +2395,7 @@ else:
                     
                         ca_edit, ct_edit = st.columns(2)
                         ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
-                        to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=1, key="to_edit")
+                        to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=0, key="to_edit")
                     
                         # Dificuldade
                         st.markdown("##### 🎯 Classificação de Dificuldade")
