@@ -1878,62 +1878,57 @@ else:
                 st.plotly_chart(fig_bar, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICO DE EVOLUÇÃO (Mantido)
+        # 3. GRÁFICO DE EVOLUÇÃO (Precisão com Média Móvel)
         if not df_estudos.empty:
-            st.subheader("📈 Evolução de Acertos")
-            try:
-                # Agrupa pela coluna certa: 'data_estudo'
-                df_evo = df_estudos.groupby('data_estudo')['acertos'].sum().reset_index()
-                st.line_chart(df_evo.set_index('data_estudo'))
-            except Exception as e:
-                st.error(f"Erro ao gerar gráfico: {e}")
+            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+            st.markdown("##### 📈 Evolução de Precisão & Tendência")
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 5 registros).</p>", unsafe_allow_html=True)
+            
+            # Preparar dados de evolução
+            df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo')['taxa'].mean().reset_index()
+            
+            # Calcular Média Móvel (janela de 5 registros)
+            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(5, len(df_ev)), min_periods=1).mean()
+            
+            # Criar gráfico Plotly unificado
+            import plotly.graph_objects as go
+            fig_evo = go.Figure()
+            
+            # Linha de Precisão Diária
+            fig_evo.add_trace(go.Scatter(
+                x=df_ev['data_estudo'], y=df_ev['taxa'],
+                name='Precisão Diária',
+                line=dict(color='#8B5CF6', width=2),
+                mode='lines+markers',
+                marker=dict(size=6)
+            ))
+            
+            # Linha de Tendência (Média Móvel)
+            fig_evo.add_trace(go.Scatter(
+                x=df_ev['data_estudo'], y=df_ev['Média Móvel'],
+                name='Tendência (Média Móvel)',
+                line=dict(color='#06B6D4', width=4, dash='dash'),
+                mode='lines'
+            ))
+            
+            fig_evo.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=10, b=0, l=0, r=0),
+                xaxis_title=None,
+                yaxis_title="Taxa %",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                font=dict(color="#fff"),
+                height=400,
+                yaxis=dict(range=[0, 105], gridcolor='rgba(255,255,255,0.05)')
+            )
+            
+            st.plotly_chart(fig_evo, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
-        # 4. GRÁFICOS PLOTLY (Pizza e Precisão)
-        if not df_estudos.empty:
-            # Gráficos
-            c_g1, c_g2 = st.columns(2)
-            with c_g1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Distribuição por Matéria")
-                fig_pie = px.pie(df_estudos, values='total', names='materia', hole=0.6, 
-                                color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True, 
-                                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                    font=dict(color="#fff"))
-                st.plotly_chart(fig_pie, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            with c_g2:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### Evolução de Precisão")
-                df_ev = df_estudos.groupby('data_estudo')['taxa'].mean().reset_index()
-                fig_line = px.line(df_ev, x='data_estudo', y='taxa', markers=True)
-                fig_line.update_traces(line_color='#FF4B4B', marker=dict(size=8))
-                fig_line.update_layout(margin=dict(t=20, b=0, l=0, r=0), 
-                                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                    font=dict(color="#fff"), xaxis_title=None, yaxis_title="Taxa %")
-                st.plotly_chart(fig_line, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            # Detalhamento por Matéria
-            st.markdown("### 📁 Detalhamento por Disciplina")
-            df_mat = df.groupby('materia').agg({'total': 'sum', 'taxa': 'mean'}).reset_index().sort_values('total', ascending=False)
-            
-            for _, m in df_mat.iterrows():
-                with st.expander(f"{m['materia'].upper()} — {m['taxa']:.1f}% de Precisão"):
-                    with st.container(border=True):
-                        df_ass = df[df['materia'] == m['materia']].groupby('assunto').agg({'total': 'sum', 'acertos': 'sum', 'taxa': 'mean'}).reset_index()
-                        for _, a in df_ass.iterrows():
-                            ca1, ca2 = st.columns([4, 1])
-                            ca1.markdown(f"<span style='color:#fff; font-size:0.9rem; font-weight:600;'>{a['assunto']}</span>", unsafe_allow_html=True)
-                            ca2.markdown(f"<p style='text-align: right; color:#adb5bd; font-size: 0.8rem;'>{int(a['acertos'])}/{int(a['total'])}</p>", unsafe_allow_html=True)
-                            st.markdown(f"""
-                                <div class="modern-progress-container" style="margin-top: 5px; margin-bottom: 15px;">
-                                    <div class="modern-progress-fill" style="width: {a['taxa']}%;"></div>
-                                </div>
-                            """, unsafe_allow_html=True)
+        st.write("") # Espaçador
 
     # --- ABA: SIMULADOS (NOVA) ---
     elif menu == "Simulados":
