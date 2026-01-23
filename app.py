@@ -13,6 +13,54 @@ from streamlit_option_menu import option_menu
 from fpdf import FPDF
 import io
 
+
+
+# ============================================================================
+# 🎨 CONFIGURAÇÃO DE LAYOUT RESPONSIVO
+# ============================================================================
+
+def configurar_layout_responsivo():
+    """Configura o layout para evitar problemas de espaço horizontal"""
+    
+    st.markdown("""
+        <style>
+        /* Garantir largura mínima para inputs */
+        .stNumberInput > div > div > input {
+            min-width: 80px !important;
+        }
+        
+        .stTextInput > div > div > input {
+            min-width: 100px !important;
+        }
+        
+        .stSelectbox > div > div > div {
+            min-width: 120px !important;
+        }
+        
+        /* Melhorar responsividade em mobile */
+        @media (max-width: 768px) {
+            .stColumns {
+                flex-direction: column !important;
+            }
+            
+            .stColumn {
+                width: 100% !important;
+                margin-bottom: 1rem;
+            }
+        }
+        
+        /* Evitar overflow em containers */
+        .element-container {
+            overflow-x: auto;
+        }
+        
+        /* Garantir que cards tenham largura mínima */
+        .modern-card {
+            min-width: 200px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
 # ============================================================================
@@ -2292,15 +2340,36 @@ else:
                     """, unsafe_allow_html=True)
                     
                     # Área de Ação (Inputs, Tempo e Botão)
-                    c_input, c_btn = st.columns([3, 1])
+                    # Layout sem aninhamento excessivo (corrigido)
+
+                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
                     
-                    with c_input:
-                        ci1, ci2, ci3 = st.columns(3)
-                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
-                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
-                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
+
+                    with col1:
+
+                        acertos = st.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
+
                     
-                    with c_btn:
+
+                    with col2:
+
+                        total = st.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
+
+                    
+
+                    with col3:
+
+                        tempo_rev = st.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
+
+                    
+
+                    with col4:
+
+                        st.write("")  # Espaçamento
+
+                        st.write("")  # Mais espaçamento
+
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             try:
                                 res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
@@ -2476,6 +2545,8 @@ else:
             ritmo = (tempo_min / t_q) if t_q > 0 else 0
         
         # 1. MÉTRICAS PRINCIPAIS
+        # Layout responsivo: 4 colunas (pode ser estreito em mobile)
+
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card("Questões", int(t_q), "📝")
         with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
@@ -2504,7 +2575,8 @@ else:
             # Usar colunas dinâmicas para os níveis de relevância
             n_cols = len(df_rel_dash)
             if n_cols > 0:
-                c_rel = st.columns(n_cols)
+                n_cols_safe = min(n_cols, 3)  # Limite máximo de 3 colunas
+                c_rel = st.columns(n_cols_safe)
                 for idx, row in enumerate(df_rel_dash.iterrows()):
                     r_val = row[1]['relevancia']
                     r_taxa = row[1]['taxa']
