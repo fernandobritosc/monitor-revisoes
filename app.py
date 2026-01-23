@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 import re
 import time
 from streamlit_option_menu import option_menu
+from fpdf import FPDF
+import io
 
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
@@ -95,7 +97,119 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
         </div>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÃO: Card de métrica moderno ---
+# ============================================================================
+# 📄 GERAÇÃO DE RELATÓRIOS PDF
+# ============================================================================
+
+class EstudoPDF(FPDF):
+    def header(self):
+        # Logo ou Título
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(139, 92, 246) # Roxo do tema
+        self.cell(0, 10, 'RELATÓRIO ESTRATÉGICO DE DESEMPENHO', 0, 1, 'C')
+        self.set_font('Arial', '', 10)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 5, f'Gerado em: {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1, 'C')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+
+def gerar_pdf_estratégico(df_estudos, missao):
+    pdf = EstudoPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # 1. RESUMO GERAL
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, '1. RESUMO GERAL', 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    
+    t_q = df_estudos['total'].sum()
+    a_q = df_estudos['acertos'].sum()
+    precisao = (a_q / t_q * 100) if t_q > 0 else 0
+    tempo_total = df_estudos['tempo'].sum() / 60
+    
+    pdf.cell(0, 8, f'- Missão: {missao}', 0, 1)
+    pdf.cell(0, 8, f'- Tempo Total de Estudo: {tempo_total:.1f} horas', 0, 1)
+    pdf.cell(0, 8, f'- Total de Questões: {int(t_q)}', 0, 1)
+    pdf.cell(0, 8, f'- Precisão Média: {precisao:.1f}%', 0, 1)
+    pdf.ln(5)
+    
+    # 2. MATRIZ DE PRIORIZAÇÃO
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, '2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)', 0, 1, 'L')
+    pdf.set_font('Arial', '', 9)
+    
+    # Lógica da Matriz
+    df_matriz = df_estudos.groupby('materia').agg({
+        'acertos': 'sum',
+        'total': 'sum',
+        'tempo': 'sum'
+    }).reset_index()
+    df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
+    
+    media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
+    media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
+    
+    focar = []
+    manter = []
+    revisar_base = []
+    otimizar = []
+    
+    for _, row in df_matriz.iterrows():
+        if row['taxa'] < 75 and row['total'] >= media_volume:
+            focar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        elif row['taxa'] >= 75 and row['total'] >= media_volume:
+            manter.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        elif row['taxa'] < 75 and row['total'] < media_volume:
+            revisar_base.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        else:
+            otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+            
+    # Escrever no PDF
+    def write_section(title, items, color):
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(*color)
+        pdf.cell(0, 7, title, 0, 1)
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        if items:
+            pdf.multi_cell(0, 5, ", ".join(items))
+        else:
+            pdf.cell(0, 5, "Nenhuma disciplina nesta categoria.", 0, 1)
+        pdf.ln(3)
+
+    write_section("❌ FOCO CRÍTICO (Baixo acerto + Alto volume de questões):", focar, (239, 68, 68))
+    write_section("✅ MANUTENÇÃO (Bom acerto + Alto volume):", manter, (16, 185, 129))
+    write_section("📚 VOLTAR NA BASE (Baixo acerto + Poucas questões):", revisar_base, (245, 158, 11))
+    write_section("⚡ OTIMIZAR (Excelente acerto + Poucas questões):", otimizar, (6, 182, 212))
+    
+    pdf.ln(5)
+    
+    # 3. DETALHAMENTO POR MATÉRIA
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, '3. DETALHAMENTO POR MATÉRIA', 0, 1, 'L')
+    
+    # Cabeçalho da Tabela
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(80, 7, 'Matéria', 1, 0, 'C', True)
+    pdf.cell(30, 7, 'Questões', 1, 0, 'C', True)
+    pdf.cell(30, 7, 'Acertos', 1, 0, 'C', True)
+    pdf.cell(30, 7, 'Precisão', 1, 1, 'C', True)
+    
+    pdf.set_font('Arial', '', 8)
+    for _, row in df_matriz.sort_values('taxa', ascending=False).iterrows():
+        pdf.cell(80, 6, row['materia'][:45], 1, 0, 'L')
+        pdf.cell(30, 6, str(int(row['total'])), 1, 0, 'C')
+        pdf.cell(30, 6, str(int(row['acertos'])), 1, 0, 'C')
+        pdf.cell(30, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
+        
+    return pdf.output(dest='S')
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
     if color is None:
@@ -1179,8 +1293,8 @@ else:
         # Menu Premium com option_menu
         menu_selecionado = option_menu(
             menu_title=None,
-            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "CONFIGURAR"],
-            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "gear"],
+            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
+            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -1220,6 +1334,7 @@ else:
             "DASHBOARD": "Dashboard",
             "SIMULADOS": "Simulados",
             "HISTÓRICO": "Histórico",
+            "RELATÓRIOS": "Relatórios",
             "CONFIGURAR": "Configurar"
         }
         
@@ -2574,6 +2689,51 @@ else:
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
+
+    # --- ABA: RELATÓRIOS ---
+    elif menu == "Relatórios":
+        st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2.5rem; margin-bottom:1rem;">📑 Central de Relatórios</h1>', unsafe_allow_html=True)
+        st.markdown("<p style='color: #94A3B8; font-size: 1.1rem;'>Gere documentos consolidados e análises estratégicas para o seu estudo.</p>", unsafe_allow_html=True)
+        
+        st.divider()
+        
+        col_rel1, col_rel2 = st.columns(2)
+        
+        with col_rel1:
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%;">
+                    <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório de Desempenho Estratégico</h3>
+                    <p style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 20px;">
+                        Inclui a Matriz de Priorização (Esforço vs Resultado), 
+                        detalhamento por matéria e resumo de progresso do edital.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("🚀 Gerar Relatório PDF", use_container_width=True, key="btn_gerar_pdf"):
+                try:
+                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao)
+                    st.success("✅ Relatório gerado com sucesso!")
+                    st.download_button(
+                        label="📥 Baixar Relatório (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"Relatorio_Estrategico_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
+
+        with col_rel2:
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%; opacity: 0.6;">
+                    <h3 style="color: #fff; margin-bottom: 10px;">🕒 Planilha de Carga Horária</h3>
+                    <p style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 20px;">
+                        Detalhamento completo de horas líquidas estudadas por dia e por semana.
+                    </p>
+                    <span style="background: rgba(139, 92, 246, 0.2); color: #8B5CF6; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">EM BREVE</span>
+                </div>
+            """, unsafe_allow_html=True)
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
