@@ -1,4 +1,4 @@
-# app.py (com correção para exclusão em massa)
+# app.py (com correção para KeyError em PDF e ordenação de simulados)
 
 import streamlit as st
 import pandas as pd
@@ -13,15 +13,12 @@ from streamlit_option_menu import option_menu
 from fpdf import FPDF
 import io
 
-
-
 # ============================================================================
 # 🎨 CONFIGURAÇÃO DE LAYOUT RESPONSIVO
 # ============================================================================
 
 def configurar_layout_responsivo():
     """Configura o layout para evitar problemas de espaço horizontal"""
-    
     st.markdown("""
         <style>
         /* Garantir largura mínima para inputs */
@@ -175,10 +172,10 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     
     # Calcular métricas principais
-    t_q = df_estudos['total'].sum()
-    a_q = df_estudos['acertos'].sum()
+    t_q = df_estudos['total'].sum() if 'total' in df_estudos.columns else 0
+    a_q = df_estudos['acertos'].sum() if 'acertos' in df_estudos.columns else 0
     precisao = (a_q / t_q * 100) if t_q > 0 else 0
-    tempo_total = df_estudos['tempo'].sum() / 60
+    tempo_total = df_estudos['tempo'].sum() / 60 if 'tempo' in df_estudos.columns else 0
     
     # 1. RESUMO GERAL (Layout em Grid/Tabela)
     pdf.set_font('Arial', 'B', 12)
@@ -220,36 +217,39 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.cell(0, 10, '2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)', 0, 1, 'L')
     
     # Lógica de Dados
-    df_matriz = df_estudos.groupby('materia').agg({
-        'acertos': 'sum',
-        'total': 'sum',
-        'tempo': 'sum'
-    }).reset_index()
-    df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
-    
-    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
-        'acertos': 'sum',
-        'total': 'sum'
-    }).reset_index()
-    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
-    
-    media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
-    media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
-    
-    focar = []
-    manter = []
-    revisar_base = []
-    otimizar = []
-    
-    for _, row in df_matriz.iterrows():
-        if row['taxa'] < 75 and row['total'] >= media_volume:
-            focar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        elif row['taxa'] >= 75 and row['total'] >= media_volume:
-            manter.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        elif row['taxa'] < 75 and row['total'] < media_volume:
-            revisar_base.append(f"{row['materia']} ({row['taxa']:.0f}%)")
-        else:
-            otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+    if 'materia' in df_estudos.columns:
+        df_matriz = df_estudos.groupby('materia').agg({
+            'acertos': 'sum',
+            'total': 'sum',
+            'tempo': 'sum'
+        }).reset_index()
+        df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
+        
+        df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
+            'acertos': 'sum',
+            'total': 'sum'
+        }).reset_index()
+        df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
+        
+        media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
+        media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
+        
+        focar = []
+        manter = []
+        revisar_base = []
+        otimizar = []
+        
+        for _, row in df_matriz.iterrows():
+            if row['taxa'] < 75 and row['total'] >= media_volume:
+                focar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+            elif row['taxa'] >= 75 and row['total'] >= media_volume:
+                manter.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+            elif row['taxa'] < 75 and row['total'] < media_volume:
+                revisar_base.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+            else:
+                otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+    else:
+        focar, manter, revisar_base, otimizar = [], [], [], []
             
     # Escrever no PDF com design melhorado
     def write_block(title, items, border_color, bg_color):
@@ -283,36 +283,38 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.cell(0, 10, '3. DESEMPENHO DETALHADO (POR MATÉRIA E ASSUNTO)', 0, 1, 'L')
     pdf.ln(2)
     
-    for _, row_mat in df_matriz.sort_values('taxa').iterrows():
-        # Bloco de Título da Matéria
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
-        
-        # Sub-cabeçalho das métricas da matéria
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, f"  Média Geral: {row_mat['taxa']:.1f}% | Total de Questões: {int(row_mat['total'])}", 0, 1, 'L')
-        
-        # Listagem de Assuntos
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(60, 60, 60)
-        topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
-        
-        for _, row_ass in topicos_da_materia.iterrows():
-            # Formatar linha do assunto: Assunto ............. % (Questoes)
-            nome_ass = row_ass['assunto']
-            if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
+    if 'materia' in df_estudos.columns and not df_matriz.empty:
+        for _, row_mat in df_matriz.sort_values('taxa').iterrows():
+            # Bloco de Título da Matéria
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_fill_color(240, 240, 245)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
             
-            # Usamos uma lógica de preenchimento de pontos para ficar elegante
-            texto_esq = f"      - {nome_ass}"
-            texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
+            # Sub-cabeçalho das métricas da matéria
+            pdf.set_font('Arial', 'I', 8)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 6, f"  Média Geral: {row_mat['taxa']:.1f}% | Total de Questões: {int(row_mat['total'])}", 0, 1, 'L')
             
-            pdf.cell(120, 6, texto_esq, 0, 0, 'L')  # Largura reduzida de 150 para 120
-            pdf.cell(0, 6, texto_dir, 0, 1, 'R')
-            
-        pdf.ln(4)
+            # Listagem de Assuntos
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(60, 60, 60)
+            if 'assunto' in df_assuntos.columns:
+                topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
+                
+                for _, row_ass in topicos_da_materia.iterrows():
+                    # Formatar linha do assunto: Assunto ............. % (Questoes)
+                    nome_ass = row_ass['assunto']
+                    if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
+                    
+                    # Usamos uma lógica de preenchimento de pontos para ficar elegante
+                    texto_esq = f"      - {nome_ass}"
+                    texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
+                    
+                    pdf.cell(120, 6, texto_esq, 0, 0, 'L')  # Largura reduzida de 150 para 120
+                    pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+                    
+            pdf.ln(4)
         
     # 4. PROJEÇÃO DE CONCLUSÃO
     if proj:
@@ -368,73 +370,95 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.ln(5)
     
     # Filtrar assuntos críticos (taxa < 70% e total > 0)
-    df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
-    
-    if not df_criticos.empty:
-        materias_criticas = df_criticos['materia'].unique()
-        for mat in materias_criticas:
-            pdf.set_font('Arial', 'B', 10)
-            pdf.set_text_color(139, 92, 246)
-            pdf.cell(0, 8, f"  > {mat}", 0, 1)
-            
-            topicos_da_materia = df_criticos[df_criticos['materia'] == mat]
-            pdf.set_font('Arial', '', 9)
-            pdf.set_text_color(60, 60, 60)
-            for _, row in topicos_da_materia.iterrows():
-                bullet = f"      - {row['assunto']}: {row['taxa']:.0f}% de acerto ({int(row['total'])} questões)"
-                pdf.multi_cell(0, 5, bullet)
-            pdf.ln(2)
+    if 'materia' in df_estudos.columns and 'assunto' in df_estudos.columns:
+        df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
+        
+        if not df_criticos.empty:
+            materias_criticas = df_criticos['materia'].unique()
+            for mat in materias_criticas:
+                pdf.set_font('Arial', 'B', 10)
+                pdf.set_text_color(139, 92, 246)
+                pdf.cell(0, 8, f"  > {mat}", 0, 1)
+                
+                topicos_da_materia = df_criticos[df_criticos['materia'] == mat]
+                pdf.set_font('Arial', '', 9)
+                pdf.set_text_color(60, 60, 60)
+                for _, row in topicos_da_materia.iterrows():
+                    bullet = f"      - {row['assunto']}: {row['taxa']:.0f}% de acerto ({int(row['total'])} questões)"
+                    pdf.multi_cell(0, 5, bullet)
+                pdf.ln(2)
+        else:
+            pdf.set_font('Arial', 'I', 10)
+            pdf.set_text_color(16, 185, 129)
+            pdf.cell(0, 10, "Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%.", 0, 1, 'L')
     else:
         pdf.set_font('Arial', 'I', 10)
         pdf.set_text_color(16, 185, 129)
-        pdf.cell(0, 10, "Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%.", 0, 1, 'L')
+        pdf.cell(0, 10, "Dados insuficientes para análise de gargalos.", 0, 1, 'L')
 
     # 6. BENCHMARK DE SIMULADOS
     # Usar filtro flexível no dataframe bruto para capturar variações (Simulado, SIMULADOS, etc)
-    df_sim = df_bruto[df_bruto['materia'].str.upper().str.contains('SIMULADO', na=False)].sort_values('data_estudo')
-    if not df_sim.empty:
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 10, '6. BENCHMARK DE SIMULADOS (EVOLUÇÃO)', 0, 1, 'L')
+    if not df_bruto.empty and 'materia' in df_bruto.columns and 'data_estudo' in df_bruto.columns:
+        mask = df_bruto['materia'].str.upper().str.contains('SIMULADO', na=False)
+        df_sim = df_bruto[mask].copy()
         
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(100, 100, 100)
-        pdf.multi_cell(0, 6, "Acompanhamento cronológico do seu desempenho em provas completas (Simulados).")
-        pdf.ln(5)
-        
-        # Cabeçalho da Tabela
-        pdf.set_font('Arial', 'B', 9)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(40, 7, ' Data', 1, 0, 'C', True)
-        pdf.cell(100, 7, ' Simulado', 1, 0, 'C', True)
-        pdf.cell(40, 7, ' Pontuação (%)', 1, 1, 'C', True)
-        
-        pdf.set_font('Arial', '', 8)
-        pdf.set_text_color(60, 60, 60)
-        for _, row in df_sim.iterrows():
-            pdf.cell(40, 6, pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y'), 1, 0, 'C')
-            pdf.cell(100, 6, f" {row['assunto'][:55]}", 1, 0, 'L')
-            pdf.cell(40, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
+        if not df_sim.empty and 'data_estudo' in df_sim.columns:
+            try:
+                df_sim = df_sim.sort_values('data_estudo')
+            except Exception:
+                df_sim = df_sim.copy()
             
-        # Insights de Tendência no PDF
-        pdf.ln(5)
-        ult_nota = df_sim['taxa'].iloc[-1]
-        med_nota = df_sim['taxa'].mean()
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 8, f"Resumo: Última Nota: {ult_nota:.1f}% | Precisão Média: {med_nota:.1f}%", 0, 1)
-        
-        pdf.set_font('Arial', 'I', 9)
-        pdf.set_text_color(100, 100, 100)
-        if len(df_sim) >= 2:
-            gap = df_sim['taxa'].iloc[-1] - df_sim['taxa'].iloc[-2]
-            tendencia = "em ascensão" if gap > 0 else "em queda" if gap < 0 else "estabilizado"
-            msg_sim = f"Seu desempenho está {tendencia} em relação ao último simulado ({'+' if gap>0 else ''}{gap:.1f}%)."
-        else:
-            msg_sim = "Continue realizando simulados regularmente para consolidar sua curva de aprendizado."
-        pdf.multi_cell(0, 6, f"Análise: {msg_sim}")
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(60, 60, 60)
+            pdf.cell(0, 10, '6. BENCHMARK DE SIMULADOS (EVOLUÇÃO)', 0, 1, 'L')
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(100, 100, 100)
+            pdf.multi_cell(0, 6, "Acompanhamento cronológico do seu desempenho em provas completas (Simulados).")
+            pdf.ln(5)
+            
+            # Cabeçalho da Tabela
+            pdf.set_font('Arial', 'B', 9)
+            pdf.set_fill_color(240, 240, 245)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(40, 7, ' Data', 1, 0, 'C', True)
+            pdf.cell(100, 7, ' Simulado', 1, 0, 'C', True)
+            pdf.cell(40, 7, ' Pontuação (%)', 1, 1, 'C', True)
+            
+            pdf.set_font('Arial', '', 8)
+            pdf.set_text_color(60, 60, 60)
+            for _, row in df_sim.iterrows():
+                try:
+                    data_formatada = pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')
+                except:
+                    data_formatada = str(row['data_estudo'])
+                
+                pdf.cell(40, 6, data_formatada, 1, 0, 'C')
+                assunto = str(row.get('assunto', ''))[:55]
+                pdf.cell(100, 6, f" {assunto}", 1, 0, 'L')
+                
+                taxa = row.get('taxa', 0)
+                pdf.cell(40, 6, f"{taxa:.1f}%", 1, 1, 'C')
+                
+            # Insights de Tendência no PDF
+            pdf.ln(5)
+            if not df_sim.empty and 'taxa' in df_sim.columns:
+                ult_nota = df_sim['taxa'].iloc[-1]
+                med_nota = df_sim['taxa'].mean()
+                pdf.set_font('Arial', 'B', 10)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(0, 8, f"Resumo: Última Nota: {ult_nota:.1f}% | Precisão Média: {med_nota:.1f}%", 0, 1)
+                
+                pdf.set_font('Arial', 'I', 9)
+                pdf.set_text_color(100, 100, 100)
+                if len(df_sim) >= 2:
+                    gap = df_sim['taxa'].iloc[-1] - df_sim['taxa'].iloc[-2]
+                    tendencia = "em ascensão" if gap > 0 else "em queda" if gap < 0 else "estabilizado"
+                    msg_sim = f"Seu desempenho está {tendencia} em relação ao último simulado ({'+' if gap>0 else ''}{gap:.1f}%)."
+                else:
+                    msg_sim = "Continue realizando simulados regularmente para consolidar sua curva de aprendizado."
+                pdf.multi_cell(0, 6, f"Análise: {msg_sim}")
 
     return bytes(pdf.output())
 
@@ -448,9 +472,12 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 10, '1. RESUMO DE CARGA HORÁRIA', 0, 1, 'L')
     
-    minutos_totais = df['tempo'].sum()
+    minutos_totais = df['tempo'].sum() if 'tempo' in df.columns else 0
     horas_totais = minutos_totais / 60
-    dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
+    if 'data_estudo' in df.columns and 'tempo' in df.columns:
+        dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
+    else:
+        dias_estudados = 0
     media_diaria = horas_totais / dias_estudados if dias_estudados > 0 else 0
     
     # Grid de métricas
@@ -477,37 +504,38 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.ln(2)
     
     # Lógica de Agrupamento
-    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
-    df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
-    
-    for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
-        # Bloco de Título da Matéria
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
+    if 'materia' in df.columns and 'tempo' in df.columns:
+        df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
+        df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
         
-        # Total da matéria
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h", 0, 1, 'L')
-        
-        # Listagem de Assuntos
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(60, 60, 60)
-        assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
-        
-        for _, row_ass in assuntos_da_materia.iterrows():
-            nome_ass = row_ass['assunto']
-            if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
+        for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
+            # Bloco de Título da Matéria
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_fill_color(240, 240, 245)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
             
-            texto_esq = f"      - {nome_ass}"
-            texto_dir = f"{row_ass['tempo']/60:.1f}h"
+            # Total da matéria
+            pdf.set_font('Arial', 'I', 8)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 6, f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h", 0, 1, 'L')
             
-            pdf.cell(160, 6, texto_esq, 0, 0, 'L')
-            pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+            # Listagem de Assuntos
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(60, 60, 60)
+            assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
             
-        pdf.ln(4)
+            for _, row_ass in assuntos_da_materia.iterrows():
+                nome_ass = row_ass['assunto']
+                if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
+                
+                texto_esq = f"      - {nome_ass}"
+                texto_dir = f"{row_ass['tempo']/60:.1f}h"
+                
+                pdf.cell(160, 6, texto_esq, 0, 0, 'L')
+                pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+                
+            pdf.ln(4)
         
     pdf.ln(5)
     pdf.set_font('Arial', 'I', 9)
@@ -515,6 +543,7 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.multi_cell(0, 5, "Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade.")
 
     return bytes(pdf.output())
+
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
     if color is None:
@@ -601,7 +630,6 @@ def render_progress_bar(percentage, height=8, color_start=None, color_end=None):
         </div>
     """, unsafe_allow_html=True)
 
-
 # --- FUNÇÃO: Barra de progresso moderna ---
 def render_consistency_heatmap(df):
     """Renderiza um mapa de calor estilo GitHub para constância de estudos (Últimos 6 meses)"""
@@ -610,55 +638,58 @@ def render_consistency_heatmap(df):
         return
 
     # Preparar dados: Soma de minutos por data
-    df_day = df.groupby('data_estudo')['tempo'].sum().reset_index()
-    df_day['data_estudo'] = pd.to_datetime(df_day['data_estudo']).dt.date
-    
-    # Criar dict para busca rápida
-    data_map = dict(zip(df_day['data_estudo'], df_day['tempo']))
-    
-    # Gerar range de datas (últimos 180 dias)
-    hoje = get_br_date()
-    datas = [hoje - timedelta(days=x) for x in range(180, -1, -1)]
-    
-    # Organizar por semanas para o grid (transposto: colunas são semanas)
-    # Precisamos de 7 linhas (seg a dom)
-    rows = [[] for _ in range(7)]
-    for d in datas:
-        rows[d.weekday()].append(d)
+    if 'data_estudo' in df.columns and 'tempo' in df.columns:
+        df_day = df.groupby('data_estudo')['tempo'].sum().reset_index()
+        df_day['data_estudo'] = pd.to_datetime(df_day['data_estudo']).dt.date
         
-    # Cores
-    COLOR_EMPTY = "rgba(255, 255, 255, 0.05)"
-    COLORS_INTENS = [
-        "rgba(139, 92, 246, 0.2)", # Nível 1 (Pouco)
-        "rgba(139, 92, 246, 0.5)", # Nível 2
-        "rgba(139, 92, 246, 0.8)", # Nível 3
-        "#8B5CF6"                  # Nível 4 (Muito)
-    ]
-    
-    html = '<div style="display: flex; gap: 3px; overflow-x: auto; padding-bottom: 15px; mask-image: linear-gradient(to right, black 85%, transparent);">'
-    
-    # Renderizar colunas (Semanas)
-    num_weeks = len(rows[0])
-    for w in range(num_weeks):
-        html += '<div style="display: flex; flex-direction: column; gap: 3px;">'
-        for r in range(7):
-            if w < len(rows[r]):
-                d = rows[r][w]
-                tempo = data_map.get(d, 0)
-                
-                # Definir cor baseada no tempo (minutos)
-                if tempo == 0: color = COLOR_EMPTY
-                elif tempo < 120: color = COLORS_INTENS[0]
-                elif tempo < 240: color = COLORS_INTENS[1]
-                elif tempo < 480: color = COLORS_INTENS[2]
-                else: color = COLORS_INTENS[3]
-                
-                tip = f"{d.strftime('%d/%m')}: {tempo/60:.1f}h"
-                html += f'<div title="{tip}" style="width: 12px; height: 12px; background-color: {color}; border-radius: 2px;"></div>'
+        # Criar dict para busca rápida
+        data_map = dict(zip(df_day['data_estudo'], df_day['tempo']))
+        
+        # Gerar range de datas (últimos 180 dias)
+        hoje = get_br_date()
+        datas = [hoje - timedelta(days=x) for x in range(180, -1, -1)]
+        
+        # Organizar por semanas para o grid (transposto: colunas são semanas)
+        # Precisamos de 7 linhas (seg a dom)
+        rows = [[] for _ in range(7)]
+        for d in datas:
+            rows[d.weekday()].append(d)
+            
+        # Cores
+        COLOR_EMPTY = "rgba(255, 255, 255, 0.05)"
+        COLORS_INTENS = [
+            "rgba(139, 92, 246, 0.2)", # Nível 1 (Pouco)
+            "rgba(139, 92, 246, 0.5)", # Nível 2
+            "rgba(139, 92, 246, 0.8)", # Nível 3
+            "#8B5CF6"                  # Nível 4 (Muito)
+        ]
+        
+        html = '<div style="display: flex; gap: 3px; overflow-x: auto; padding-bottom: 15px; mask-image: linear-gradient(to right, black 85%, transparent);">'
+        
+        # Renderizar colunas (Semanas)
+        num_weeks = len(rows[0])
+        for w in range(num_weeks):
+            html += '<div style="display: flex; flex-direction: column; gap: 3px;">'
+            for r in range(7):
+                if w < len(rows[r]):
+                    d = rows[r][w]
+                    tempo = data_map.get(d, 0)
+                    
+                    # Definir cor baseada no tempo (minutos)
+                    if tempo == 0: color = COLOR_EMPTY
+                    elif tempo < 120: color = COLORS_INTENS[0]
+                    elif tempo < 240: color = COLORS_INTENS[1]
+                    elif tempo < 480: color = COLORS_INTENS[2]
+                    else: color = COLORS_INTENS[3]
+                    
+                    tip = f"{d.strftime('%d/%m')}: {tempo/60:.1f}h"
+                    html += f'<div title="{tip}" style="width: 12px; height: 12px; background-color: {color}; border-radius: 2px;"></div>'
+            html += '</div>'
+        
         html += '</div>'
-    
-    html += '</div>'
-    st.markdown(html, unsafe_allow_html=True)
+        st.markdown(html, unsafe_allow_html=True)
+    else:
+        st.info("Dados insuficientes para gerar mapa de calor.")
 
 # --- FUNÇÃO ADICIONADA: Fuso Horário Brasília ---
 def get_br_date():
@@ -1457,8 +1488,8 @@ def calcular_estudos_semana(df):
         df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
         df_semana = df[(df['data_estudo_date'] >= inicio_semana) & (df['data_estudo_date'] <= fim_semana)]
         
-        horas_semana = df_semana['tempo'].sum() / 60
-        questoes_semana = df_semana['total'].sum()
+        horas_semana = df_semana['tempo'].sum() / 60 if 'tempo' in df_semana.columns else 0
+        questoes_semana = df_semana['total'].sum() if 'total' in df_semana.columns else 0
         
         return horas_semana, questoes_semana
     except (ValueError, TypeError, KeyError):
@@ -1489,7 +1520,7 @@ def calcular_projecao_conclusao(df, dados_edital):
             todos_topicos_edital.extend(topicos)
         
         # Filtra registros que batem com o edital e conta únicos
-        estudados = df[df['assunto'].isin(todos_topicos_edital)]['assunto'].nunique()
+        estudados = df[df['assunto'].isin(todos_topicos_edital)]['assunto'].nunique() if 'assunto' in df.columns else 0
     
     restantes = total_topicos - estudados
     progresso_pct = (estudados / total_topicos * 100) if total_topicos > 0 else 0
@@ -1504,15 +1535,22 @@ def calcular_projecao_conclusao(df, dados_edital):
     # Ritmo nos últimos 30 dias (mais realista que o histórico total)
     hoje = get_br_date()
     inicio_janela = hoje - timedelta(days=30)
-    df_recente = df[pd.to_datetime(df['data_estudo']).dt.date >= inicio_janela]
     
-    if len(df_recente) < 5: # Se tiver pouco dado recente, usa histórico total
-        data_inicio = pd.to_datetime(df['data_estudo']).min().date()
-        dias_totais = max((hoje - data_inicio).days, 1)
-        ritmo_diario = estudados / dias_totais
+    # Verificar se a coluna data_estudo existe
+    if 'data_estudo' not in df.columns:
+        data_inicio = hoje
+        dias_totais = 1
     else:
-        topicos_30d = df_recente['assunto'].nunique()
-        ritmo_diario = topicos_30d / 30
+        df['data_estudo_date'] = pd.to_datetime(df['data_estudo']).dt.date
+        df_recente = df[df['data_estudo_date'] >= inicio_janela]
+        
+        if len(df_recente) < 5: # Se tiver pouco dado recente, usa histórico total
+            data_inicio = pd.to_datetime(df['data_estudo']).min().date()
+            dias_totais = max((hoje - data_inicio).days, 1)
+            ritmo_diario = estudados / dias_totais
+        else:
+            topicos_30d = df_recente['assunto'].nunique() if 'assunto' in df_recente.columns else 0
+            ritmo_diario = topicos_30d / 30
     
     # Garantir ritmo mínimo para não dividir por zero
     ritmo_diario = max(ritmo_diario, 0.01)
@@ -1529,11 +1567,6 @@ def calcular_projecao_conclusao(df, dados_edital):
         "dias_para_fim": dias_para_fim,
         "data_fim": data_fim
     }
-
-# --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
-
-# --- FUNÇÃO REMOVIDA: gerar_numeros_mes (1-31) ---
-# A função gerar_numeros_mes foi REMOVIDA por solicitação
 
 # --- NOVA FUNÇÃO: Cálculo dinâmico de intervalos ---
 def calcular_proximo_intervalo(dificuldade, taxa_acerto):
@@ -1567,11 +1600,15 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
     hoje = get_br_date()
     pend = []
     
-    if df_estudos.empty:
+    if df_estudos.empty or 'data_estudo' not in df_estudos.columns:
         return pend
         
     for _, row in df_estudos.iterrows():
-        dt_est = pd.to_datetime(row['data_estudo']).date()
+        try:
+            dt_est = pd.to_datetime(row['data_estudo']).date()
+        except:
+            continue
+            
         dias = (hoje - dt_est).days
         tx = row.get('taxa', 0)
         dif = row.get('dificuldade', '🟡 Médio')
@@ -1582,7 +1619,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
             if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
                 atraso = (hoje - dt_prev).days
                 pend.append({
-                    "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                    "id": row['id'], "materia": row.get('materia', ''), "assunto": row.get('assunto', ''), 
                     "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
                     "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
                     "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
@@ -1603,7 +1640,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                 if dt_prev <= hoje or filtro_rev == "Todas (incluindo futuras)":
                     atraso = (hoje - dt_prev).days
                     pend.append({
-                        "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
+                        "id": row['id'], "materia": row.get('materia', ''), "assunto": row.get('assunto', ''), 
                         "tipo": lbl, "col": col_alv, "atraso": atraso, 
                         "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
                         "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
@@ -1694,14 +1731,13 @@ else:
     
     # --- IMPORTANTE: BUSCA DIRETA DA DATA DA PROVA DO BANCO ---
     try:
-        data_prova_direta = dados.get(missao, {}).get('data_prova')
-    except Exception as e:
-        # Log silencioso do erro, mas continua funcionando
+        data_prova_direta = dados.get('data_prova') if isinstance(dados, dict) else None
+    except Exception:
         data_prova_direta = None
         
     # Garantir que 'dados' se refere à missão ativa
     dados_global = dados
-    dados = dados_global.get(missao, {})
+    dados = dados_global.get(missao, {}) if isinstance(dados_global, dict) else {}
 
     with st.sidebar:
         # Logo Estilizado Moderno e Genérico
@@ -1787,7 +1823,8 @@ else:
         
         with col_titulo:
             st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
-            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get(missao, {}).get("cargo", "")}</p>', unsafe_allow_html=True)
+            if isinstance(dados, dict):
+                st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
         
         with col_btn:
             st.write("")  # Espaçamento vertical
@@ -1803,11 +1840,11 @@ else:
             # --- VISÃO DO MÊS ATUAL (como na imagem) ---
             st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
-            # Calcular métricas
-            t_q = df_estudos['total'].sum()
-            a_q = df_estudos['acertos'].sum()
+            # Calcular métricas com verificação de colunas
+            t_q = df_estudos['total'].sum() if 'total' in df_estudos.columns else 0
+            a_q = df_estudos['acertos'].sum() if 'acertos' in df_estudos.columns else 0
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df_estudos['tempo'].sum())
+            minutos_totais = int(df_estudos['tempo'].sum() if 'tempo' in df_estudos.columns else 0)
             
             # Formatar tempo como na imagem (3h45min)
             tempo_formatado = formatar_minutos(minutos_totais)
@@ -1925,8 +1962,11 @@ else:
                 # Calcular dias estudados no mês
                 hoje = get_br_date()
                 dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
-                dias_estudados_mes = len(set(pd.to_datetime(df_estudos['data_estudo']).dt.date.unique()))
-                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
+                if 'data_estudo' in df_estudos.columns:
+                    dias_estudados_mes = len(set(pd.to_datetime(df_estudos['data_estudo']).dt.date.unique()))
+                else:
+                    dias_estudados_mes = 0
+                percentual_mes = (dias_estudados_mes / dias_no_mes) * 100 if dias_no_mes > 0 else 0
                 
                 st.markdown(f'''
                     <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05)); border-radius: 16px; border: 1px solid rgba(6, 182, 212, 0.2); transition: all 0.3s ease;">
@@ -1945,7 +1985,7 @@ else:
             st.divider()
             st.markdown('<div style="text-align: center; color: #94A3B8; font-size: 0.85rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;">🔥 MAPA DE CALOR (ÚLTIMAS 12 SEMANAS)</div>', unsafe_allow_html=True)
             
-            if not df_estudos.empty:
+            if not df_estudos.empty and 'data_estudo' in df_estudos.columns and 'tempo' in df_estudos.columns:
                 try:
                     # Preparar dados: Soma de tempo por dia
                     df_heat = df_estudos.copy()
@@ -2005,21 +2045,22 @@ else:
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
             
-            if not df_estudos.empty:
+            if not df_estudos.empty and 'materia' in df_estudos.columns:
                 # Calcular totais por disciplina
                 df_disciplinas = df_estudos.groupby('materia').agg({
-                    'tempo': 'sum',
-                    'acertos': 'sum',
-                    'total': 'sum'
+                    'tempo': 'sum' if 'tempo' in df_estudos.columns else 'materia',
+                    'acertos': 'sum' if 'acertos' in df_estudos.columns else 'materia',
+                    'total': 'sum' if 'total' in df_estudos.columns else 'materia'
                 }).reset_index()
                 
                 # Recalcular taxa global por disciplina (média ponderada)
-                df_disciplinas['taxa'] = (df_disciplinas['acertos'] / df_disciplinas['total'] * 100).fillna(0)
+                if 'acertos' in df_disciplinas.columns and 'total' in df_disciplinas.columns:
+                    df_disciplinas['taxa'] = (df_disciplinas['acertos'] / df_disciplinas['total'] * 100).fillna(0)
                 
-                df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
-                df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos)
-                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
-                df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
+                df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos'] if 'total' in df_disciplinas.columns and 'acertos' in df_disciplinas.columns else 0
+                df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos) if 'tempo' in df_disciplinas.columns else "0h00min"
+                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int) if 'taxa' in df_disciplinas.columns else 0
+                df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False) if 'tempo' in df_disciplinas.columns else df_disciplinas
                 
                 # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -2028,10 +2069,10 @@ else:
                 display_df = pd.DataFrame({
                     'DISCIPLINAS': df_disciplinas['materia'],
                     'TEMPO': df_disciplinas['tempo_formatado'],
-                    '✓': df_disciplinas['acertos'].astype(int),
-                    '✗': df_disciplinas['erros'].astype(int),
-                    '🎉': df_disciplinas['total'].astype(int),
-                    '%': df_disciplinas['taxa_formatada']
+                    '✓': df_disciplinas['acertos'].astype(int) if 'acertos' in df_disciplinas.columns else 0,
+                    '✗': df_disciplinas['erros'].astype(int) if 'erros' in df_disciplinas.columns else 0,
+                    '🎉': df_disciplinas['total'].astype(int) if 'total' in df_disciplinas.columns else 0,
+                    '%': df_disciplinas['taxa_formatada'] if 'taxa_formatada' in df_disciplinas.columns else 0
                 })
                 
                 # Exibir tabela usando st.dataframe com formatação condicional
@@ -2167,15 +2208,23 @@ else:
             st.info("Registre alguns estudos para que eu possa planejar sua semana estrategicamente.")
         else:
             # Lógica de Recomendação (Priority Engine)
-            df_matriz = df_estudos.groupby('materia').agg({
-                'acertos': 'sum',
-                'total': 'sum',
-                'relevancia': 'mean'
-            }).reset_index()
-            df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
-            
-            # Quadrante: Foco Crítico (Taxa < 75 e Relevância > 5)
-            criticos = df_matriz[(df_matriz['taxa'] < 75) & (df_matriz['relevancia'] >= 5)].sort_values(['relevancia', 'taxa'], ascending=[False, True])
+            if 'materia' in df_estudos.columns:
+                df_matriz = df_estudos.groupby('materia').agg({
+                    'acertos': 'sum' if 'acertos' in df_estudos.columns else 'materia',
+                    'total': 'sum' if 'total' in df_estudos.columns else 'materia',
+                    'relevancia': 'mean' if 'relevancia' in df_estudos.columns else 'materia'
+                }).reset_index()
+                
+                if 'acertos' in df_matriz.columns and 'total' in df_matriz.columns:
+                    df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
+                
+                # Quadrante: Foco Crítico (Taxa < 75 e Relevância > 5)
+                if 'taxa' in df_matriz.columns and 'relevancia' in df_matriz.columns:
+                    criticos = df_matriz[(df_matriz['taxa'] < 75) & (df_matriz['relevancia'] >= 5)].sort_values(['relevancia', 'taxa'], ascending=[False, True])
+                else:
+                    criticos = pd.DataFrame()
+            else:
+                criticos = pd.DataFrame()
             
             col_rec1, col_rec2 = st.columns([2, 1])
             
@@ -2186,8 +2235,11 @@ else:
                 else:
                     for _, row in criticos.head(3).iterrows():
                         # Buscar o pior assunto desta materia
-                        df_ass = df_estudos[df_estudos['materia'] == row['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
-                        pior_ass = df_ass.sort_values('taxa').iloc[0]['assunto']
+                        if 'materia' in df_estudos.columns and 'assunto' in df_estudos.columns and 'taxa' in df_estudos.columns:
+                            df_ass = df_estudos[df_estudos['materia'] == row['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
+                            pior_ass = df_ass.sort_values('taxa').iloc[0]['assunto'] if not df_ass.empty else "Nenhum assunto específico"
+                        else:
+                            pior_ass = "Nenhum assunto específico"
                         
                         st.markdown(f"""
                         <div class="modern-card" style="border-left: 5px solid #EF4444;">
@@ -2212,9 +2264,20 @@ else:
                 hoje = get_br_date()
                 in_sem = hoje - timedelta(days=hoje.weekday())
                 
-                df_s = df_raw[pd.to_datetime(df_raw['data_estudo']).dt.date >= in_sem] if not df_raw.empty else pd.DataFrame()
-                df_e = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= in_sem] if not df_estudos.empty else pd.DataFrame()
-                df_sim_s = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= in_sem] if not df_simulados.empty else pd.DataFrame()
+                if not df_raw.empty and 'data_estudo' in df_raw.columns:
+                    df_s = df_raw[pd.to_datetime(df_raw['data_estudo']).dt.date >= in_sem] 
+                else:
+                    df_s = pd.DataFrame()
+                    
+                if not df_estudos.empty and 'data_estudo' in df_estudos.columns:
+                    df_e = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= in_sem]
+                else:
+                    df_e = pd.DataFrame()
+                    
+                if not df_simulados.empty and 'data_estudo' in df_simulados.columns:
+                    df_sim_s = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= in_sem]
+                else:
+                    df_sim_s = pd.DataFrame()
                 
                 # Definir itens do checklist
                 m_labels = []
@@ -2228,8 +2291,8 @@ else:
                 
                 m_labels.extend(["Realizar 1 Simulado de Elite", "Manter meta de questões diária", "Zerar 2 novos tópicos do edital"])
                 st_auto["Realizar 1 Simulado de Elite"] = not df_sim_s.empty
-                st_auto["Manter meta de questões diária"] = df_s['total'].sum() >= st.session_state.get('meta_questoes_semana', 350) if not df_s.empty else False
-                st_auto["Zerar 2 novos tópicos do edital"] = len(df_e['assunto'].unique()) >= 2 if not df_e.empty else False
+                st_auto["Manter meta de questões diária"] = df_s['total'].sum() >= st.session_state.get('meta_questoes_semana', 350) if not df_s.empty and 'total' in df_s.columns else False
+                st_auto["Zerar 2 novos tópicos do edital"] = len(df_e['assunto'].unique()) >= 2 if not df_e.empty and 'assunto' in df_e.columns else False
 
                 # Contagem de Progresso (Calculado ANTES de desenhar a UI)
                 v_done = 0
@@ -2350,36 +2413,20 @@ else:
                     """, unsafe_allow_html=True)
                     
                     # Área de Ação (Inputs, Tempo e Botão)
-                    # Layout sem aninhamento excessivo (corrigido)
-
                     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
 
-                    
-
                     with col1:
-
                         acertos = st.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
 
-                    
-
                     with col2:
-
                         total = st.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
 
-                    
-
                     with col3:
-
                         tempo_rev = st.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
 
-                    
-
                     with col4:
-
                         st.write("")  # Espaçamento
-
                         st.write("")  # Mais espaçamento
-
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             try:
                                 res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
@@ -2409,7 +2456,12 @@ else:
     # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
         st.markdown('<h2 class="main-title">📝 Novo Registro de Estudo</h2>', unsafe_allow_html=True)
-        mats = list(dados.get('materias', {}).keys())
+        
+        # Obter matérias do edital
+        if isinstance(dados, dict) and 'materias' in dados:
+            mats = list(dados['materias'].keys())
+        else:
+            mats = []
         
         if not mats:
             st.warning("⚠️ Nenhuma matéria cadastrada. Vá em 'Configurar' para adicionar disciplinas.")
@@ -2422,1603 +2474,13 @@ else:
                 tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
                 
                 mat_reg = st.selectbox("Disciplina", mats)
-                assuntos_disponiveis = dados.get('materias', {}).get(mat_reg, ["Geral"])
+                
+                # Obter assuntos da matéria selecionada
+                if isinstance(dados, dict) and 'materias' in dados and mat_reg in dados['materias']:
+                    assuntos_disponiveis = dados['materias'][mat_reg]
+                else:
+                    assuntos_disponiveis = ["Geral"]
+                    
                 ass_reg = st.selectbox("Assunto", assuntos_disponiveis, key=f"assunto_select_{mat_reg}")
                 
-                st.divider()
-                
-                with st.form("form_registro_final", clear_on_submit=True):
-                    ca_reg, ct_reg = st.columns(2)
-                    ac_reg = ca_reg.number_input("Questões Acertadas", 0)
-                    to_reg = ct_reg.number_input("Total de Questões", 0)
-                    
-                    # NOVO: Classificação de Dificuldade
-                    st.markdown("##### 🎯 Como foi esse assunto?")
-                    dif_reg = st.segmented_control(
-                        "Classificação:",
-                        ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
-                        default="🟡 Médio"
-                    )
-                    
-                    # NOVO: Relevância (Incidência)
-                    rel_reg = st.selectbox(
-                        "Relevância (Incidência em Prova):",
-                        options=list(range(1, 11)),
-                        index=4,  # Valor 5 (índice 4)
-                        help="De 1 (baixa incidência) a 10 (matéria muito cobrada)"
-                    )
-                    
-                    # Mostrar recomendação baseada na dificuldade
-                    tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_reg)
-                    st.info(f"💡 **{dif_reg}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
-                    
-                    # NOVO: Checkbox para controlar se gera revisões
-                    gerar_rev_reg = st.checkbox("🔄 Gerar ciclo de revisões para este registro?", value=True, help="Se desmarcado, este registro será salvo apenas para estatísticas e não aparecerá no radar de revisões.")
-                    
-                    st.divider()
-                    
-                    com_reg = st.text_area("Anotações / Comentários", placeholder="O que você aprendeu ou sentiu dificuldade?")
-                    
-                    btn_salvar = st.form_submit_button("💾 SALVAR REGISTRO", use_container_width=True, type="primary")
-                    
-                    if btn_salvar:
-                        try:
-                            t_b = formatar_tempo_para_bigint(tm_reg)
-                            taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
-                            
-                            payload = {
-                                "concurso": missao, 
-                                "materia": mat_reg, 
-                                "assunto": ass_reg, 
-                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
-                                "acertos": ac_reg, 
-                                "total": to_reg, 
-                                "taxa": taxa,
-                                "dificuldade": dif_reg, 
-                                "relevancia": rel_reg,  # Novo campo
-                                "comentarios": com_reg, 
-                                "tempo": t_b, 
-                                "rev_24h": not gerar_rev_reg, 
-                                "rev_07d": not gerar_rev_reg, 
-                                "rev_15d": not gerar_rev_reg, 
-                                "rev_30d": not gerar_rev_reg
-                            }
-                            supabase.table("registros_estudos").insert(payload).execute()
-                            st.success("✅ Registro salvo com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao salvar: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- ABA: DASHBOARD ---
-    elif menu == "Dashboard":
-        st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
-        
-        # --- NOVO: EDITAL VERTICALIZADO (COBERTURA) ---
-        if dados.get('materias'):
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📜 Progresso do Edital (Syllabus)")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Percentual de assuntos únicos estudados por matéria.</p>", unsafe_allow_html=True)
-            
-            # Calcular cobertura para cada materia cadastrada
-            cols_edital = st.columns(3)
-            col_idx = 0
-            
-            for materia, assuntos_previstos in dados.get('materias', {}).items():
-                # Assuntos estudados nessa materia (filtrando do df_estudos)
-                if not df_estudos.empty and 'materia' in df_estudos.columns and 'assunto' in df_estudos.columns:
-                    assuntos_estudados = df_estudos[df_estudos['materia'] == materia]['assunto'].unique()
-                    count_estudados = len(assuntos_estudados)
-                else:
-                    count_estudados = 0
-                
-                count_total = len(assuntos_previstos)
-                porcentagem = (count_estudados / count_total * 100) if count_total > 0 else 0
-                
-                # Cor da barra
-                bar_color = "#EF4444" if porcentagem < 30 else "#F59E0B" if porcentagem < 70 else "#10B981"
-                
-                with cols_edital[col_idx % 3]:
-                    st.markdown(f"""
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; color: #E2E8F0; margin-bottom: 5px;">
-                            <span>{materia}</span>
-                            <span style="color: {bar_color};">{int(porcentagem)}%</span>
-                        </div>
-                        <div class="modern-progress-container">
-                            <div class="modern-progress-fill" style="width: {porcentagem}%; background: {bar_color};"></div>
-                        </div>
-                        <div style="font-size: 0.7rem; color: #64748B; text-align: right; margin-top: 2px;">{count_estudados}/{count_total} tópicos</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                col_idx += 1
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.divider()
-
-        # --- NOVO: MAPA DE CALOR DE CONSTÂNCIA ---
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### 🔥 Mapa de Calor: Sua Constância (6 meses)")
-        render_consistency_heatmap(df_estudos)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.divider()
-
-        # Métricas Gerais
-        if df_estudos.empty:
-            t_q, precisao, horas, ritmo = 0, 0, 0, 0
-        else:
-            t_q = df_estudos['total'].sum()
-            a_q = df_estudos['acertos'].sum()
-            precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            tempo_min = df_estudos['tempo'].sum()
-            horas = tempo_min/60
-            ritmo = (tempo_min / t_q) if t_q > 0 else 0
-        
-        # 1. MÉTRICAS PRINCIPAIS
-        # Layout responsivo: 4 colunas (pode ser estreito em mobile)
-        # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-        # Linha 1: Questões e Precisão
-        row1_col1, row1_col2 = st.columns(2)
-        with row1_col1: render_metric_card("Questões", int(t_q), "📝")
-        with row1_col2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-        
-        # Linha 2: Horas e Ritmo
-        row2_col1, row2_col2 = st.columns(2)
-        with row2_col1: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with row2_col2: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
-        st.divider()
-        
-        # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
-        if not df_estudos.empty and 'relevancia' in df_estudos.columns:
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### ⭐ Desempenho por Nível de Relevância")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão média agrupada pela importância da matéria (1-10).</p>", unsafe_allow_html=True)
-            
-            # Agrupar por relevância
-            df_rel_dash = df_estudos.groupby('relevancia').agg({
-                'acertos': 'sum',
-                'total': 'sum'
-            }).reset_index()
-            
-            # Recalcular taxa por nível de relevância (média ponderada)
-            df_rel_dash['taxa'] = (df_rel_dash['acertos'] / df_rel_dash['total'] * 100).fillna(0)
-            df_rel_dash['relevancia'] = df_rel_dash['relevancia'].astype(int)
-            df_rel_dash = df_rel_dash.sort_values('relevancia', ascending=False)
-            
-            # Usar colunas dinâmicas para os níveis de relevância
-            n_cols = len(df_rel_dash)
-            if n_cols > 0:
-                n_cols_safe = min(n_cols, 3)  # Limite máximo de 3 colunas
-                # Garantir máximo de 3 colunas para evitar erro de espaço
-                n_cols_safe = min(n_cols_safe, 3) if 'n_cols_safe' in locals() else 3
-                c_rel = st.columns(n_cols_safe)
-                for idx, row in enumerate(df_rel_dash.iterrows()):
-                    r_val = row[1]['relevancia']
-                    r_taxa = row[1]['taxa']
-                    r_total = row[1]['total']
-                    
-                    with c_rel[idx]:
-                        color = "#10B981" if r_taxa >= 75 else "#F59E0B" if r_taxa >= 50 else "#EF4444"
-                        st.markdown(f"""
-                            <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02);">
-                                <div style="font-size: 0.7rem; color: #94A3B8;">NÍVEL {r_val}</div>
-                                <div style="font-size: 1.2rem; font-weight: 800; color: {color};">{r_taxa:.1f}%</div>
-                                <div style="font-size: 0.65rem; color: #64748B;">{int(r_total)} questões</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.divider()
-
-        # 2. PONTOS FRACOS & EVOLUÇÃO
-        if not df_estudos.empty:
-            c_main1, c_main2 = st.columns([1, 1])
-            
-            with c_main1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### 📉 Pareto de Erros: Onde você mais perde pontos")
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Top 10 assuntos com maior volume absoluto de erros.</p>", unsafe_allow_html=True)
-                
-                # Calcular erros brutos por assunto
-                df_errors = df_estudos.groupby(['materia', 'assunto']).agg({
-                    'total': 'sum', 
-                    'acertos': 'sum'
-                }).reset_index()
-                df_errors['erros'] = df_errors['total'] - df_errors['acertos']
-                df_errors = df_errors.sort_values('erros', ascending=False).head(10)
-                # Filtrar apenas assuntos com erros
-                df_errors = df_errors[df_errors['erros'] > 0]
-                
-                if not df_errors.empty:
-                    # Gráfico de barras horizontais (Pareto)
-                    df_errors['label'] = df_errors['assunto'].apply(lambda x: x[:25] + '...' if len(x) > 25 else x)
-                    fig_pareto = px.bar(
-                        df_errors, x='erros', y='label', orientation='h',
-                        template="plotly_dark",
-                        color='erros',
-                        color_continuous_scale=["#F43F5E", "#E11D48"], # Tons de vermelho
-                        text='erros'
-                    )
-                    fig_pareto.update_layout(
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        margin=dict(t=0, b=0, l=0, r=0),
-                        xaxis_visible=False,
-                        yaxis_title=None,
-                        coloraxis_showscale=False,
-                        height=280,
-                        yaxis={'categoryorder':'total ascending'}
-                    )
-                    st.plotly_chart(fig_pareto, use_container_width=True)
-                else:
-                    st.success("🎉 Nenhum erro registrado! Continue com a precisão em 100%.")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            with c_main2:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### 📅 Produtividade Semanal")
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Horas de estudo por dia da semana.</p>", unsafe_allow_html=True)
-                
-                # Preparar dados por dia da semana
-                df_estudos['weekday'] = pd.to_datetime(df_estudos['data_estudo']).dt.day_name()
-                # Traduzir dias (opcional, ou usar ordem fixa)
-                dias_ordem = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                dias_trad = {"Monday": "Seg", "Tuesday": "Ter", "Wednesday": "Qua", "Thursday": "Qui", "Friday": "Sex", "Saturday": "Sáb", "Sunday": "Dom"}
-                
-                df_week = df_estudos.groupby('weekday')['tempo'].sum().reindex(dias_ordem).fillna(0).reset_index()
-                df_week['horas'] = df_week['tempo'] / 60
-                df_week['dia_pt'] = df_week['weekday'].map(dias_trad)
-                
-                fig_bar = px.bar(df_week, x='dia_pt', y='horas', 
-                                template="plotly_dark",
-                                color='horas',
-                                color_continuous_scale=["#8B5CF6", "#06B6D4"])
-                
-                fig_bar.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(t=10, b=0, l=0, r=0),
-                    xaxis_title=None,
-                    yaxis_title="Horas",
-                    coloraxis_showscale=False,
-                    height=250
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        # 3. GRÁFICO DE EVOLUÇÃO (Precisão com Média Móvel)
-        if not df_estudos.empty:
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📈 Evolução de Precisão & Tendência")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 7 dias).</p>", unsafe_allow_html=True)
-            
-            # Preparar dados de evolução
-            # Agrupar por data calculando somas para taxa ponderada
-            df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo').agg({
-                'acertos': 'sum',
-                'total': 'sum'
-            }).reset_index()
-            
-            # Calcular taxa diária
-            df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
-            
-            # Calcular Média Móvel (janela de 7 pontos para capturar ciclo semanal)
-            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(7, len(df_ev)), min_periods=1).mean()
-            
-            # Criar gráfico Plotly unificado
-            fig_evo = go.Figure()
-            
-            # Linha de Precisão Diária
-            fig_evo.add_trace(go.Scatter(
-                x=df_ev['data_estudo'], y=df_ev['taxa'],
-                name='Precisão Diária',
-                line=dict(color='#8B5CF6', width=2),
-                mode='lines+markers',
-                marker=dict(size=6)
-            ))
-            
-            # Linha de Tendência (Média Móvel)
-            fig_evo.add_trace(go.Scatter(
-                x=df_ev['data_estudo'], y=df_ev['Média Móvel'],
-                name='Tendência (Média Móvel)',
-                line=dict(color='#06B6D4', width=4, dash='dash'),
-                mode='lines'
-            ))
-            
-            fig_evo.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(t=10, b=0, l=0, r=0),
-                xaxis_title=None,
-                yaxis_title="Taxa %",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                font=dict(color="#fff"),
-                height=400,
-                yaxis=dict(range=[0, 105], gridcolor='rgba(255,255,255,0.05)')
-            )
-            
-            st.plotly_chart(fig_evo, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
-
-        st.write("") # Espaçador
-
-    # --- ABA: SIMULADOS (NOVA) ---
-    elif menu == "Simulados":
-        st.markdown('<h2 class="main-title">🏆 Área de Simulados</h2>', unsafe_allow_html=True)
-        
-        col_sim1, col_sim2 = st.columns([1, 2])
-        
-        with col_sim1:
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📝 Novo Simulado")
-            
-            with st.form("form_simulado"):
-                nome_sim = st.text_input("Nome da Prova", placeholder="Ex: Simulado PF 01")
-                banca_sim = st.text_input("Banca", placeholder="Ex: Cebraspe")
-                col_sd1, col_sd2 = st.columns(2)
-                data_sim = col_sd1.date_input("Data Realização")
-                tempo_sim = col_sd2.text_input("Tempo (HHMM)", value="0400", help="Ex: 0400 para 4h00min")
-                
-                st.markdown("---")
-                st.markdown("##### 📊 Desempenho por Disciplina")
-                
-                # Campos dinâmicos por matéria
-                notas_por_materia = {}
-                mats_edital = list(dados.get('materias', {}).keys())
-                
-                if not mats_edital:
-                    st.warning("⚠️ Nenhuma matéria cadastrada no edital. Adicione matérias em 'Configurar' primeiro.")
-                else:
-                    for m_name in mats_edital:
-                        c1, c2, c3 = st.columns([2, 1, 1])
-                        c1.markdown(f"<div style='padding-top:25px; font-weight:600;'>{m_name}</div>", unsafe_allow_html=True)
-                        ac = c2.number_input("Acertos", min_value=0, key=f"sim_ac_{m_name}")
-                        to = c3.number_input("Total", min_value=0, key=f"sim_to_{m_name}")
-                        notas_por_materia[m_name] = {"ac": ac, "to": to}
-
-                if st.form_submit_button("💾 Salvar Simulado Completo", use_container_width=True, type="primary"):
-                    if nome_sim and mats_edital:
-                        # Calcular totais
-                        total_acertos = sum(v['ac'] for v in notas_por_materia.values())
-                        total_questoes = sum(v['to'] for v in notas_por_materia.values())
-                        
-                        if total_questoes == 0:
-                            st.error("O total de questões não pode ser zero.")
-                        else:
-                            # Gerar string de detalhes
-                            detalhes = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in notas_por_materia.items() if v['to'] > 0])
-                            
-                            t_b_sim = formatar_tempo_para_bigint(tempo_sim)
-                            
-                            simulado_data = {
-                                "data_estudo": data_sim.strftime("%Y-%m-%d"),
-                                "materia": "SIMULADO",
-                                "assunto": f"{nome_sim} | {banca_sim}",
-                                "tempo": t_b_sim,
-                                "acertos": total_acertos,
-                                "total": total_questoes,
-                                "taxa": (total_acertos/total_questoes*100),
-                                "concurso": st.session_state.missao_ativa,
-                                "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
-                                "dificuldade": "Simulado",
-                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
-                            }
-                            try:
-                                supabase.table("registros_estudos").insert(simulado_data).execute()
-                                st.success(f"🏆 Simulado registrado! Total: {total_acertos}/{total_questoes}")
-                                time.sleep(1)
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro: {e}")
-                    elif not nome_sim:
-                        st.warning("Preencha o nome do simulado.")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col_sim2:
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            if not df_simulados.empty:
-                # --- MÉTRICAS ACUMULATIVAS ---
-                st.markdown("##### 🏛️ Desempenho Acumulado")
-                
-                # Calcular métricas acumulativas
-                tot_ac = df_simulados['acertos'].sum()
-                tot_to = df_simulados['total'].sum()
-                prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
-                tempo_medio = df_simulados['tempo'].mean() if not df_simulados.empty else 0
-                
-                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-                # Linha 1: Total Acertos e Total Questões
-                row1_col1, row1_col2 = st.columns(2)
-                with row1_col1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
-                with row1_col2: render_metric_card("Total Questões", int(tot_to), "📝")
-                
-                # Linha 2: Precisão Global e Tempo Médio
-                row2_col1, row2_col2 = st.columns(2)
-                with row2_col1: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
-                with row2_col2: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
-                
-                st.divider()
-                
-                # --- ANÁLISE VERTICAL ACUMULADA ---
-                st.markdown("##### 📈 Análise Vertical Acumulada")
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8; margin-bottom: 15px;'>Desempenho consolidado de todas as disciplinas em todos os simulados.</p>", unsafe_allow_html=True)
-                
-                # Consolidar dados de todas as matérias de todos os simulados
-                consolidado = {}
-                for _, row in df_simulados.iterrows():
-                    coments = row.get('comentarios', '')
-                    if "Detalhes:" in coments:
-                        try:
-                            det_str = coments.split("Detalhes:")[1].strip()
-                            items = [it.strip() for it in det_str.split("|")]
-                            for item in items:
-                                if ":" in item:
-                                    mat, score = item.split(":", 1)
-                                    if "/" in score:
-                                        ac, to = score.split("/")
-                                        m_name = mat.strip()
-                                        if m_name not in consolidado:
-                                            consolidado[m_name] = {"ac": 0, "to": 0}
-                                        consolidado[m_name]["ac"] += int(ac)
-                                        consolidado[m_name]["to"] += int(to)
-                        except Exception:
-                            continue
-                
-                if consolidado:
-                    st.markdown("<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;'>", unsafe_allow_html=True)
-                    # Ordenar por maior número de questões/importância
-                    for m_name, vals in sorted(consolidado.items(), key=lambda x: x[1]['to'], reverse=True):
-                        perc = (vals['ac'] / vals['to'] * 100) if vals['to'] > 0 else 0
-                        bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
-                        
-                        st.markdown(f"""
-                        <div style="background: rgba(139, 92, 246, 0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.1);">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #E2E8F0; margin-bottom: 8px;">
-                                <span style="font-weight: 600;">{m_name}</span>
-                                <span style="font-weight: 800; color: {bar_color};">{vals['ac']}/{vals['to']} ({int(perc)}%)</span>
-                            </div>
-                            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                <div style="width: {perc}%; height: 100%; background: {bar_color}; box-shadow: 0 0 10px {bar_color}40;"></div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                else:
-                    st.info("Cadastre simulados com detalhamento por matéria para habilitar a análise vertical.")
-
-                st.divider()
-                
-                # --- HISTÓRICO VERTICAL (CARDS) COM SCROLL ---
-                st.markdown("##### 📜 Histórico de Provas")
-                
-                df_sim_hist = df_simulados.sort_values('data_estudo', ascending=False)
-                
-                # --- MODAL DE EDIÇÃO DE SIMULADO ---
-                if st.session_state.edit_id_simulado is not None:
-                    registro_sim_edit = df_simulados[df_simulados['id'] == st.session_state.edit_id_simulado].iloc[0]
-                    
-                    st.markdown('<div class="modern-card" style="border: 2px solid rgba(0, 255, 255, 0.3); background: rgba(0, 255, 255, 0.05);">', unsafe_allow_html=True)
-                    st.markdown("### ✏️ Editar Simulado")
-                    
-                    with st.form("form_edit_simulado"):
-                        nome_sim_ed = st.text_input("Nome da Prova", value=registro_sim_edit['assunto'].split(' | ')[0])
-                        banca_sim_ed = st.text_input("Banca", value=registro_sim_edit['assunto'].split(' | ')[1] if ' | ' in registro_sim_edit['assunto'] else "")
-                        
-                        col_ed_sim1, col_ed_sim2 = st.columns(2)
-                        data_sim_ed = col_ed_sim1.date_input("Data Realização", value=pd.to_datetime(registro_sim_edit['data_estudo']).date())
-                        tempo_sim_ed = col_ed_sim2.text_input("Tempo (HHMM)", value=f"{int(registro_sim_edit['tempo']//60):02d}{int(registro_sim_edit['tempo']%60):02d}")
-                        
-                        st.divider()
-                        st.markdown("##### 📊 Desempenho por Disciplina")
-                        
-                        # Extrair notas atuais dos comentários
-                        coments = registro_sim_edit.get('comentarios', '')
-                        notas_atuais = {}
-                        if "Detalhes:" in coments:
-                            det_str = coments.split("Detalhes:")[1].strip()
-                            for item in det_str.split("|"):
-                                if ":" in item:
-                                    m, s = item.split(":", 1)
-                                    if "/" in s:
-                                        notas_atuais[m.strip()] = s.strip().split("/")
-                        
-                        novas_notas = {}
-                        for m_name in mats_edital:
-                            c1, c2, c3 = st.columns([2, 1, 1])
-                            c1.markdown(f"<div style='padding-top:25px; font-weight:600;'>{m_name}</div>", unsafe_allow_html=True)
-                            val_ac = int(notas_atuais.get(m_name, [0, 0])[0])
-                            val_to = int(notas_atuais.get(m_name, [0, 0])[1])
-                            ac = c2.number_input("Acertos", min_value=0, value=val_ac, key=f"edit_sim_ac_{m_name}")
-                            to = c3.number_input("Total", min_value=0, value=val_to, key=f"edit_sim_to_{m_name}")
-                            novas_notas[m_name] = {"ac": ac, "to": to}
-                        
-                        col_edit_btn1, col_edit_btn2 = st.columns(2)
-                        if col_edit_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-                            tot_ac = sum(v['ac'] for v in novas_notas.values())
-                            tot_to = sum(v['to'] for v in novas_notas.values())
-                            
-                            if tot_to > 0:
-                                det_novos = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in novas_notas.items() if v['to'] > 0])
-                                t_b_ed = formatar_tempo_para_bigint(tempo_sim_ed)
-                                
-                                supabase.table("registros_estudos").update({
-                                    "data_estudo": data_sim_ed.strftime("%Y-%m-%d"),
-                                    "assunto": f"{nome_sim_ed} | {banca_sim_ed}",
-                                    "tempo": t_b_ed,
-                                    "acertos": tot_ac,
-                                    "total": tot_to,
-                                    "taxa": (tot_ac/tot_to*100),
-                                    "comentarios": f"Banca: {banca_sim_ed} | Detalhes: {det_novos}"
-                                }).eq("id", st.session_state.edit_id_simulado).execute()
-                                
-                                st.success("✅ Simulado atualizado!")
-                                time.sleep(1)
-                                st.session_state.edit_id_simulado = None
-                                st.rerun()
-                        
-                        if col_edit_btn2.form_submit_button("❌ CANCELAR", use_container_width=True):
-                            st.session_state.edit_id_simulado = None
-                            st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                with st.container(height=600): # Container scrollável
-                    for _, row in df_sim_hist.iterrows():
-                        st.markdown(f"""
-                        <div style="
-                            background: rgba(30, 41, 59, 0.4);
-                            border-left: 5px solid #8B5CF6;
-                            padding: 20px;
-                            border-radius: 12px;
-                            margin-bottom: 20px;
-                        ">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <div>
-                                    <div style="font-size: 0.8rem; color: #94A3B8;">
-                                        {pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')} 
-                                        <span style="margin-left: 10px; color: #00FFFF;">⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}min</span>
-                                    </div>
-                                    <div style="font-size: 1.2rem; font-weight: 700; color: white;">{row['assunto']}</div>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 1.8rem; font-weight: 900; color: #00FFFF;">{row['taxa']:.1f}%</div>
-                                    <div style="font-size: 0.8rem; color: #94A3B8;">{int(row['acertos'])}/{int(row['total'])} acertos</div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Extrair detalhamento do comentário
-                        # Formato: "Banca: X | Detalhes: Materia: A/B | Materia2: C/D"
-                        comentario = row.get('comentarios', '')
-                        if "Detalhes:" in comentario:
-                            try:
-                                detalhes_str = comentario.split("Detalhes:")[1].strip()
-                                items = [it.strip() for it in detalhes_str.split("|")]
-                                
-                                st.markdown("<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px;'>", unsafe_allow_html=True)
-                                for item in items:
-                                    if ":" in item:
-                                        mat, score = item.split(":", 1)
-                                        if "/" in score:
-                                            ac, to = score.split("/")
-                                            perc = (int(ac)/int(to)*100) if int(to) > 0 else 0
-                                            bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
-                                            
-                                            st.markdown(f"""
-                                            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
-                                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #E2E8F0; margin-bottom: 4px;">
-                                                    <span>{mat}</span>
-                                                    <span style="font-weight: 700;">{score.strip()} ({int(perc)}%)</span>
-                                                </div>
-                                                <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                                                    <div style="width: {perc}%; height: 100%; background: {bar_color};"></div>
-                                                </div>
-                                            </div>
-                                            """, unsafe_allow_html=True)
-                                st.markdown("</div>", unsafe_allow_html=True)
-                            except Exception:
-                                st.write(f"Ref: {comentario}")
-                        else:
-                            st.write(f"Notas: {comentario}")
-                            
-                        st.markdown("</div>", unsafe_allow_html=True)
-                        
-                        # Adicionar botões de ação para Simulado
-                        col_act1, col_act2, col_act3 = st.columns([1, 1, 4])
-                        if col_act1.button("✏️", key=f"edit_sim_{row['id']}", help="Editar simulado", use_container_width=True):
-                            st.session_state.edit_id_simulado = row['id']
-                            st.rerun()
-                        
-                        if col_act2.button("🗑️", key=f"del_sim_{row['id']}", help="Excluir simulado", use_container_width=True):
-                            if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
-                                try:
-                                    supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
-                                    st.toast("✅ Simulado excluído!")
-                                    st.session_state[f"confirm_del_sim_{row['id']}"] = False
-                                    time.sleep(1)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro ao excluir: {e}")
-                            else:
-                                st.session_state[f"confirm_del_sim_{row['id']}"] = True
-                                st.rerun()
-                        
-                        if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
-                            st.warning("⚠️ Clique em 🗑️ novamente para confirmar")
-
-                        st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.info("Nenhum simulado registrado ainda.")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# --- ABA: HISTÓRICO ---
-    elif menu == "Histórico":
-            st.markdown('<h2 class="main-title">📜 Histórico de Estudos</h2>', unsafe_allow_html=True)
-        
-            if not df.empty:
-                df_h = df.copy()
-                df_h['data_estudo_display'] = pd.to_datetime(df_h['data_estudo']).dt.strftime('%d/%m/%Y')
-            
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            
-                # Filtros
-                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-                # Linha 1: Filtros de Matéria e Relevância
-                row1_col1, row1_col2 = st.columns(2)
-                with row1_col1:
-                    mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
-                with row1_col2:
-                    rel_options = ["Todas"] + list(range(1, 11))
-                    rel_filter = st.selectbox("Filtrar por Relevância:", rel_options, index=0, key="rel_hist_filter")
-                
-                # Linha 2: Ordenação
-                ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
-                
-            
-                # Aplicar filtros
-                df_filtered = df_h.copy()
-                if mat_filter != "Todas":
-                    df_filtered = df_filtered[df_filtered['materia'] == mat_filter]
-                
-                # Filtrar por relevância (considerando 5 como padrão se nulo ou coluna ausente)
-                df_filtered['rel_val'] = df_filtered['relevancia'].fillna(5).astype(int) if 'relevancia' in df_filtered.columns else 5
-                
-                if rel_filter != "Todas":
-                    df_filtered = df_filtered[df_filtered['rel_val'] == int(rel_filter)]
-            
-                # Aplicar ordenação
-                if ordem == "Mais Recente":
-                    df_filtered = df_filtered.sort_values('data_estudo', ascending=False)
-                elif ordem == "Mais Antigo":
-                    df_filtered = df_filtered.sort_values('data_estudo', ascending=True)
-                elif ordem == "Maior Taxa":
-                    df_filtered = df_filtered.sort_values('taxa', ascending=False)
-                elif ordem == "Menor Taxa":
-                    df_filtered = df_filtered.sort_values('taxa', ascending=True)
-                elif ordem == "Maior Relevância":
-                    df_filtered = df_filtered.sort_values('rel_val', ascending=False)
-            
-                st.divider()
-            
-                # Resumo
-                total_registros = len(df_filtered)
-                total_acertos_hist = df_filtered['acertos'].sum()
-                total_questoes_hist = df_filtered['total'].sum()
-                taxa_media = (total_acertos_hist / total_questoes_hist * 100) if total_questoes_hist > 0 else 0
-                tempo_total = df_filtered['tempo'].sum() / 60
-            
-                col_info1, col_info2, col_info3 = st.columns(3)
-                col_info1.metric("📝 Registros", total_registros)
-                col_info2.metric("🎯 Taxa Média", f"{taxa_media:.1f}%")
-                col_info3.metric("⏱️ Tempo Total", f"{tempo_total:.1f}h")
-            
-                st.divider()
-            
-                # --- MODAL DE EDIÇÃO ---
-                if st.session_state.edit_id is not None:
-                    registro_edit = df[df['id'] == st.session_state.edit_id].iloc[0]
-                
-                    st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-                    st.markdown("### ✏️ Editar Registro")
-                
-                    with st.form("form_edit_registro", clear_on_submit=False):
-                        col_e1, col_e2 = st.columns([2, 1])
-                        dt_edit = col_e1.date_input(
-                            "Data do Estudo", 
-                            value=pd.to_datetime(registro_edit['data_estudo']).date(), 
-                            format="DD/MM/YYYY", 
-                            key="dt_edit"
-                        )
-                        tm_edit = col_e2.text_input(
-                            "Tempo (HHMM)", 
-                            value=f"{int(registro_edit['tempo']//60):02d}{int(registro_edit['tempo']%60):02d}", 
-                            key="tm_edit"
-                        )
-                    
-                        mat_edit = st.selectbox(
-                            "Disciplina", 
-                            list(dados.get('materias', {}).keys()), 
-                            index=list(dados.get('materias', {}).keys()).index(registro_edit['materia']), 
-                            key="mat_edit"
-                        )
-                        assuntos_edit = dados['materias'].get(mat_edit, ["Geral"])
-                        ass_edit = st.selectbox(
-                            "Assunto", 
-                            assuntos_edit, 
-                            index=assuntos_edit.index(registro_edit['assunto']) if registro_edit['assunto'] in assuntos_edit else 0, 
-                            key="ass_edit"
-                        )
-                    
-                        st.divider()
-                    
-                        ca_edit, ct_edit = st.columns(2)
-                        ac_edit = ca_edit.number_input("Questões Acertadas", value=int(registro_edit['acertos']), min_value=0, key="ac_edit")
-                        to_edit = ct_edit.number_input("Total de Questões", value=int(registro_edit['total']), min_value=0, key="to_edit")
-                    
-                        # Dificuldade
-                        st.markdown("##### 🎯 Classificação de Dificuldade")
-                        dif_edit = st.segmented_control(
-                            "Classificação:",
-                            ["🟢 Fácil", "🟡 Médio", "🔴 Difícil"],
-                            default=registro_edit.get('dificuldade', '🟡 Médio'),
-                            key="dif_edit"
-                        )
-
-                        # NOVO: Relevância na edição
-                        rel_edit = st.selectbox(
-                            "Relevância (Incidência em Prova):",
-                            options=list(range(1, 11)),
-                            index=int(registro_edit.get('relevancia', 5)) - 1,
-                            key="rel_edit"
-                        )
-                    
-                        tempo_rec, desc_rec = tempo_recomendado_rev24h(dif_edit)
-                        st.info(f"💡 **{dif_edit}** → Revisar em 24h: ~{tempo_rec}min ({desc_rec})")
-                    
-                        st.divider()
-                        com_edit = st.text_area(
-                            "Anotações / Comentários", 
-                            value=registro_edit.get('comentarios', ''), 
-                            key="com_edit",
-                            height=100
-                        )
-                    
-                        # NOVO: Controle de ciclo de revisões na edição
-                        st.markdown("##### 🔄 Ciclo de Revisões")
-                        foi_concluido = all([registro_edit.get('rev_24h'), registro_edit.get('rev_07d'), registro_edit.get('rev_15d')])
-                        gerar_rev_edit = st.checkbox(
-                            "Manter ciclo de revisões ativo?", 
-                            value=not foi_concluido,
-                            help="Se desmarcado, as revisões deste registro serão marcadas como concluídas.",
-                            key="gerar_rev_edit"
-                        )
-                    
-                        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
-                    
-                        if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-                            try:
-                                t_b = formatar_tempo_para_bigint(tm_edit)
-                                taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
-                            
-                                supabase.table("registros_estudos").update({
-                                    "data_estudo": dt_edit.strftime('%Y-%m-%d'),
-                                    "materia": mat_edit,
-                                    "assunto": ass_edit,
-                                    "acertos": ac_edit,
-                                    "total": to_edit,
-                                    "taxa": taxa,
-                                    "dificuldade": dif_edit,
-                                    "relevancia": rel_edit, # Novo campo
-                                    "comentarios": com_edit,
-                                    "tempo": t_b,
-                                    "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
-                                    "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_07d'])),
-                                    "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_15d'])),
-                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d']))
-                                }).eq("id", st.session_state.edit_id).execute()
-                            
-                                st.success("✅ Registro atualizado com sucesso!")
-                                time.sleep(1)
-                                st.session_state.edit_id = None
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao atualizar: {e}")
-                    
-                        if col_btn2.form_submit_button("❌ CANCELAR", use_container_width=True, type="secondary"):
-                            st.session_state.edit_id = None
-                            st.rerun()
-                
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    st.divider()
-            
-                # --- LISTA DE REGISTROS ---
-                st.markdown("##### 📝 Gerenciar Registros")
-            
-                if len(df_filtered) == 0:
-                    st.info("Nenhum registro encontrado com os filtros selecionados.")
-                else:
-                    for index, row in df_filtered.iterrows():
-                        with st.container():
-                            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                        
-                            # Layout principal
-                            info_col, metrics_col, action_col = st.columns([3, 1.5, 1.2])
-                        
-                            with info_col:
-                                # Informações do Registro
-                                taxa_color = "#00FF00" if row['taxa'] >= 80 else "#FFD700" if row['taxa'] >= 60 else "#FF4B4B"
-                            
-                                st.markdown(f"""
-                                    <div style="margin-bottom: 8px;">
-                                        <span style="color: #adb5bd; font-size: 0.85rem; font-weight: 600;">📅 {row['data_estudo_display']}</span>
-                                        <span style="color: {taxa_color}; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
-                                            {row['taxa']:.1f}%
-                                        </span>
-                                        <span style="color: #adb5bd; font-size: 0.85rem; margin-left: 15px;">
-                                            {row.get('dificuldade', '🟡 Médio')}
-                                        </span>
-                                        <span style="color: #F59E0B; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
-                                            ⭐ R{int(row.get('relevancia', 5))}
-                                        </span>
-                                    </div>
-                                    <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
-                                    <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
-                                """, unsafe_allow_html=True)
-                            
-                                # Anotações
-                                if row.get('comentarios'):
-                                    with st.expander("📝 Ver Anotações", expanded=False):
-                                        st.markdown(f"<p style='color: #adb5bd; font-size: 0.9rem;'>{row['comentarios']}</p>", unsafe_allow_html=True)
-                        
-                            with metrics_col:
-                                # Métricas - CORREÇÃO: string formatada corretamente
-                                html_metricas = f"""
-                                    <div style="text-align: right;">
-                                        <div style="font-size: 0.8rem; color: #adb5bd; margin-bottom: 5px;">Desempenho</div>
-                                        <div style="font-size: 1.3rem; font-weight: 700; color: #fff;">
-                                            {int(row['acertos'])}/{int(row['total'])}
-                                        </div>
-                                        <div style="font-size: 0.75rem; color: #adb5bd;">
-                                            ⏱️ {int(row['tempo']//60)}h{int(row['tempo']%60):02d}m
-                                        </div>
-                                    </div>
-                                """
-                                st.markdown(html_metricas, unsafe_allow_html=True)
-                        
-                            with action_col:
-                                col_a1, col_a2 = st.columns(2, gap="small")
-                            
-                                # Botão Editar
-                                if col_a1.button("✏️", key=f"edit_{row['id']}", help="Editar registro", use_container_width=True):
-                                    st.session_state.edit_id = row['id']
-                                    st.rerun()
-                            
-                                # Botão Excluir com confirmação
-                                if col_a2.button("🗑️", key=f"del_{row['id']}", help="Excluir registro", use_container_width=True):
-                                    try:
-                                        # Confirmação via dialog
-                                        if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                            supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
-                                            st.toast("✅ Registro excluído com sucesso!", icon="✅")
-                                            time.sleep(0.5)
-                                            st.session_state[f"confirm_delete_{row['id']}"] = False
-                                            st.rerun()
-                                        else:
-                                            st.session_state[f"confirm_delete_{row['id']}"] = True
-                                            st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao excluir: {e}")
-                            
-                                # Confirmação visual
-                                if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                    st.warning(f"⚠️ Clique em 🗑️ novamente para confirmar exclusão", icon="⚠️")
-                        
-                            st.markdown('</div>', unsafe_allow_html=True)
-            
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info("📚 Nenhum registro de estudo encontrado ainda. Comece a estudar!")
-
-    # --- ABA: RELATÓRIOS ---
-    elif menu == "Relatórios":
-        st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2.5rem; margin-bottom:1rem;">📑 Central de Relatórios</h1>', unsafe_allow_html=True)
-        st.markdown("<p style='color: #94A3B8; font-size: 1.1rem;'>Gere documentos consolidados e análises estratégicas para o seu estudo.</p>", unsafe_allow_html=True)
-        
-        st.divider()
-        
-        # Calcular Projeção
-        proj = calcular_projecao_conclusao(df_estudos, dados)
-        
-        # Layout responsivo: 2 colunas principais (evita erro com download_button)
-        col_rel_row1_1, col_rel_row1_2 = st.columns(2)
-        
-        with col_rel_row1_1:
-            st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
-                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
-                        Análise de priorização (Esforço x Resultado), 
-                        detalhamento por matéria e gargalos de assuntos.
-                    </p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
-                # Gerar PDF fora das colunas para evitar erro de espaço
-                with st.spinner("Gerando relatório..."):
-                    try:
-                        pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
-                        st.session_state['pdf_relatorio'] = pdf_bytes
-                        st.session_state['pdf_relatorio_nome'] = f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
-                    except Exception as e:
-                        st.error(f"Erro ao gerar PDF: {e}")
-            
-            # Mostrar botão de download fora do if (após geração)
-            if 'pdf_relatorio' in st.session_state:
-                st.success("✅ Relatório gerado!")
-                st.download_button(
-                    label="📥 Baixar (PDF)",
-                    data=st.session_state['pdf_relatorio'],
-                    file_name=st.session_state['pdf_relatorio_nome'],
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_relatorio"
-                )
-
-        with col_rel_row1_2:
-            st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
-                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
-                        Planilha detalhada com todas as suas sessões de estudo e horas líquidas acumuladas.
-                    </p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("📊 Gerar Log Detalhado", use_container_width=True, key="btn_gerar_pdf_horas"):
-                with st.spinner("Gerando log..."):
-                    try:
-                        pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
-                        st.session_state['pdf_horas'] = pdf_bytes_h
-                        st.session_state['pdf_horas_nome'] = f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
-                    except Exception as e:
-                        st.error(f"Erro ao gerar log: {e}")
-            
-            # Mostrar botão de download fora do if
-            if 'pdf_horas' in st.session_state:
-                st.success("✅ Log gerado!")
-                st.download_button(
-                    label="📥 Baixar Diário (PDF)",
-                    data=st.session_state['pdf_horas'],
-                    file_name=st.session_state['pdf_horas_nome'],
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_horas"
-                )
-        
-        # Terceira seção: Previsão (largura completa)
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-        
-        if proj:
-            # Layout de Projeção na Interface
-            st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; max-width: 500px; margin: 0 auto;">
-                        <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
-                        <div style="margin: 10px 0;">
-                            <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
-                            <div style="font-size: 1.5rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <div>
-                                <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y')}</div>
-                            </div>
-                            <div>
-                                <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['dias_para_fim']} dias</div>
-                            </div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("Cadastre o edital para ver a previsão.")
-
-        st.divider()
-
-        # --- SEÇÃO: BENCHMARK DE SIMULADOS ---
-        st.markdown('<h3 style="color: #fff; margin-bottom: 20px;">📈 Benchmark de Simulados</h3>', unsafe_allow_html=True)
-        
-        # Usar df_simulados carregado no início da aplicação
-        df_sim_bench = df_simulados.sort_values('data_estudo')
-        
-        if df_sim_bench.empty:
-            st.info("Registre pelo menos um Simulado para habilitar o Benchmark.")
-        else:
-            col_b1, col_b2 = st.columns([1, 2])
-            
-            with col_b1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                # Configurar Nota de Corte
-                st.session_state.nota_corte_alvo = st.slider(
-                    "Sua Nota de Corte Alvo (%)", 
-                    min_value=50, max_value=100, 
-                    value=st.session_state.nota_corte_alvo,
-                    step=1
-                )
-                
-                # Métricas de Evolução
-                ult_nota = df_sim_bench['taxa'].iloc[-1]
-                med_nota = df_sim_bench['taxa'].mean()
-                diff_corte = ult_nota - st.session_state.nota_corte_alvo
-                
-                st.markdown("---")
-                st.markdown(f"**Última Nota:** {ult_nota:.1f}%")
-                if diff_corte >= 0:
-                    st.success(f"🔥 +{diff_corte:.1f}% ACIMA da meta!")
-                else:
-                    st.warning(f"⚠️ {abs(diff_corte):.1f}% ABAIXO da meta.")
-                
-                st.markdown(f"**Média Geral:** {med_nota:.1f}%")
-                
-                # Tendência
-                if len(df_sim_bench) >= 2:
-                    tendencia = "Subindo 📈" if df_sim_bench['taxa'].iloc[-1] > df_sim_bench['taxa'].iloc[-2] else "Caindo 📉" if df_sim_bench['taxa'].iloc[-1] < df_sim_bench['taxa'].iloc[-2] else "Estável ➖"
-                else:
-                    tendencia = "Mantenha o Ritmo!"
-                
-                st.markdown(f"**Tendência:** {tendencia}")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            with col_b2:
-                # Gráfico de Evolução de simulados
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                
-                df_plt = df_sim_bench.copy()
-                df_plt['data_estudo'] = pd.to_datetime(df_plt['data_estudo'])
-                
-                fig_bench = go.Figure()
-                
-                # Linha de Corte
-                fig_bench.add_hline(
-                    y=st.session_state.nota_corte_alvo, 
-                    line_dash="dash", 
-                    line_color="#EF4444", 
-                    annotation_text="Nota de Corte", 
-                    annotation_position="top left"
-                )
-                
-                # Linha de Performance
-                fig_bench.add_trace(go.Scatter(
-                    x=df_plt['data_estudo'], 
-                    y=df_plt['taxa'],
-                    name='Seu Desempenho',
-                    line=dict(color='#06B6D4', width=3),
-                    mode='lines+markers',
-                    marker=dict(size=8, symbol='diamond')
-                ))
-                
-                fig_bench.update_layout(
-                    title="Evolução de Notas vs Meta",
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color="#fff"),
-                    height=300,
-                    margin=dict(t=30, b=10, l=10, r=10),
-                    yaxis=dict(range=[max(0, df_plt['taxa'].min()-10), 105], gridcolor='rgba(255,255,255,0.05)')
-                )
-                
-                st.plotly_chart(fig_bench, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- ABA: CONFIGURAR ---
-    elif menu == "Configurar":
-        st.markdown('<h2 class="main-title">⚙️ Configurações</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="section-subtitle">Gerenciar missões e preferências globais</p>', unsafe_allow_html=True)
-
-        # SEÇÃO: TROCAR MISSÃO (Conforme Plano de Profissionalização)
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown('### 📌 Seleção de Missão Foco', unsafe_allow_html=True)
-        
-            ed = get_editais(supabase)
-            if ed:
-                nomes_missoes = list(ed.keys())
-                try:
-                    indice_atual = nomes_missoes.index(missao) if missao in nomes_missoes else 0
-                except (ValueError, IndexError):
-                    indice_atual = 0
-            
-                nova_missao = st.selectbox(
-                    "Selecione o concurso que deseja focar agora:",
-                    options=nomes_missoes,
-                    index=indice_atual,
-                    help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida."
-                )
-            
-                if nova_missao != missao:
-                    st.session_state.missao_ativa = nova_missao
-                    st.success(f"✅ Missão alterada para: {nova_missao}")
-                    time.sleep(1)
-                    st.rerun()
-            else:
-                st.warning("Nenhuma missão cadastrada encontrada.")
-                if st.button("➕ Cadastrar Nova Missão"):
-                    st.session_state.missao_ativa = None
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.divider()
-
-        # Mostrar data atual se existir
-        try:
-            data_prova_atual = pd.to_datetime(data_prova_direta).date() if data_prova_direta else None
-        except Exception:
-            data_prova_atual = None
-
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown('### Dados do Edital', unsafe_allow_html=True)
-            st.write(f"**Concurso:** {missao}")
-            st.write(f"**Cargo:** {dados.get('cargo', '—')}")
-            st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Formulário para editar data da prova
-        with st.form("form_editar_edital"):
-            st.markdown("### 📅 Ajustar Data da Prova")
-        
-            nova_data_escolhida = st.date_input(
-                "Selecione a data da prova", 
-                value=(data_prova_atual or datetime.date.today())
-            )
-        
-            remover = st.checkbox("Remover data da prova (deixar em branco)")
-
-            submitted = st.form_submit_button("Salvar alterações", use_container_width=True, type="primary")
-        
-            if submitted:
-                try:
-                    valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
-                
-                    # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
-                    res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
-                
-                    if res.data:
-                        # 2. LIMPA A MEMÓRIA DO APP
-                        st.cache_data.clear() 
-                    
-                        # 3. ATUALIZA O ESTADO PARA FORÇAR RECARREGAMENTO
-                        st.session_state.missao_ativa = missao
-                    
-                        st.success(f"✅ Data atualizada no banco! Recarregando...")
-                        time.sleep(1)
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao salvar: {e}")
-
-        # Seção para adicionar/gerenciar matérias
-        st.divider()
-        st.markdown("### 📚 Gerenciar Matérias e Assuntos")
-    
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        
-            # Buscar matérias do banco de dados
-            try:
-                res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
-                registros_materias = res_materias.data
-            except Exception as e:
-                st.error(f"Erro ao buscar matérias: {e}")
-                registros_materias = []
-        
-            # --- NOVA SEÇÃO: EXCLUSÃO EM MASSA ---
-            if registros_materias:
-                st.markdown("#### 🗑️ Exclusão em Massa de Matérias")
-                st.warning("⚠️ Atenção: Esta ação excluirá permanentemente as matérias selecionadas e TODOS os registros de estudo relacionados!", icon="⚠️")
-            
-                # Criar lista de matérias com checkboxes
-                materias_selecionadas = []
-            
-                for reg in registros_materias:
-                    col_check, col_info = st.columns([0.5, 9.5])  # Corrigido: checkbox tem mais espaço
-                    with col_check:
-                        selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
-                    with col_info:
-                        st.write(f"**{reg['materia']}** - {len(reg['topicos'] if reg['topicos'] else [])} assuntos")
-                
-                    if selecionada:
-                        materias_selecionadas.append(reg)
-            
-                # Botão para excluir matérias selecionadas
-                if materias_selecionadas:
-                    st.error(f"⚠️ **{len(materias_selecionadas)} matéria(s) selecionada(s) para exclusão:**")
-                    for mat in materias_selecionadas:
-                        st.write(f"• {mat['materia']}")
-                
-                    # Confirmação adicional
-                    confirmacao = st.checkbox("✅ Confirmo que compreendo que esta ação é irreversível e excluirá todos os registros relacionados", 
-                                            key="confirm_exclusao_massa")
-                
-                    if confirmacao:
-                        col_btn1, col_btn2 = st.columns(2)
-                        with col_btn1:
-                            if st.button("🚨 EXCLUIR MATÉRIAS SELECIONADAS", type="primary", use_container_width=True):
-                                try:
-                                    contador_exclusoes = 0
-                                    contador_registros = 0
-                                
-                                    for mat in materias_selecionadas:
-                                        # Primeiro, contar registros de estudos associados a esta matéria
-                                        try:
-                                            res_contagem = supabase.table("registros_estudos")\
-                                                .select("id", count="exact")\
-                                                .eq("concurso", missao)\
-                                                .eq("materia", mat['materia'])\
-                                                .execute()
-                                        
-                                            # CORREÇÃO: Verificar se count existe e não é None
-                                            if hasattr(res_contagem, 'count') and res_contagem.count is not None:
-                                                contador_registros += res_contagem.count
-                                        except Exception:
-                                            # Se não conseguir contar, continuar mesmo assim
-                                            pass
-                                    
-                                        # Excluir registros de estudos dessa matéria
-                                        try:
-                                            supabase.table("registros_estudos").delete()\
-                                                .eq("concurso", missao)\
-                                                .eq("materia", mat['materia'])\
-                                                .execute()
-                                        except Exception as e:
-                                            st.warning(f"Aviso: Não foi possível excluir todos os registros de '{mat['materia']}': {e}")
-                                    
-                                        # Excluir a matéria da tabela editais_materias
-                                        try:
-                                            supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
-                                            contador_exclusoes += 1
-                                        except Exception as e:
-                                            st.error(f"Erro ao excluir matéria '{mat['materia']}': {e}")
-                                
-                                    st.success(f"✅ **{contador_exclusoes} matéria(s) excluída(s) com sucesso!**")
-                                    if contador_registros > 0:
-                                        st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
-                                
-                                    # Limpar cache e recarregar
-                                    st.cache_data.clear()
-                                    time.sleep(2)
-                                    st.rerun()
-                                
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao excluir matérias: {e}")
-                    
-                        with col_btn2:
-                            if st.button("❌ Cancelar Exclusão", type="secondary", use_container_width=True):
-                                st.rerun()
-            
-                st.divider()
-        
-            # Mostrar matérias atuais
-            if registros_materias:
-                st.markdown("#### ✏️ Editar Matérias Individuais")
-            
-                # Para cada matéria, criar um expander com opções de edição
-                for reg in registros_materias:
-                    materia = reg['materia']
-                    topicos = reg['topicos'] if reg['topicos'] else []
-                    id_registro = reg['id']
-                
-                    with st.expander(f"📖 {materia} ({len(topicos)} assuntos)"):
-                        # Mostrar assuntos atuais
-                        st.markdown("**Assuntos atuais:**")
-                        if topicos:
-                            for i, topico in enumerate(topicos):
-                                col1, col2 = st.columns([5, 1])
-                                col1.write(f"• {topico}")
-                                # Botão para remover assunto
-                                if col2.button("🗑️", key=f"del_{id_registro}_{i}", help="Remover assunto", use_container_width=True):
-                                    try:
-                                        # Remover o tópico da lista
-                                        novos_topicos = [t for t in topicos if t != topico]
-                                        # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).execute()
-                                        st.success(f"✅ Assunto '{topico}' removido!")
-                                        time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao remover assunto: {e}")
-                        else:
-                            st.info("Nenhum assunto cadastrado.")
-                    
-                        st.divider()
-                    
-                        # Formulário para adicionar novos assuntos
-                        with st.form(f"form_novo_assunto_{id_registro}"):
-                            st.markdown("**Adicionar novos assuntos (em massa)**")
-                        
-                            # Opções de entrada
-                            metodo_entrada = st.selectbox(
-                                "Como deseja adicionar os assuntos?",
-                                ["Um por um", "Vários com separador", "Vários por linhas"],
-                                key=f"metodo_{id_registro}"
-                            )
-                        
-                            # Inicializar variável para evitar NameError
-                            assuntos_para_adicionar = []
-                        
-                            if metodo_entrada == "Um por um":
-                                # Modo tradicional
-                                novo_assunto = st.text_input("Nome do assunto", placeholder="Ex: Princípios fundamentais", key=f"novo_assunto_single_{id_registro}")
-                                assuntos_para_adicionar = [novo_assunto] if novo_assunto else []
-                            
-                            elif metodo_entrada == "Vários com separador":
-                                # Modo com separador
-                                col_sep1, col_sep2 = st.columns([2, 1])
-                                with col_sep1:
-                                    texto_assuntos = st.text_area(
-                                        "Digite os assuntos separados por:",
-                                        placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
-                                        key=f"texto_assuntos_{id_registro}",
-                                        height=100
-                                    )
-                                with col_sep2:
-                                    separador = st.selectbox(
-                                        "Separador",
-                                        ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
-                                        key=f"separador_{id_registro}"
-                                    )
-                                    # Mapear separador
-                                    separador_map = {
-                                        "; (ponto e vírgula)": ";",
-                                        ", (vírgula)": ",",
-                                        ". (ponto)": ".",
-                                        "- (hífen)": "-",
-                                        "| (pipe)": "|"
-                                    }
-                                    separador_char = separador_map[separador]
-                            
-                                if texto_assuntos:
-                                    # Processar os assuntos
-                                    assuntos_brutos = texto_assuntos.split(separador_char)
-                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
-                                else:
-                                    assuntos_para_adicionar = []
-                                
-                                    # Mostrar prévia
-                                    if assuntos_para_adicionar:
-                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
-                                        with st.expander("Ver assuntos"):
-                                            for a in assuntos_para_adicionar:
-                                                st.write(f"• {a}")
-                            else:  # "Vários por linhas"
-                                # Modo com múltiplas linhas
-                                texto_assuntos = st.text_area(
-                                    "Digite um assunto por linha:",
-                                    placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
-                                    key=f"texto_assuntos_linhas_{id_registro}",
-                                    height=120
-                                )
-                            
-                                if texto_assuntos:
-                                    # Processar os assuntos (uma por linha)
-                                    assuntos_brutos = texto_assuntos.split("\n")
-                                    assuntos_para_adicionar = [a.strip() for a in assuntos_brutos if a.strip()]
-                                else:
-                                    assuntos_para_adicionar = []
-                                
-                                    # Mostrar prévia
-                                    if assuntos_para_adicionar:
-                                        st.info(f"**Prévia:** Serão adicionados {len(assuntos_para_adicionar)} assuntos")
-                                        with st.expander("Ver assuntos"):
-                                            for a in assuntos_para_adicionar:
-                                                st.write(f"• {a}")
-                        
-                            col_btn1, col_btn2 = st.columns(2)
-                            if col_btn1.form_submit_button("➕ Adicionar Assuntos", use_container_width=True):
-                                if assuntos_para_adicionar:
-                                    try:
-                                        # Buscar tópicos atuais
-                                        if not topicos:
-                                            topicos = []
-                                        # Adicionar novos tópicos à lista (evitar duplicados)
-                                        for assunto in assuntos_para_adicionar:
-                                            if assunto not in topicos:
-                                                topicos.append(assunto)
-                                            else:
-                                                st.warning(f"Assunto '{assunto}' já existe e foi ignorado.")
-                                    
-                                        # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
-                                        st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
-                                        time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao adicionar assuntos: {e}")
-                                else:
-                                    st.warning("⚠️ Nenhum assunto válido para adicionar.")
-                        
-                            if col_btn2.form_submit_button("✏️ Renomear Matéria", use_container_width=True, type="secondary"):
-                                # Abrir modal para renomear matéria
-                                st.session_state[f"renomear_{id_registro}"] = True
-                                st.rerun()
-                    
-                        # Modal para renomear matéria
-                        if st.session_state.get(f"renomear_{id_registro}", False):
-                            st.markdown('<div style="background: rgba(255, 75, 75, 0.1); padding: 15px; border-radius: 8px; margin-top: 10px;">', unsafe_allow_html=True)
-                            novo_nome = st.text_input("Novo nome da matéria", value=materia, key=f"novo_nome_{id_registro}")
-                        
-                            col_r1, col_r2 = st.columns(2)
-                            if col_r1.button("💾 Salvar", key=f"salvar_nome_{id_registro}", use_container_width=True):
-                                if novo_nome and novo_nome != materia:
-                                    try:
-                                        # Atualizar o nome da matéria
-                                        supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).execute()
-                                    
-                                        # Atualizar também nos registros de estudo
-                                        supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
-                                    
-                                        st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
-                                        time.sleep(1)
-                                        st.session_state[f"renomear_{id_registro}"] = False
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao renomear matéria: {e}")
-                        
-                            if col_r2.button("❌ Cancelar", key=f"cancelar_nome_{id_registro}", use_container_width=True):
-                                st.session_state[f"renomear_{id_registro}"] = False
-                                st.rerun()
-                        
-                            st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info("Nenhuma matéria cadastrada ainda.")
-        
-            # Formulário para adicionar nova matéria
-            st.divider()
-            st.markdown("#### ➕ Adicionar Nova Matéria")
-        
-            with st.form("form_nova_materia"):
-                col1, col2 = st.columns([3, 1])
-            
-                with col1:
-                    nova_materia = st.text_input("Nome da Matéria", placeholder="Ex: Direito Constitucional")
-            
-                with col2:
-                    st.write("")  # Espaçamento
-                    st.write("")  # Espaçamento
-            
-                # Seção para assuntos iniciais
-                st.markdown("**Assuntos iniciais (opcional):**")
-            
-                metodo_assuntos = st.selectbox(
-                    "Como deseja adicionar os assuntos iniciais?",
-                    ["Sem assuntos iniciais", "Um por um", "Vários com separador", "Vários por linhas"],
-                    key="metodo_assuntos_nova"
-                )
-            
-                assuntos_iniciais = []
-            
-                if metodo_assuntos == "Um por um":
-                    assunto_inicial = st.text_input("Assunto inicial", placeholder="Ex: Princípios fundamentais", key="assunto_inicial_single")
-                    if assunto_inicial:
-                        assuntos_iniciais = [assunto_inicial]
-                    
-                elif metodo_assuntos == "Vários com separador":
-                    col_sep1, col_sep2 = st.columns([2, 1])
-                    with col_sep1:
-                        texto_assuntos = st.text_area(
-                            "Digite os assuntos separados por:",
-                            placeholder="Ex: Princípios fundamentais; Organização do Estado; Direitos e garantias fundamentais",
-                            key="texto_assuntos_nova",
-                            height=100
-                        )
-                    with col_sep2:
-                        separador = st.selectbox(
-                            "Separador",
-                            ["; (ponto e vírgula)", ", (vírgula)", ". (ponto)", "- (hífen)", "| (pipe)"],
-                            key="separador_nova"
-                        )
-                        # Mapear separador
-                        separador_map = {
-                            "; (ponto e vírgula)": ";",
-                            ", (vírgula)": ",",
-                            ". (ponto)": ".",
-                            "- (hífen)": "-",
-                            "| (pipe)": "|"
-                        }
-                        separador_char = separador_map[separador]
-                
-                    if texto_assuntos:
-                        # Processar os assuntos
-                        assuntos_brutos = texto_assuntos.split(separador_char)
-                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-                    
-                elif metodo_assuntos == "Vários por linhas":
-                    texto_assuntos = st.text_area(
-                        "Digite um assunto por linha:",
-                        placeholder="Princípios fundamentais\nOrganização do Estado\nDireitos e garantias fundamentais\n...",
-                        key="texto_assuntos_linhas_nova",
-                        height=120
-                    )
-                
-                    if texto_assuntos:
-                        # Processar os assuntos (uma por linha)
-                        assuntos_brutos = texto_assuntos.split("\n")
-                        assuntos_iniciais = [a.strip() for a in assuntos_brutos if a.strip()]
-            
-                # Mostrar prévia se houver assuntos
-                if assuntos_iniciais and metodo_assuntos != "Sem assuntos iniciais":
-                    st.info(f"**Prévia:** {len(assuntos_iniciais)} assunto(s) inicial(is)")
-                    with st.expander("Ver assuntos"):
-                        for a in assuntos_iniciais:
-                            st.write(f"• {a}")
-            
-                # Botão de envio
-                if st.form_submit_button("Adicionar Matéria", use_container_width=True):
-                    if nova_materia:
-                        try:
-                            # Verificar se já existe
-                            res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
-                            if res_existente.data:
-                                st.error(f"❌ A matéria '{nova_materia}' já existe!")
-                            else:
-                                # Buscar cargo atual
-                                cargo_atual = dados.get('cargo', '')
-                                # Se não houver assuntos definidos, usar "Geral" como padrão
-                                if not assuntos_iniciais:
-                                    assuntos_iniciais = ["Geral"]
-                            
-                                # Adicionar nova matéria
-                                payload = {
-                                    "concurso": missao,
-                                    "cargo": cargo_atual,
-                                    "materia": nova_materia,
-                                    "topicos": assuntos_iniciais
-                                }
-                                # Se houver data_prova, incluir
-                                if data_prova_direta:
-                                    payload["data_prova"] = data_prova_direta
-                            
-                                supabase.table("editais_materias").insert(payload).execute()
-                                st.success(f"✅ Matéria '{nova_materia}' adicionada com {len(assuntos_iniciais)} assunto(s) inicial(is)!")
-                                time.sleep(1)
-                                st.cache_data.clear()  # Limpar cache para atualizar a interface
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Erro ao adicionar matéria: {e}")
-                    else:
-                        st.warning("⚠️ Por favor, informe o nome da matéria.")
-        
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Botão para excluir o concurso
-        st.divider()
-        st.markdown("### ⚠️ Zona de Perigo")
-    
-        with st.container():
-            st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-        
-            st.warning("Esta ação é irreversível!")
-        
-            # Checkbox de confirmação ANTES do botão (para funcionar corretamente com Streamlit)
-            confirmacao_exclusao = st.checkbox(
-                "✅ Confirmo que quero excluir TODOS os dados desta missão", 
-                key="confirm_delete_mission"
-            )
-        
-            # Botão só aparece habilitado se checkbox estiver marcado
-            if confirmacao_exclusao:
-                st.error("⚠️ ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos!")
-                if st.button("🗑️ EXCLUIR MISSÃO PERMANENTEMENTE", type="primary", use_container_width=True):
-                    if excluir_concurso_completo(supabase, missao):  # Função do logic.py
-                        st.success("Missão excluída! Redirecionando...")
-                        st.session_state.missao_ativa = None
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao excluir missão. Tente novamente.")
-            else:
-                st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
-        
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.div
