@@ -126,6 +126,12 @@ def gerar_pdf_estratégico(df_estudos, missao):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
+    # Calcular métricas principais
+    t_q = df_estudos['total'].sum()
+    a_q = df_estudos['acertos'].sum()
+    precisao = (a_q / t_q * 100) if t_q > 0 else 0
+    tempo_total = df_estudos['tempo'].sum() / 60
+    
     # 1. RESUMO GERAL (Layout em Grid/Tabela)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
