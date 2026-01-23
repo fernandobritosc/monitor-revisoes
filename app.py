@@ -1676,8 +1676,8 @@ else:
         # Menu Premium com option_menu
         menu_selecionado = option_menu(
             menu_title=None,
-            options=["HOME", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
-            icons=["house", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
+            options=["HOME", "GUIA SEMANAL", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
+            icons=["house", "calendar3", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
             menu_icon="cast",
             default_index=0,
             styles={
