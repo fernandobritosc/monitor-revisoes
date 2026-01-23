@@ -282,6 +282,46 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
             msg = "Continue assim! O segredo da aprovação é a regularidade. Cada tópico zerado é um passo rumo à vaga."
         pdf.multi_cell(0, 7, f"Insight: {msg}")
 
+    # 5. ASSUNTOS QUE EXIGEM ATENÇÃO (GARGALOS)
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, '5. ASSUNTOS QUE EXIGEM ATENCÃO (GARGALOS)', 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(0, 6, "Abaixo estão listados os tópicos específicos onde sua precisão está abaixo de 70%. Estes são os seus maiores gargalos e merecem uma revisão teórica antes de novos exercícios.")
+    pdf.ln(5)
+    
+    # Lógica de Assuntos Críticos
+    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
+        'acertos': 'sum',
+        'total': 'sum'
+    }).reset_index()
+    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
+    
+    # Filtrar assuntos críticos (taxa < 70% e total > 0)
+    df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
+    
+    if not df_criticos.empty:
+        materias_criticas = df_criticos['materia'].unique()
+        for mat in materias_criticas:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(0, 8, f"  > {mat}", 0, 1)
+            
+            topicos_da_materia = df_criticos[df_criticos['materia'] == mat]
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(60, 60, 60)
+            for _, row in topicos_da_materia.iterrows():
+                bullet = f"      - {row['assunto']}: {row['taxa']:.0f}% de acerto ({int(row['total'])} questões)"
+                pdf.multi_cell(0, 5, bullet)
+            pdf.ln(2)
+    else:
+        pdf.set_font('Arial', 'I', 10)
+        pdf.set_text_color(16, 185, 129)
+        pdf.cell(0, 10, "Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%.", 0, 1, 'L')
+
     return bytes(pdf.output())
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
