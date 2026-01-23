@@ -1,4 +1,4 @@
-# app.py (com correção para exclusão em massa)
+# app.py (com correção para exclusão em massa e PDF)
 
 import streamlit as st
 import pandas as pd
@@ -12,54 +12,6 @@ import time
 from streamlit_option_menu import option_menu
 from fpdf import FPDF
 import io
-
-
-
-# ============================================================================
-# 🎨 CONFIGURAÇÃO DE LAYOUT RESPONSIVO
-# ============================================================================
-
-def configurar_layout_responsivo():
-    """Configura o layout para evitar problemas de espaço horizontal"""
-    
-    st.markdown("""
-        <style>
-        /* Garantir largura mínima para inputs */
-        .stNumberInput > div > div > input {
-            min-width: 80px !important;
-        }
-        
-        .stTextInput > div > div > input {
-            min-width: 100px !important;
-        }
-        
-        .stSelectbox > div > div > div {
-            min-width: 120px !important;
-        }
-        
-        /* Melhorar responsividade em mobile */
-        @media (max-width: 768px) {
-            .stColumns {
-                flex-direction: column !important;
-            }
-            
-            .stColumn {
-                width: 100% !important;
-                margin-bottom: 1rem;
-            }
-        }
-        
-        /* Evitar overflow em containers */
-        .element-container {
-            overflow-x: auto;
-        }
-        
-        /* Garantir que cards tenham largura mínima */
-        .modern-card {
-            min-width: 200px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
 
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
@@ -149,55 +101,40 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
 # 📄 GERAÇÃO DE RELATÓRIOS PDF
 # ============================================================================
 
-
-# ============================================================================
-# 🔧 CORREÇÃO DE ENCODING PARA PDF
-# ============================================================================
-
 def fix_text(text):
     """
-    Converte texto UTF-8 para Latin-1 (ISO-8859-1) para FPDF.
-    Substitui caracteres incompatíveis por '?' para não quebrar o PDF.
-    Permite acentos (á, é, ã, ç, etc.) aparecerem corretamente.
+    Corrige problemas de encoding para o FPDF (Arial/Core fonts).
+    Converte UTF-8 para Latin-1 e substitui caracteres não suportados (como emojis) por '?'.
     """
-    if not isinstance(text, str):
-        text = str(text)
-    
+    if text is None:
+        return ""
     try:
-        # Tenta codificar para latin-1
-        # Se tiver emoji ou char especial, substitui por '?'
-        return text.encode('latin-1', errors='replace').decode('latin-1')
+        # Tenta converter string para latin-1, substituindo erros
+        return str(text).encode('latin-1', 'replace').decode('latin-1')
     except Exception:
-        # Fallback: remove acentos completamente
-        import unicodedata
-        nfkd = unicodedata.normalize('NFKD', text)
-        return "".join([c for c in nfkd if not unicodedata.combining(c)])
+        return str(text)
 
 class EstudoPDF(FPDF):
     def header(self):
         # Título principal
         self.set_font('Arial', 'B', 16)
         self.set_text_color(139, 92, 246) # Roxo do tema
-        self.multi_cell(0, 10, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), align='C')
+        self.cell(0, 10, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), 0, 1, 'C')
         
         # Horário de Brasília
         agora_br = (datetime.datetime.utcnow() - datetime.timedelta(hours=3))
         self.set_font('Arial', '', 9)
         self.set_text_color(120, 120, 120)
-        self.multi_cell(0, 5, fix_text(f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horário de Brasília)'), align='C')
-        self.ln(5)
+        self.cell(0, 5, fix_text(f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horário de Brasília)'), 0, 1, 'C')
+        self.ln(10)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(150, 150, 150)
-        self.multi_cell(0, 10, fix_text(f'Página {self.page_no()}'), align='C')
+        self.cell(0, 10, fix_text(f'Página {self.page_no()}'), 0, 0, 'C')
 
 def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
-    """
-    Versão MINIMALISTA e ROBUSTA da geração de PDF
-    À PROVA DE ERROS de largura horizontal
-    """
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -208,122 +145,262 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     precisao = (a_q / t_q * 100) if t_q > 0 else 0
     tempo_total = df_estudos['tempo'].sum() / 60
     
-    # === 1. RESUMO GERAL ===
-    pdf.set_font('Arial', 'B', 14)
-    pdf.set_text_color(139, 92, 246)
-    pdf.multi_cell(0, 10, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), align='C')
-    pdf.ln(5)
-    
-    # Missão (truncada)
-    pdf.set_font('Arial', 'B', 10)
+    # 1. RESUMO GERAL (Layout em Grid/Tabela)
+    pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    missao_curta = missao[:40] + "..." if len(missao) > 40 else missao
-    pdf.multi_cell(0, 6, fix_text(f'Missão: {missao_curta}'))
-    pdf.ln(3)
+    pdf.cell(0, 10, fix_text('1. RESUMO GERAL'), 0, 1, 'L')
     
-    # Métricas em grid simples
-    pdf.set_font('Arial', '', 10)
-    pdf.multi_cell(0, 6, fix_text(f'Total de Questões: {int(t_q)}'))
-    pdf.multi_cell(0, 6, fix_text(f'Precisão Média: {precisao:.1f}%'))
-    pdf.multi_cell(0, 6, f'Tempo Total: {tempo_total:.1f} horas')
+    # Grid de métricas
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(248, 248, 255)
+    pdf.set_text_color(100, 100, 100)
+    
+    # Linha 1
+    pdf.cell(95, 8, fix_text(' MISSÃO ATIVA'), 1, 0, 'L', True)
+    pdf.cell(95, 8, fix_text(' TEMPO TOTAL'), 1, 1, 'L', True)
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(95, 10, f' {fix_text(missao)}', 1, 0, 'L')
+    pdf.cell(95, 10, f' {tempo_total:.1f} horas', 1, 1, 'L')
+    
+    # Linha 2
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(95, 8, fix_text(' TOTAL DE QUESTÕES'), 1, 0, 'L', True)
+    pdf.cell(95, 8, fix_text(' PRECISÃO MÉDIA'), 1, 1, 'L', True)
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(95, 10, f' {int(t_q)}', 1, 0, 'L')
+    pdf.cell(95, 10, f' {precisao:.1f}%', 1, 1, 'L')
+    
     pdf.ln(10)
     
-    # === 2. DESEMPENHO POR MATÉRIA ===
+    # 2. MATRIZ DE PRIORIZAÇÃO
     pdf.set_font('Arial', 'B', 12)
-    pdf.multi_cell(0, 10, fix_text('DESEMPENHO POR MATÉRIA'))
-    pdf.ln(2)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, fix_text('2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)'), 0, 1, 'L')
     
-    # Agrupar por matéria
+    # Lógica de Dados
     df_matriz = df_estudos.groupby('materia').agg({
         'acertos': 'sum',
         'total': 'sum',
         'tempo': 'sum'
     }).reset_index()
     df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
-    df_matriz = df_matriz.sort_values('taxa')
     
-    # Listar matérias (FORMA SEGURA)
-    pdf.set_font('Arial', '', 9)
+    df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
+        'acertos': 'sum',
+        'total': 'sum'
+    }).reset_index()
+    df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
+    
+    media_taxa = df_matriz['taxa'].mean() if not df_matriz.empty else 0
+    media_volume = df_matriz['total'].mean() if not df_matriz.empty else 0
+    
+    focar = []
+    manter = []
+    revisar_base = []
+    otimizar = []
+    
     for _, row in df_matriz.iterrows():
-        try:
-            # Nome da matéria (truncado)
-            nome = row['materia'][:30] + "..." if len(row['materia']) > 30 else row['materia']
+        if row['taxa'] < 75 and row['total'] >= media_volume:
+            focar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        elif row['taxa'] >= 75 and row['total'] >= media_volume:
+            manter.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        elif row['taxa'] < 75 and row['total'] < media_volume:
+            revisar_base.append(f"{row['materia']} ({row['taxa']:.0f}%)")
+        else:
+            otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
             
-            # Linha completa em uma única string
-            linha = f"{nome}"
-            linha += " " * max(35 - len(nome), 1)
-            linha += f"{row['taxa']:.1f}% ({int(row['total'])} q)"
-            
-            # Usar multi_cell (mais seguro que cell)
-            pdf.multi_cell(0, 5, fix_text(linha))
-            
-        except Exception as e:
-            # Se der erro, pular esta matéria
-            pdf.multi_cell(0, 5, "[Erro ao processar materia]")
-            continue
-    
-    pdf.ln(10)
-    
-    # === 3. TOP 5 MATÉRIAS (Melhor e Pior) ===
-    pdf.set_font('Arial', 'B', 12)
-    pdf.multi_cell(0, 10, fix_text('ANÁLISE DE PERFORMANCE'))
-    pdf.ln(2)
-    
-    # Melhores
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(16, 185, 129)  # Verde
-    pdf.multi_cell(0, 6, fix_text('TOP 5 - Melhor Desempenho:'))
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(0, 0, 0)
-    
-    top5_melhor = df_matriz.nlargest(5, 'taxa')
-    for _, row in top5_melhor.iterrows():
-        nome = row['materia'][:25] + "..." if len(row['materia']) > 25 else row['materia']
-        pdf.multi_cell(0, 5, fix_text(f"  - {nome}: {row['taxa']:.1f}%"))
+    # Escrever no PDF com design melhorado
+    def write_block(title, items, border_color, bg_color):
+        pdf.set_fill_color(*bg_color)
+        pdf.set_draw_color(*border_color)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(*border_color)
+        
+        # Cabeçalho do Bloco
+        pdf.cell(0, 8, f"  {fix_text(title)}", 1, 1, 'L', True)
+        
+        # Conteúdo do Bloco
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_fill_color(255, 255, 255)
+        
+        content = ", ".join(items) if items else "Nenhuma disciplina nesta categoria."
+        pdf.multi_cell(0, 6, f"  {fix_text(content)}\n ", 1, 'L')
+        pdf.ln(5)
+
+    write_block("FOCO CRÍTICO: Baixo acerto + Alto volume", focar, (239, 68, 68), (254, 242, 242))
+    write_block("MANUTENÇÃO: Bom acerto + Alto volume", manter, (16, 185, 129), (240, 253, 244))
+    write_block("REVISAR BASE: Baixo acerto + Poucas questões", revisar_base, (245, 158, 11), (255, 251, 235))
+    write_block("OTIMIZAR: Excelente acerto + Poucas questões", otimizar, (6, 182, 212), (236, 254, 255))
     
     pdf.ln(5)
     
-    # Piores
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(239, 68, 68)  # Vermelho
-    pdf.multi_cell(0, 6, fix_text('ATENÇÃO - Necessitam Foco:'))
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(0, 0, 0)
+    # 3. DETALHAMENTO POR MATÉRIA E ASSUNTO
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, fix_text('3. DESEMPENHO DETALHADO (POR MATÉRIA E ASSUNTO)'), 0, 1, 'L')
+    pdf.ln(2)
     
-    top5_pior = df_matriz.nsmallest(5, 'taxa')
-    for _, row in top5_pior.iterrows():
-        nome = row['materia'][:25] + "..." if len(row['materia']) > 25 else row['materia']
-        pdf.multi_cell(0, 5, fix_text(f"  - {nome}: {row['taxa']:.1f}%"))
-    
-    pdf.ln(10)
-    
-    # === 4. PROJEÇÃO (se disponível) ===
+    for _, row_mat in df_matriz.sort_values('taxa').iterrows():
+        # Bloco de Título da Matéria
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
+        
+        # Sub-cabeçalho das métricas da matéria
+        pdf.set_font('Arial', 'I', 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, fix_text(f"  Média Geral: {row_mat['taxa']:.1f}% | Total de Questões: {int(row_mat['total'])}"), 0, 1, 'L')
+        
+        # Listagem de Assuntos
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(60, 60, 60)
+        topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
+        
+        for _, row_ass in topicos_da_materia.iterrows():
+            # Formatar linha do assunto: Assunto ............. % (Questoes)
+            nome_ass = row_ass['assunto']
+            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            
+            # Usamos uma lógica de preenchimento de pontos para ficar elegante
+            texto_esq = f"      - {nome_ass}"
+            texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
+            
+            pdf.cell(150, 6, fix_text(texto_esq), 0, 0, 'L')
+            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
+            
+        pdf.ln(4)
+        
+    # 4. PROJEÇÃO DE CONCLUSÃO
     if proj:
+        pdf.add_page()
         pdf.set_font('Arial', 'B', 12)
         pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 10, fix_text('PROJEÇÃO DE CONCLUSÃO'))
-        pdf.ln(2)
+        pdf.cell(0, 10, fix_text('4. PROJEÇÃO DE CONCLUSÃO DO EDITAL'), 0, 1, 'L')
         
         pdf.set_font('Arial', '', 10)
-        pdf.multi_cell(0, 6, fix_text(f"Progresso: {proj['progresso']:.1f}%"))
-        pdf.multi_cell(0, 6, fix_text(f"Tópicos estudados: {proj['estudados']} de {proj['total']}"))
-        pdf.multi_cell(0, 6, fix_text(f"Ritmo: {proj['ritmo']:.1f} tópicos por semana"))
-        pdf.multi_cell(0, 6, f"Dias restantes: {proj['dias_para_fim']} dias")
-        if proj.get('data_fim'):
-            pdf.multi_cell(0, 6, fix_text(f"Data prevista: {proj['data_fim'].strftime('%d/%m/%Y')}"))
-    
-    # Gerar e retornar bytes
-    try:
-        return pdf.output(dest='S').encode('latin-1')
-    except Exception as e:
-        # Se AINDA assim der erro, gerar PDF de emergência
-        pdf_emergencia = EstudoPDF()
-        pdf_emergencia.add_page()
-        pdf_emergencia.set_font('Arial', '', 10)
-        pdf_emergencia.multi_cell(0, 6, f'Erro ao gerar relatorio completo.')
-        pdf_emergencia.multi_cell(0, 6, f'Erro: {str(e)[:100]}')
-        return pdf_emergencia.output(dest='S').encode('latin-1')
+        pdf.set_text_color(0, 0, 0)
+        pdf.multi_cell(0, 7, fix_text(f"Com base no seu ritmo de estudo dos últimos 30 dias (ou histórico total), aqui está a estimativa para conclusão do seu edital:"))
+        pdf.ln(5)
+        
+        # Grid de Projeção
+        pdf.set_fill_color(240, 253, 244) # Verde bem claro
+        pdf.set_draw_color(16, 185, 129)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(95, 10, fix_text(' PROGRESSO DO EDITAL'), 1, 0, 'L', True)
+        pdf.cell(95, 10, fix_text(' RITMO (PACE) ATUAL'), 1, 1, 'L', True)
+        
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(95, 12, fix_text(f" {proj['estudados']} de {proj['total']} tópicos ({proj['progresso']:.1f}%)"), 1, 0, 'L')
+        pdf.cell(95, 12, fix_text(f" {proj['ritmo']:.1f} tópicos por semana"), 1, 1, 'L')
+        
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(95, 10, fix_text(' DIAS RESTANTES ESTIMADOS'), 1, 0, 'L', True)
+        pdf.cell(95, 10, fix_text(' DATA PREVISTA PARA TERMINAR'), 1, 1, 'L', True)
+        
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(95, 12, f" {proj['dias_para_fim']} dias", 1, 0, 'L')
+        pdf.cell(95, 12, f" {proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else '—'}", 1, 1, 'L')
+        
+        pdf.ln(10)
+        pdf.set_font('Arial', 'I', 10)
+        pdf.set_text_color(100, 100, 100)
+        if proj['progresso'] > 80:
+            msg = "Você está na reta final! Mantenha a constância para garantir a memorização dos últimos detalhes."
+        elif proj['ritmo'] < 1:
+            msg = "Atenção: Seu ritmo atual está baixo. Tente zerar ao menos 2-3 novos tópicos por semana para acelerar a conclusão."
+        else:
+            msg = "Continue assim! O segredo da aprovação é a regularidade. Cada tópico zerado é um passo rumo à vaga."
+        pdf.multi_cell(0, 7, fix_text(f"Insight: {msg}"))
 
+    # 5. ASSUNTOS QUE EXIGEM ATENÇÃO (GARGALOS)
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, fix_text('5. ASSUNTOS QUE EXIGEM ATENÇÃO (GARGALOS)'), 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(0, 6, fix_text("Abaixo estão listados os tópicos específicos onde sua precisão está abaixo de 70%. Estes são os seus maiores gargalos e merecem uma revisão teórica antes de novos exercícios."))
+    pdf.ln(5)
+    
+    # Filtrar assuntos críticos (taxa < 70% e total > 0)
+    df_criticos = df_assuntos[(df_assuntos['taxa'] < 70) & (df_assuntos['total'] > 0)].sort_values('taxa')
+    
+    if not df_criticos.empty:
+        materias_criticas = df_criticos['materia'].unique()
+        for mat in materias_criticas:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(0, 8, f"  > {fix_text(mat)}", 0, 1)
+            
+            topicos_da_materia = df_criticos[df_criticos['materia'] == mat]
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(60, 60, 60)
+            for _, row in topicos_da_materia.iterrows():
+                bullet = f"      - {row['assunto']}: {row['taxa']:.0f}% de acerto ({int(row['total'])} questões)"
+                pdf.multi_cell(0, 5, fix_text(bullet))
+            pdf.ln(2)
+    else:
+        pdf.set_font('Arial', 'I', 10)
+        pdf.set_text_color(16, 185, 129)
+        pdf.cell(0, 10, fix_text("Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%."), 0, 1, 'L')
+
+    # 6. BENCHMARK DE SIMULADOS
+    # Usar filtro flexível no dataframe bruto para capturar variações (Simulado, SIMULADOS, etc)
+    df_sim = df_bruto[df_bruto['materia'].str.upper().str.contains('SIMULADO', na=False)].sort_values('data_estudo')
+    if not df_sim.empty:
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(0, 10, fix_text('6. BENCHMARK DE SIMULADOS (EVOLUÇÃO)'), 0, 1, 'L')
+        
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.multi_cell(0, 6, fix_text("Acompanhamento cronológico do seu desempenho em provas completas (Simulados)."))
+        pdf.ln(5)
+        
+        # Cabeçalho da Tabela
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(40, 7, fix_text(' Data'), 1, 0, 'C', True)
+        pdf.cell(100, 7, fix_text(' Simulado'), 1, 0, 'C', True)
+        pdf.cell(40, 7, fix_text(' Pontuação (%)'), 1, 1, 'C', True)
+        
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(60, 60, 60)
+        for _, row in df_sim.iterrows():
+            pdf.cell(40, 6, pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y'), 1, 0, 'C')
+            pdf.cell(100, 6, f" {fix_text(row['assunto'][:55])}", 1, 0, 'L')
+            pdf.cell(40, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
+            
+        # Insights de Tendência no PDF
+        pdf.ln(5)
+        ult_nota = df_sim['taxa'].iloc[-1]
+        med_nota = df_sim['taxa'].mean()
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 8, fix_text(f"Resumo: Última Nota: {ult_nota:.1f}% | Precisão Média: {med_nota:.1f}%"), 0, 1)
+        
+        pdf.set_font('Arial', 'I', 9)
+        pdf.set_text_color(100, 100, 100)
+        if len(df_sim) >= 2:
+            gap = df_sim['taxa'].iloc[-1] - df_sim['taxa'].iloc[-2]
+            tendencia = "em ascensão" if gap > 0 else "em queda" if gap < 0 else "estabilizado"
+            msg_sim = f"Seu desempenho está {tendencia} em relação ao último simulado ({'+' if gap>0 else ''}{gap:.1f}%)."
+        else:
+            msg_sim = "Continue realizando simulados regularmente para consolidar sua curva de aprendizado."
+        pdf.multi_cell(0, 6, fix_text(f"Análise: {msg_sim}"))
+
+    # Retorna string de bytes codificada corretamente para FPDF
+    return pdf.output(dest='S').encode('latin-1')
 
 def gerar_pdf_carga_horaria(df, missao):
     pdf = EstudoPDF()
@@ -333,7 +410,7 @@ def gerar_pdf_carga_horaria(df, missao):
     # 1. RESUMO DE CARGA HORÁRIA
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.multi_cell(0, 10, fix_text('1. RESUMO DE CARGA HORÁRIA'))
+    pdf.cell(0, 10, fix_text('1. RESUMO DE CARGA HORÁRIA'), 0, 1, 'L')
     
     minutos_totais = df['tempo'].sum()
     horas_totais = minutos_totais / 60
@@ -345,20 +422,22 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.set_fill_color(248, 248, 255)
     pdf.set_text_color(100, 100, 100)
     
-    # Cabeçalho do grid
-    pdf.multi_cell(0, 8, fix_text('TOTAL DE HORAS | DIAS ESTUDADOS | MÉDIA DIÁRIA'))
+    pdf.cell(63, 8, fix_text(' TOTAL DE HORAS'), 1, 0, 'L', True)
+    pdf.cell(63, 8, fix_text(' DIAS ESTUDADOS'), 1, 0, 'L', True)
+    pdf.cell(64, 8, fix_text(' MÉDIA DIÁRIA'), 1, 1, 'L', True)
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    # Valores do grid
-    pdf.multi_cell(0, 10, f'{horas_totais:.1f}h | {int(dias_estudados)} dias | {media_diaria:.1f}h/dia')
+    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
+    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
+    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
     
     pdf.ln(10)
     
     # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.multi_cell(0, 10, fix_text('2. DETALHAMENTO DE TEMPO INVESTIDO'))
+    pdf.cell(0, 10, fix_text('2. DETALHAMENTO DE TEMPO INVESTIDO'), 0, 1, 'L')
     pdf.ln(2)
     
     # Lógica de Agrupamento
@@ -370,12 +449,12 @@ def gerar_pdf_carga_horaria(df, missao):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_fill_color(240, 240, 245)
         pdf.set_text_color(139, 92, 246)
-        pdf.multi_cell(0, 8, fix_text(f" {row_mat['materia'].upper()}"))
+        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
         
         # Total da matéria
         pdf.set_font('Arial', 'I', 8)
         pdf.set_text_color(100, 100, 100)
-        pdf.multi_cell(0, 6, fix_text(f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h"))
+        pdf.cell(0, 6, fix_text(f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h"), 0, 1, 'L')
         
         # Listagem de Assuntos
         pdf.set_font('Arial', '', 9)
@@ -384,23 +463,23 @@ def gerar_pdf_carga_horaria(df, missao):
         
         for _, row_ass in assuntos_da_materia.iterrows():
             nome_ass = row_ass['assunto']
-            if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
+            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
             
             texto_esq = f"      - {nome_ass}"
             texto_dir = f"{row_ass['tempo']/60:.1f}h"
             
-            # Usar multi_cell em vez de células duplas
-            linha_completa = f"{texto_esq}    {texto_dir}"
-            pdf.multi_cell(0, 6, fix_text(linha_completa))
+            pdf.cell(160, 6, fix_text(texto_esq), 0, 0, 'L')
+            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
             
         pdf.ln(4)
         
     pdf.ln(5)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 5, "Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade.")
+    pdf.multi_cell(0, 5, fix_text("Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade."))
 
-    return bytes(pdf.output())
+    return pdf.output(dest='S').encode('latin-1')
+
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
     if color is None:
@@ -1707,7 +1786,8 @@ else:
                 except Exception:
                     dias_restantes = None
             
-            # Métricas com ANÉIS CIRCULARES - Layout responsivo (2x2)
+            # 4 cartões de métricas com ANÉIS CIRCULARES MODERNOS
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             
             # Calcular percentuais para os anéis
             horas_totais = minutos_totais / 60
@@ -1717,10 +1797,7 @@ else:
             meta_questoes_mes = 1000
             pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
             
-            # Linha 1: Tempo e Precisão
-            row1_col1, row1_col2 = st.columns(2)
-            
-            with row1_col1:
+            with c1:
                 render_circular_progress(
                     percentage=pct_tempo,
                     label="TEMPO TOTAL",
@@ -1729,8 +1806,7 @@ else:
                     color_end=COLORS["secondary"],
                     icon="⏱️"
                 )
-            
-            with row1_col2:
+            with c2:
                 render_circular_progress(
                     percentage=pct_precisao,
                     label="PRECISÃO",
@@ -1739,11 +1815,7 @@ else:
                     color_end=COLORS["secondary"],
                     icon="🎯"
                 )
-            
-            # Linha 2: Questões e Média
-            row2_col1, row2_col2 = st.columns(2)
-            
-            with row2_col1:
+            with c3:
                 render_circular_progress(
                     percentage=pct_questoes,
                     label="QUESTÕES",
@@ -1752,8 +1824,7 @@ else:
                     color_end=COLORS["primary"],
                     icon="📝"
                 )
-            
-            with row2_col2:
+            with c4:
                 if dias_restantes is not None:
                     # Calcular percentual baseado em 90 dias
                     pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
@@ -2236,36 +2307,15 @@ else:
                     """, unsafe_allow_html=True)
                     
                     # Área de Ação (Inputs, Tempo e Botão)
-                    # Layout sem aninhamento excessivo (corrigido)
-
-                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-
+                    c_input, c_btn = st.columns([3, 1])
                     
-
-                    with col1:
-
-                        acertos = st.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
-
+                    with c_input:
+                        ci1, ci2, ci3 = st.columns(3)
+                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
+                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
+                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
                     
-
-                    with col2:
-
-                        total = st.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
-
-                    
-
-                    with col3:
-
-                        tempo_rev = st.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
-
-                    
-
-                    with col4:
-
-                        st.write("")  # Espaçamento
-
-                        st.write("")  # Mais espaçamento
-
+                    with c_btn:
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
                             try:
                                 res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
@@ -2441,17 +2491,12 @@ else:
             ritmo = (tempo_min / t_q) if t_q > 0 else 0
         
         # 1. MÉTRICAS PRINCIPAIS
-        # Layout responsivo: 4 colunas (pode ser estreito em mobile)
-        # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-        # Linha 1: Questões e Precisão
-        row1_col1, row1_col2 = st.columns(2)
-        with row1_col1: render_metric_card("Questões", int(t_q), "📝")
-        with row1_col2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: render_metric_card("Questões", int(t_q), "📝")
+        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
+        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         
-        # Linha 2: Horas e Ritmo
-        row2_col1, row2_col2 = st.columns(2)
-        with row2_col1: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with row2_col2: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         st.divider()
         
         # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
@@ -2474,10 +2519,7 @@ else:
             # Usar colunas dinâmicas para os níveis de relevância
             n_cols = len(df_rel_dash)
             if n_cols > 0:
-                n_cols_safe = min(n_cols, 3)  # Limite máximo de 3 colunas
-                # Garantir máximo de 3 colunas para evitar erro de espaço
-                n_cols_safe = min(n_cols_safe, 3) if 'n_cols_safe' in locals() else 3
-                c_rel = st.columns(n_cols_safe)
+                c_rel = st.columns(n_cols)
                 for idx, row in enumerate(df_rel_dash.iterrows()):
                     r_val = row[1]['relevancia']
                     r_taxa = row[1]['taxa']
@@ -2706,23 +2748,16 @@ else:
             if not df_simulados.empty:
                 # --- MÉTRICAS ACUMULATIVAS ---
                 st.markdown("##### 🏛️ Desempenho Acumulado")
-                
-                # Calcular métricas acumulativas
+                c_ac1, c_ac2, c_ac3, c_ac4 = st.columns(4)
                 tot_ac = df_simulados['acertos'].sum()
                 tot_to = df_simulados['total'].sum()
                 prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
                 tempo_medio = df_simulados['tempo'].mean() if not df_simulados.empty else 0
                 
-                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-                # Linha 1: Total Acertos e Total Questões
-                row1_col1, row1_col2 = st.columns(2)
-                with row1_col1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
-                with row1_col2: render_metric_card("Total Questões", int(tot_to), "📝")
-                
-                # Linha 2: Precisão Global e Tempo Médio
-                row2_col1, row2_col2 = st.columns(2)
-                with row2_col1: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
-                with row2_col2: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
+                with c_ac1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
+                with c_ac2: render_metric_card("Total Questões", int(tot_to), "📝")
+                with c_ac3: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
+                with c_ac4: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
                 
                 st.divider()
                 
@@ -2948,18 +2983,16 @@ else:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             
                 # Filtros
-                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
-                # Linha 1: Filtros de Matéria e Relevância
-                row1_col1, row1_col2 = st.columns(2)
-                with row1_col1:
+                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+                with col_f1:
                     mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
-                with row1_col2:
+                with col_f2:
                     rel_options = ["Todas"] + list(range(1, 11))
                     rel_filter = st.selectbox("Filtrar por Relevância:", rel_options, index=0, key="rel_hist_filter")
-                
-                # Linha 2: Ordenação
-                ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
-                
+                with col_f3:
+                    ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
+                with col_f4:
+                    st.write("")  # Espaçamento
             
                 # Aplicar filtros
                 df_filtered = df_h.copy()
@@ -3212,15 +3245,14 @@ else:
         
         st.divider()
         
+        col_rel1, col_rel2, col_rel3 = st.columns(3)
+        
         # Calcular Projeção
         proj = calcular_projecao_conclusao(df_estudos, dados)
         
-        # Layout responsivo: 2 colunas principais (evita erro com download_button)
-        col_rel_row1_1, col_rel_row1_2 = st.columns(2)
-        
-        with col_rel_row1_1:
+        with col_rel1:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
                     <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
                     <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                         Análise de priorização (Esforço x Resultado), 
@@ -3230,30 +3262,22 @@ else:
             """, unsafe_allow_html=True)
             
             if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
-                # Gerar PDF fora das colunas para evitar erro de espaço
-                with st.spinner("Gerando relatório..."):
-                    try:
-                        pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
-                        st.session_state['pdf_relatorio'] = pdf_bytes
-                        st.session_state['pdf_relatorio_nome'] = f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
-                    except Exception as e:
-                        st.error(f"Erro ao gerar PDF: {e}")
-            
-            # Mostrar botão de download fora do if (após geração)
-            if 'pdf_relatorio' in st.session_state:
-                st.success("✅ Relatório gerado!")
-                st.download_button(
-                    label="📥 Baixar (PDF)",
-                    data=st.session_state['pdf_relatorio'],
-                    file_name=st.session_state['pdf_relatorio_nome'],
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_relatorio"
-                )
+                try:
+                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
+                    st.success("✅ Relatório gerado!")
+                    st.download_button(
+                        label="📥 Baixar (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
-        with col_rel_row1_2:
+        with col_rel2:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; min-height: 300px;">
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
                     <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
                     <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                         Planilha detalhada com todas as suas sessões de estudo e horas líquidas acumuladas.
@@ -3262,33 +3286,24 @@ else:
             """, unsafe_allow_html=True)
             
             if st.button("📊 Gerar Log Detalhado", use_container_width=True, key="btn_gerar_pdf_horas"):
-                with st.spinner("Gerando log..."):
-                    try:
-                        pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
-                        st.session_state['pdf_horas'] = pdf_bytes_h
-                        st.session_state['pdf_horas_nome'] = f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf"
-                    except Exception as e:
-                        st.error(f"Erro ao gerar log: {e}")
-            
-            # Mostrar botão de download fora do if
-            if 'pdf_horas' in st.session_state:
-                st.success("✅ Log gerado!")
-                st.download_button(
-                    label="📥 Baixar Diário (PDF)",
-                    data=st.session_state['pdf_horas'],
-                    file_name=st.session_state['pdf_horas_nome'],
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_horas"
-                )
-        
-        # Terceira seção: Previsão (largura completa)
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-        
-        if proj:
-            # Layout de Projeção na Interface
-            st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; max-width: 500px; margin: 0 auto;">
+                try:
+                    pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
+                    st.success("✅ Log gerado!")
+                    st.download_button(
+                        label="📥 Baixar Diário (PDF)",
+                        data=pdf_bytes_h,
+                        file_name=f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+        with col_rel3:
+            if proj:
+                # Layout de Projeção na Interface
+                st.markdown(f"""
+                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
                         <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
                         <div style="margin: 10px 0;">
                             <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
@@ -3306,8 +3321,8 @@ else:
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.info("Cadastre o edital para ver a previsão.")
+            else:
+                st.info("Cadastre o edital para ver a previsão.")
 
         st.divider()
 
@@ -3506,7 +3521,7 @@ else:
                 materias_selecionadas = []
             
                 for reg in registros_materias:
-                    col_check, col_info = st.columns([0.5, 9.5])  # Corrigido: checkbox tem mais espaço
+                    col_check, col_info = st.columns([0.1, 0.9])
                     with col_check:
                         selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
                     with col_info:
