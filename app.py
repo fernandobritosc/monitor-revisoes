@@ -323,6 +323,73 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
         pdf.cell(0, 10, "Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%.", 0, 1, 'L')
 
     return bytes(pdf.output())
+
+def gerar_pdf_carga_horaria(df, missao):
+    pdf = EstudoPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # 1. RESUMO DE CARGA HORÁRIA
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, '1. RESUMO DE CARGA HORÁRIA', 0, 1, 'L')
+    
+    minutos_totais = df['tempo'].sum()
+    horas_totais = minutos_totais / 60
+    dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
+    media_diaria = horas_totais / dias_estudados if dias_estudados > 0 else 0
+    
+    # Grid de métricas
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(248, 248, 255)
+    pdf.set_text_color(100, 100, 100)
+    
+    pdf.cell(63, 8, ' TOTAL DE HORAS', 1, 0, 'L', True)
+    pdf.cell(63, 8, ' DIAS ESTUDADOS', 1, 0, 'L', True)
+    pdf.cell(64, 8, ' MEDIA DIARIA', 1, 1, 'L', True)
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
+    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
+    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
+    
+    pdf.ln(10)
+    
+    # 2. LOG DETALHADO DE SESSÕES
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, '2. DIÁRIO DE ESTUDOS (LOG DE SESSÕES)', 0, 1, 'L')
+    
+    # Cabeçalho da Tabela
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(25, 7, 'Data', 1, 0, 'C', True)
+    pdf.cell(60, 7, 'Matéria', 1, 0, 'C', True)
+    pdf.cell(80, 7, 'Assunto', 1, 0, 'C', True)
+    pdf.cell(25, 7, 'Tempo', 1, 1, 'C', True)
+    
+    pdf.set_font('Arial', '', 8)
+    # Ordenar por data (mais recente)
+    df_sorted = df.sort_values('data_estudo', ascending=False)
+    
+    for _, row in df_sorted.iterrows():
+        dt_fmt = pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')
+        tempo_h = row['tempo'] / 60
+        
+        # Manter altura da linha baseada no multi_cell do assunto se necessário, 
+        # mas aqui vamos truncar para manter uma linha por registro para ficar cara de planilha
+        pdf.cell(25, 6, dt_fmt, 1, 0, 'C')
+        pdf.cell(60, 6, row['materia'][:35], 1, 0, 'L')
+        pdf.cell(80, 6, row['assunto'][:50], 1, 0, 'L')
+        pdf.cell(25, 6, f"{tempo_h:.1f}h", 1, 1, 'C')
+        
+    pdf.ln(10)
+    pdf.set_font('Arial', 'I', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(0, 5, "Este relatório apresenta o registro cronológico de todas as suas horas líquidas. Use-o para auditar sua constância e garantir que as metas semanais estão sendo cumpridas.")
+
+    return bytes(pdf.output())
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
     if color is None:
@@ -2876,18 +2943,18 @@ else:
         
         st.divider()
         
-        col_rel1, col_rel2 = st.columns(2)
+        col_rel1, col_rel2, col_rel3 = st.columns(3)
         
         # Calcular Projeção
         proj = calcular_projecao_conclusao(df_estudos, dados)
         
         with col_rel1:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%;">
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
                     <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
-                    <p style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 20px;">
-                        Inclui a Matriz de Priorização (Esforço vs Resultado), 
-                        detalhamento por matéria e resumo de performance.
+                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+                        Análise de priorização (Esforço x Resultado), 
+                        detalhamento por matéria e gargalos de assuntos.
                     </p>
                 </div>
             """, unsafe_allow_html=True)
@@ -2895,44 +2962,65 @@ else:
             if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
                 try:
                     pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, proj)
-                    st.success("✅ Relatório gerado com sucesso!")
+                    st.success("✅ Relatório gerado!")
                     st.download_button(
-                        label="📥 Baixar Relatório (PDF)",
+                        label="📥 Baixar (PDF)",
                         data=pdf_bytes,
                         file_name=f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
                         mime="application/pdf",
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error(f"Erro ao gerar PDF: {e}")
+                    st.error(f"Erro: {e}")
 
         with col_rel2:
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
+                    <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
+                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+                        Planilha detalhada com todas as suas sessões de estudo e horas líquidas acumuladas.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("📊 Gerar Log Detalhado", use_container_width=True, key="btn_gerar_pdf_horas"):
+                try:
+                    pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
+                    st.success("✅ Log gerado!")
+                    st.download_button(
+                        label="📥 Baixar Diário (PDF)",
+                        data=pdf_bytes_h,
+                        file_name=f"Carga_Horaria_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+        with col_rel3:
             if proj:
                 # Layout de Projeção na Interface
                 st.markdown(f"""
-                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%;">
+                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
                         <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
-                        <div style="margin: 15px 0;">
-                            <div style="color: #94A3B8; font-size: 0.8rem; text-transform: uppercase;">Progresso Único</div>
-                            <div style="font-size: 1.8rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
+                        <div style="margin: 10px 0;">
+                            <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
+                            <div style="font-size: 1.5rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
                         </div>
-                        <div style="display: flex; gap: 20px;">
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
                             <div>
                                 <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else "—"}</div>
+                                <div style="color: #fff; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y')}</div>
                             </div>
                             <div>
                                 <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['dias_para_fim'] if proj['dias_para_fim'] is not None else "—"}</div>
+                                <div style="color: #fff; font-weight: 700;">{proj['dias_para_fim']} dias</div>
                             </div>
                         </div>
-                        <p style="color: #94A3B8; font-size: 0.8rem; margin-top: 15px;">
-                            Pace atual: <b>{proj['ritmo']:.1f} tópicos/semana</b>
-                        </p>
                     </div>
                 """, unsafe_allow_html=True)
             else:
-                st.info("Cadastre matérias no edital para ver a projeção.")
+                st.info("Cadastre o edital para ver a previsão.")
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
