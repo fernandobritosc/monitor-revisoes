@@ -1447,9 +1447,11 @@ else:
                 df_disciplinas = df_estudos.groupby('materia').agg({
                     'tempo': 'sum',
                     'acertos': 'sum',
-                    'total': 'sum',
-                    'taxa': 'mean'
+                    'total': 'sum'
                 }).reset_index()
+                
+                # Recalcular taxa global por disciplina (média ponderada)
+                df_disciplinas['taxa'] = (df_disciplinas['acertos'] / df_disciplinas['total'] * 100).fillna(0)
                 
                 df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
                 df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos)
@@ -1842,9 +1844,12 @@ else:
             
             # Agrupar por relevância
             df_rel_dash = df_estudos.groupby('relevancia').agg({
-                'taxa': 'mean',
+                'acertos': 'sum',
                 'total': 'sum'
             }).reset_index()
+            
+            # Recalcular taxa por nível de relevância (média ponderada)
+            df_rel_dash['taxa'] = (df_rel_dash['acertos'] / df_rel_dash['total'] * 100).fillna(0)
             df_rel_dash['relevancia'] = df_rel_dash['relevancia'].astype(int)
             df_rel_dash = df_rel_dash.sort_values('relevancia', ascending=False)
             
@@ -1952,7 +1957,14 @@ else:
             st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 7 dias).</p>", unsafe_allow_html=True)
             
             # Preparar dados de evolução
-            df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo')['taxa'].mean().reset_index()
+            # Agrupar por data calculando somas para taxa ponderada
+            df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo').agg({
+                'acertos': 'sum',
+                'total': 'sum'
+            }).reset_index()
+            
+            # Calcular taxa diária
+            df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
             
             # Calcular Média Móvel (janela de 7 pontos para capturar ciclo semanal)
             df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(7, len(df_ev)), min_periods=1).mean()
@@ -2346,7 +2358,9 @@ else:
             
                 # Resumo
                 total_registros = len(df_filtered)
-                taxa_media = df_filtered['taxa'].mean()
+                total_acertos_hist = df_filtered['acertos'].sum()
+                total_questoes_hist = df_filtered['total'].sum()
+                taxa_media = (total_acertos_hist / total_questoes_hist * 100) if total_questoes_hist > 0 else 0
                 tempo_total = df_filtered['tempo'].sum() / 60
             
                 col_info1, col_info2, col_info3 = st.columns(3)
