@@ -230,37 +230,39 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
     # 3. DETALHAMENTO POR MATÉRIA E ASSUNTO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, '3. DETALHAMENTO POR MATÉRIA E ASSUNTO', 0, 1, 'L')
-    
-    # Cabeçalho da Tabela
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(85, 7, ' Matéria / Assunto', 1, 0, 'L', True)
-    pdf.cell(25, 7, 'Questões', 1, 0, 'C', True)
-    pdf.cell(25, 7, 'Acertos', 1, 0, 'C', True)
-    pdf.cell(25, 7, 'Precisão', 1, 1, 'C', True)
+    pdf.cell(0, 10, '3. DESEMPENHO DETALHADO (POR MATÉRIA E ASSUNTO)', 0, 1, 'L')
+    pdf.ln(2)
     
     for _, row_mat in df_matriz.sort_values('taxa').iterrows():
-        # Linha da Matéria (Destaque)
-        pdf.set_font('Arial', 'B', 9)
-        pdf.set_fill_color(248, 248, 255)
-        pdf.set_text_color(139, 92, 246) # Roxo para matéria
-        pdf.cell(85, 7, f" {row_mat['materia'][:45]}", 1, 0, 'L', True)
-        pdf.cell(25, 7, str(int(row_mat['total'])), 1, 0, 'C', True)
-        pdf.cell(25, 7, str(int(row_mat['acertos'])), 1, 0, 'C', True)
-        pdf.cell(25, 7, f"{row_mat['taxa']:.1f}%", 1, 1, 'C', True)
+        # Bloco de Título da Matéria
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
         
-        # Linhas dos Assuntos
-        pdf.set_font('Arial', '', 8)
+        # Sub-cabeçalho das métricas da matéria
+        pdf.set_font('Arial', 'I', 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, f"  Média Geral: {row_mat['taxa']:.1f}% | Total de Questões: {int(row_mat['total'])}", 0, 1, 'L')
+        
+        # Listagem de Assuntos
+        pdf.set_font('Arial', '', 9)
         pdf.set_text_color(60, 60, 60)
         topicos_da_materia = df_assuntos[df_assuntos['materia'] == row_mat['materia']].sort_values('taxa')
+        
         for _, row_ass in topicos_da_materia.iterrows():
-            pdf.cell(85, 6, f"      - {row_ass['assunto'][:40]}", 1, 0, 'L')
-            pdf.cell(25, 6, str(int(row_ass['total'])), 1, 0, 'C')
-            pdf.cell(25, 6, str(int(row_ass['acertos'])), 1, 0, 'C')
-            pdf.cell(25, 6, f"{row_ass['taxa']:.1f}%", 1, 1, 'C')
-        pdf.ln(1)
+            # Formatar linha do assunto: Assunto ............. % (Questoes)
+            nome_ass = row_ass['assunto']
+            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            
+            # Usamos uma lógica de preenchimento de pontos para ficar elegante
+            texto_esq = f"      - {nome_ass}"
+            texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
+            
+            pdf.cell(150, 6, texto_esq, 0, 0, 'L')
+            pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+            
+        pdf.ln(4)
         
     # 4. PROJEÇÃO DE CONCLUSÃO
     if proj:
