@@ -4,11 +4,12 @@ import streamlit as st
 import pandas as pd
 import datetime
 from datetime import timedelta
+import calendar
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 import time
 from streamlit_option_menu import option_menu
-import calendar
 
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
@@ -1372,8 +1373,65 @@ else:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px;">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
-            # --- SEÇÃO DE DIAS DO MÊS FOI COMPLETAMENTE REMOVIDA AQUI ---
+            # --- NOVO: HEATMAP DE ATIVIDADE (ESTILO GITHUB) ---
+            st.divider()
+            st.markdown('<div style="text-align: center; color: #94A3B8; font-size: 0.85rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;">🔥 MAPA DE CALOR (ÚLTIMAS 12 SEMANAS)</div>', unsafe_allow_html=True)
             
+            if not df_estudos.empty:
+                try:
+                    # Preparar dados: Soma de tempo por dia
+                    df_heat = df_estudos.copy()
+                    df_heat['data'] = pd.to_datetime(df_heat['data_estudo']).dt.date
+                    df_day = df_heat.groupby('data')['tempo'].sum().reset_index()
+                    
+                    # Criar range das últimas 12 semanas (84 dias)
+                    fim = datetime.date.today()
+                    inicio = fim - timedelta(days=83) # 12 semanas
+                    all_days = pd.date_range(start=inicio, end=fim)
+                    
+                    # Merge para garantir todos os dias
+                    df_all = pd.DataFrame({'data': all_days.date})
+                    df_final = pd.merge(df_all, df_day, on='data', how='left').fillna(0)
+                    
+                    # Preparar matriz para o heatmap (7 linhas para dias da semana)
+                    # 0=Monday, ..., 6=Sunday
+                    df_final['weekday'] = pd.to_datetime(df_final['data']).dt.weekday
+                    df_final['week'] = df_final['data'].apply(lambda x: (x - inicio).days // 7)
+                    
+                    # Matriz de dados
+                    matrix = [[0 for _ in range(12)] for _ in range(7)]
+                    for _, r in df_final.iterrows():
+                        if r['week'] < 12:
+                            matrix[int(r['weekday'])][int(r['week'])] = r['tempo'] / 60 # Horas
+                    
+                    weekdays_labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+                    
+                    fig_heat = go.Figure(data=go.Heatmap(
+                        z=matrix,
+                        x=[f"Sem {i+1}" for i in range(12)],
+                        y=weekdays_labels,
+                        colorscale=[[0, 'rgba(139, 92, 246, 0.05)'], [0.1, '#1E1B4B'], [0.5, '#8B5CF6'], [1, '#00FFFF']],
+                        showscale=False,
+                        xgap=3, ygap=3,
+                        hoverinfo='z',
+                        hovertemplate='Horas estudadas: %{z:.1f}h<extra></extra>'
+                    ))
+                    
+                    fig_heat.update_layout(
+                        height=220,
+                        margin=dict(t=0, b=10, l=0, r=0),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        yaxis=dict(autorange='reversed', fixedrange=True),
+                        xaxis=dict(fixedrange=True, side='top'),
+                        font=dict(color="#94A3B8", size=10)
+                    )
+                    st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
+                except Exception as e:
+                    st.error(f"Erro ao gerar heatmap: {e}")
+            else:
+                st.info("Inicie seus estudos para gerar seu mapa de calor!")
+
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
@@ -1785,21 +1843,24 @@ else:
             df_rel_dash['relevancia'] = df_rel_dash['relevancia'].astype(int)
             df_rel_dash = df_rel_dash.sort_values('relevancia', ascending=False)
             
-            c_rel = st.columns(len(df_rel_dash) if len(df_rel_dash) > 0 else 1)
-            for idx, row in enumerate(df_rel_dash.iterrows()):
-                r_val = row[1]['relevancia']
-                r_taxa = row[1]['taxa']
-                r_total = row[1]['total']
-                
-                with c_rel[idx % len(c_rel)]:
-                    color = "#10B981" if r_taxa >= 75 else "#F59E0B" if r_taxa >= 50 else "#EF4444"
-                    st.markdown(f"""
-                        <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02);">
-                            <div style="font-size: 0.7rem; color: #94A3B8;">NÍVEL {r_val}</div>
-                            <div style="font-size: 1.2rem; font-weight: 800; color: {color};">{r_taxa:.1f}%</div>
-                            <div style="font-size: 0.65rem; color: #64748B;">{int(r_total)} questões</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+            # Usar colunas dinâmicas para os níveis de relevância
+            n_cols = len(df_rel_dash)
+            if n_cols > 0:
+                c_rel = st.columns(n_cols)
+                for idx, row in enumerate(df_rel_dash.iterrows()):
+                    r_val = row[1]['relevancia']
+                    r_taxa = row[1]['taxa']
+                    r_total = row[1]['total']
+                    
+                    with c_rel[idx]:
+                        color = "#10B981" if r_taxa >= 75 else "#F59E0B" if r_taxa >= 50 else "#EF4444"
+                        st.markdown(f"""
+                            <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02);">
+                                <div style="font-size: 0.7rem; color: #94A3B8;">NÍVEL {r_val}</div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: {color};">{r_taxa:.1f}%</div>
+                                <div style="font-size: 0.65rem; color: #64748B;">{int(r_total)} questões</div>
+                            </div>
+                        """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             st.divider()
 
@@ -1809,41 +1870,42 @@ else:
             
             with c_main1:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("##### 🚨 Radar de Pontos Fracos (< 70%)")
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Assuntos que precisam de reforço urgente.</p>", unsafe_allow_html=True)
+                st.markdown("##### 📉 Pareto de Erros: Onde você mais perde pontos")
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Top 10 assuntos com maior volume absoluto de erros.</p>", unsafe_allow_html=True)
                 
-                # Calcular performance por assunto
-                df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({
+                # Calcular erros brutos por assunto
+                df_errors = df_estudos.groupby(['materia', 'assunto']).agg({
                     'total': 'sum', 
-                    'acertos': 'sum', 
-                    'taxa': 'mean' # Média das taxas dos registros
+                    'acertos': 'sum'
                 }).reset_index()
+                df_errors['erros'] = df_errors['total'] - df_errors['acertos']
+                df_errors = df_errors.sort_values('erros', ascending=False).head(10)
+                # Filtrar apenas assuntos com erros
+                df_errors = df_errors[df_errors['erros'] > 0]
                 
-                # Recalcular taxa global do assunto para precisão
-                df_assuntos['taxa_global'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100)
-                
-                # Filtrar pontos fracos (Taxa < 70% e mínimo de 5 questões para relevância)
-                pontos_fracos = df_assuntos[(df_assuntos['taxa_global'] < 70) & (df_assuntos['total'] >= 5)].sort_values('taxa_global')
-                
-                if not pontos_fracos.empty:
-                    # Tabela Customizada
-                    for _, row in pontos_fracos.iterrows():
-                        st.markdown(f"""
-                            <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #EF4444; padding: 10px; margin-bottom: 8px; border-radius: 4px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <div style="font-weight: 600; color: #fff; font-size: 0.9rem;">{row['assunto']}</div>
-                                        <div style="font-size: 0.75rem; color: #94A3B8;">{row['materia']}</div>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <div style="color: #EF4444; font-weight: 800; font-size: 1.1rem;">{row['taxa_global']:.1f}%</div>
-                                        <div style="font-size: 0.7rem; color: #94A3B8;">{int(row['acertos'])}/{int(row['total'])}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                if not df_errors.empty:
+                    # Gráfico de barras horizontais (Pareto)
+                    df_errors['label'] = df_errors['assunto'].apply(lambda x: x[:25] + '...' if len(x) > 25 else x)
+                    fig_pareto = px.bar(
+                        df_errors, x='erros', y='label', orientation='h',
+                        template="plotly_dark",
+                        color='erros',
+                        color_continuous_scale=["#F43F5E", "#E11D48"], # Tons de vermelho
+                        text='erros'
+                    )
+                    fig_pareto.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(t=0, b=0, l=0, r=0),
+                        xaxis_visible=False,
+                        yaxis_title=None,
+                        coloraxis_showscale=False,
+                        height=280,
+                        yaxis={'categoryorder':'total ascending'}
+                    )
+                    st.plotly_chart(fig_pareto, use_container_width=True)
                 else:
-                    st.success("🎉 Nenhum ponto fraco crítico identificado! Continue assim.")
+                    st.success("🎉 Nenhum erro registrado! Continue com a precisão em 100%.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with c_main2:
@@ -1882,16 +1944,15 @@ else:
         if not df_estudos.empty:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             st.markdown("##### 📈 Evolução de Precisão & Tendência")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 5 registros).</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 7 dias).</p>", unsafe_allow_html=True)
             
             # Preparar dados de evolução
             df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo')['taxa'].mean().reset_index()
             
-            # Calcular Média Móvel (janela de 5 registros)
-            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(5, len(df_ev)), min_periods=1).mean()
+            # Calcular Média Móvel (janela de 7 pontos para capturar ciclo semanal)
+            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(7, len(df_ev)), min_periods=1).mean()
             
             # Criar gráfico Plotly unificado
-            import plotly.graph_objects as go
             fig_evo = go.Figure()
             
             # Linha de Precisão Diária
