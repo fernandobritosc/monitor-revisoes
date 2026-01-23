@@ -799,6 +799,12 @@ if 'meta_questoes_semana' not in st.session_state:
 if 'editando_metas' not in st.session_state:
     st.session_state.editando_metas = False
 
+if 'checklist_status' not in st.session_state:
+    st.session_state.checklist_status = {}
+
+if 'missao_semanal_status' not in st.session_state:
+    st.session_state.missao_semanal_status = "PLANEJAMENTO"
+
 if 'renomear_materia' not in st.session_state:
     st.session_state.renomear_materia = {}
 
@@ -2144,15 +2150,44 @@ else:
                         """, unsafe_allow_html=True)
             
             with col_rec2:
-                st.markdown("#### ⚡ Check-list Estratégico")
+                st.markdown('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">', unsafe_allow_html=True)
+                st.markdown("#### ⚡ Check-list Estratégico", unsafe_allow_html=True)
+                
+                status_missao = st.session_state.missao_semanal_status
+                badge_color = "#94A3B8" if status_missao == "PLANEJAMENTO" else "#8B5CF6"
+                if completed == total_checks and total_checks > 0:
+                    status_missao = "CONCLUÍDA"
+                    badge_color = "#10B981"
+                
+                st.markdown(f'<span class="badge" style="background: {badge_color}22; color: {badge_color}; border: 1px solid {badge_color}44;">{status_missao}</span>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<p style="color: #94A3B8; font-size: 0.85rem; margin-top: -10px;">Transforme as sugestões da IA em metas cumpridas.</p>', unsafe_allow_html=True)
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
-                # Gerar checks dinâmicos baseados no desempenho
+                # --- LÓGICA DE VALIDAÇÃO AUTOMÁTICA ---
+                hoje = get_br_date()
+                inicio_semana = hoje - timedelta(days=hoje.weekday())
+                
+                # Dados da semana atual
+                df_semana = df_raw[pd.to_datetime(df_raw['data_estudo']).dt.date >= inicio_semana]
+                df_est_sem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_semana]
+                df_sim_sem = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= inicio_semana]
+                
+                # Validações
+                simulado_feito = not df_sim_sem.empty
+                questoes_batidas = df_semana['total'].sum() >= st.session_state.get('meta_questoes_semana', 350)
+                novos_topicos = len(df_est_sem['assunto'].unique()) >= 2
+                
+                # Gerar checks com estados automáticos ou salvos
                 checks = []
+                status_auto = {} # Dicionário para guardar se foi batido via dado
+                
                 if not criticos.empty:
                     pior_mat = criticos.iloc[0]['materia']
-                    checks.append(f"Revisar {pior_mat}")
+                    label_crit = f"Revisar {pior_mat}"
+                    checks.append(label_crit)
+                    # Verificar se estudou a pior materia na semana
+                    status_auto[label_crit] = not df_est_sem[df_est_sem['materia'] == pior_mat].empty
                 
                 checks.extend([
                     "Realizar 1 Simulado de Elite",
@@ -2160,16 +2195,57 @@ else:
                     "Zerar 2 novos tópicos do edital"
                 ])
                 
-                for i, c in enumerate(checks):
-                    st.checkbox(c, key=f"check_{i}_{c[:10]}")
+                status_auto["Realizar 1 Simulado de Elite"] = simulado_feito
+                status_auto["Manter meta de questões diária"] = questoes_batidas
+                status_auto["Zerar 2 novos tópicos do edital"] = novos_topicos
                 
+                # Renderizar e salvar estados
+                check_values = []
+                for i, c in enumerate(checks):
+                    # Prioridade: 1. Dado Reais (Auto) | 2. Salvo Manual | 3. Falso
+                    auto_val = status_auto.get(c, False)
+                    saved_val = st.session_state.checklist_status.get(f"check_{i}_{c[:10]}", False)
+                    
+                    # Se o dado real diz que fez, FORCE o True. Se não, use o salvo.
+                    display_val = auto_val or saved_val
+                    
+                    res = st.checkbox(
+                        f"{'✅ ' if auto_val else ''}{c}", 
+                        value=display_val, 
+                        key=f"check_{i}_{c[:10]}",
+                        help="Marcado automaticamente se o sistema detectar a ação nos seus registros." if auto_val else None
+                    )
+                    check_values.append(res)
+                
+                # Calcular progresso
+                completed = sum(check_values)
+                total_checks = len(checks)
+                progress_pct = (completed / total_checks) if total_checks > 0 else 0
+                
+                st.markdown(f"""
+                    <div style='margin-top: 10px; margin-bottom: 5px;'>
+                        <div style='display: flex; justify-content: space-between; font-size: 0.8rem; color: #94A3B8; margin-bottom: 4px;'>
+                            <span>Progresso da Estratégia</span>
+                            <span>{completed}/{total_checks}</span>
+                        </div>
+                        <div class="modern-progress-container">
+                            <div class="modern-progress-fill" style="width: {progress_pct*100}%;"></div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
                 st.divider()
                 st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Este checklist é seu contrato semanal. O objetivo é garantir que você ataque seus piores pontos antes de avançar.</p>", unsafe_allow_html=True)
                 
                 if st.button("💾 Salvar Foco da Semana", use_container_width=True):
+                    # Salvar todos os estados atuais no dicionário de persistência
+                    for i, c in enumerate(checks):
+                        key = f"check_{i}_{c[:10]}"
+                        st.session_state.checklist_status[key] = st.session_state[key]
+                    
+                    st.session_state.missao_semanal_status = "EM EXECUÇÃO"
                     st.toast("Planejamento salvo! Foco total na execução.", icon="🚀")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.rerun()
                 
             st.divider()
             
