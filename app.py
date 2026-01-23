@@ -196,7 +196,9 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(95, 10, f' {missao}', 1, 0, 'L')
+    # Truncar nome da missão se muito longo
+    missao_truncada = missao if len(missao) <= 30 else missao[:27] + "..."
+    pdf.cell(95, 10, f' {missao_truncada}', 1, 0, 'L')
     pdf.cell(95, 10, f' {tempo_total:.1f} horas', 1, 1, 'L')
     
     # Linha 2
@@ -301,13 +303,13 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
         for _, row_ass in topicos_da_materia.iterrows():
             # Formatar linha do assunto: Assunto ............. % (Questoes)
             nome_ass = row_ass['assunto']
-            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
             
             # Usamos uma lógica de preenchimento de pontos para ficar elegante
             texto_esq = f"      - {nome_ass}"
             texto_dir = f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])} q)"
             
-            pdf.cell(150, 6, texto_esq, 0, 0, 'L')
+            pdf.cell(120, 6, texto_esq, 0, 0, 'L')  # Largura reduzida de 150 para 120
             pdf.cell(0, 6, texto_dir, 0, 1, 'R')
             
         pdf.ln(4)
@@ -497,7 +499,7 @@ def gerar_pdf_carga_horaria(df, missao):
         
         for _, row_ass in assuntos_da_materia.iterrows():
             nome_ass = row_ass['assunto']
-            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            if len(nome_ass) > 45: nome_ass = nome_ass[:42] + "..."  # Reduzido para evitar overflow
             
             texto_esq = f"      - {nome_ass}"
             texto_dir = f"{row_ass['tempo']/60:.1f}h"
