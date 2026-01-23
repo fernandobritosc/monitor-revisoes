@@ -1819,8 +1819,9 @@ else:
                 except Exception:
                     dias_restantes = None
             
-            # 4 cartões de métricas com ANÉIS CIRCULARES MODERNOS
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            # Métricas com ANÉIS CIRCULARES - Layout responsivo (2x2)
+            # Linha 1: Tempo e Precisão
+            row1_col1, row1_col2 = st.columns(2)
             
             # Calcular percentuais para os anéis
             horas_totais = minutos_totais / 60
@@ -2546,13 +2547,16 @@ else:
         
         # 1. MÉTRICAS PRINCIPAIS
         # Layout responsivo: 4 colunas (pode ser estreito em mobile)
-
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric_card("Questões", int(t_q), "📝")
-        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
+        # Layout responsivo: 2 linhas de 2 colunas (corrigido)
+        # Linha 1: Questões e Precisão
+        row1_col1, row1_col2 = st.columns(2)
+        with row1_col1: render_metric_card("Questões", int(t_q), "📝")
+        with row1_col2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
         
+        # Linha 2: Horas e Ritmo
+        row2_col1, row2_col2 = st.columns(2)
+        with row2_col1: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
+        with row2_col2: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         st.divider()
         
         # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
@@ -2576,6 +2580,8 @@ else:
             n_cols = len(df_rel_dash)
             if n_cols > 0:
                 n_cols_safe = min(n_cols, 3)  # Limite máximo de 3 colunas
+                # Garantir máximo de 3 colunas para evitar erro de espaço
+                n_cols_safe = min(n_cols_safe, 3) if 'n_cols_safe' in locals() else 3
                 c_rel = st.columns(n_cols_safe)
                 for idx, row in enumerate(df_rel_dash.iterrows()):
                     r_val = row[1]['relevancia']
@@ -2805,13 +2811,16 @@ else:
             if not df_simulados.empty:
                 # --- MÉTRICAS ACUMULATIVAS ---
                 st.markdown("##### 🏛️ Desempenho Acumulado")
-                c_ac1, c_ac2, c_ac3, c_ac4 = st.columns(4)
-                tot_ac = df_simulados['acertos'].sum()
-                tot_to = df_simulados['total'].sum()
-                prec_global = (tot_ac / tot_to * 100) if tot_to > 0 else 0
-                tempo_medio = df_simulados['tempo'].mean() if not df_simulados.empty else 0
+                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
+                # Linha 1: Total Acertos e Total Questões
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
+                with row1_col2: render_metric_card("Total Questões", int(tot_to), "📝")
                 
-                with c_ac1: render_metric_card("Total Acertos", int(tot_ac), "🎯")
+                # Linha 2: Precisão Global e Tempo Médio
+                row2_col1, row2_col2 = st.columns(2)
+                with row2_col1: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
+                with row2_col2: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
                 with c_ac2: render_metric_card("Total Questões", int(tot_to), "📝")
                 with c_ac3: render_metric_card("Precisão Global", f"{prec_global:.1f}%", "🏆")
                 with c_ac4: render_metric_card("Tempo Médio", formatar_minutos(tempo_medio), "⏱️")
@@ -3040,16 +3049,18 @@ else:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             
                 # Filtros
-                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-                with col_f1:
+                # Layout responsivo: 2 linhas de 2 colunas (corrigido)
+                # Linha 1: Filtros de Matéria e Relevância
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1:
                     mat_filter = st.selectbox("Filtrar por Matéria:", ["Todas"] + list(df_h['materia'].unique()), key="mat_hist_filter")
-                with col_f2:
+                with row1_col2:
                     rel_options = ["Todas"] + list(range(1, 11))
                     rel_filter = st.selectbox("Filtrar por Relevância:", rel_options, index=0, key="rel_hist_filter")
-                with col_f3:
-                    ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
-                with col_f4:
-                    st.write("")  # Espaçamento
+                
+                # Linha 2: Ordenação
+                ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
+                
             
                 # Aplicar filtros
                 df_filtered = df_h.copy()
@@ -3578,7 +3589,7 @@ else:
                 materias_selecionadas = []
             
                 for reg in registros_materias:
-                    col_check, col_info = st.columns([0.1, 0.9])
+                    col_check, col_info = st.columns([0.5, 9.5])  # Corrigido: checkbox tem mais espaço
                     with col_check:
                         selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
                     with col_info:
