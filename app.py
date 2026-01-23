@@ -154,20 +154,20 @@ class EstudoPDF(FPDF):
         # Título principal
         self.set_font('Arial', 'B', 16)
         self.set_text_color(139, 92, 246) # Roxo do tema
-        self.cell(0, 10, 'RELATÓRIO ESTRATÉGICO DE DESEMPENHO', 0, 1, 'C')
+        self.multi_cell(0, 10, 'RELATORIO ESTRATEGICO DE DESEMPENHO', align='C')
         
         # Horário de Brasília
         agora_br = (datetime.datetime.utcnow() - datetime.timedelta(hours=3))
         self.set_font('Arial', '', 9)
         self.set_text_color(120, 120, 120)
-        self.cell(0, 5, f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horário de Brasília)', 0, 1, 'C')
-        self.ln(10)
+        self.multi_cell(0, 5, f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horario de Brasilia)', align='C')
+        self.ln(5)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+        self.multi_cell(0, 10, f'Pagina {self.page_no()}', align='C')
 
 def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     """
@@ -187,7 +187,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     # === 1. RESUMO GERAL ===
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(139, 92, 246)
-    pdf.cell(0, 10, 'RELATORIO ESTRATEGICO DE DESEMPENHO', 0, 1, 'C')
+    pdf.multi_cell(0, 10, 'RELATORIO ESTRATEGICO DE DESEMPENHO', align='C')
     pdf.ln(5)
     
     # Missão (truncada)
@@ -206,7 +206,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     
     # === 2. DESEMPENHO POR MATÉRIA ===
     pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, 'DESEMPENHO POR MATERIA', 0, 1, 'L')
+    pdf.multi_cell(0, 10, 'DESEMPENHO POR MATERIA')
     pdf.ln(2)
     
     # Agrupar por matéria
@@ -242,7 +242,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     
     # === 3. TOP 5 MATÉRIAS (Melhor e Pior) ===
     pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, 'ANALISE DE PERFORMANCE', 0, 1, 'L')
+    pdf.multi_cell(0, 10, 'ANALISE DE PERFORMANCE')
     pdf.ln(2)
     
     # Melhores
@@ -277,7 +277,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     if proj:
         pdf.set_font('Arial', 'B', 12)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 10, 'PROJECAO DE CONCLUSAO', 0, 1, 'L')
+        pdf.multi_cell(0, 10, 'PROJECAO DE CONCLUSAO')
         pdf.ln(2)
         
         pdf.set_font('Arial', '', 10)
@@ -309,7 +309,7 @@ def gerar_pdf_carga_horaria(df, missao):
     # 1. RESUMO DE CARGA HORÁRIA
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, '1. RESUMO DE CARGA HORÁRIA', 0, 1, 'L')
+    pdf.multi_cell(0, 10, '1. RESUMO DE CARGA HORARIA')
     
     minutos_totais = df['tempo'].sum()
     horas_totais = minutos_totais / 60
@@ -321,22 +321,20 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.set_fill_color(248, 248, 255)
     pdf.set_text_color(100, 100, 100)
     
-    pdf.cell(63, 8, ' TOTAL DE HORAS', 1, 0, 'L', True)
-    pdf.cell(63, 8, ' DIAS ESTUDADOS', 1, 0, 'L', True)
-    pdf.cell(64, 8, ' MEDIA DIARIA', 1, 1, 'L', True)
+    # Cabeçalho do grid
+    pdf.multi_cell(0, 8, 'TOTAL DE HORAS | DIAS ESTUDADOS | MEDIA DIARIA')
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
-    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
-    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
+    # Valores do grid
+    pdf.multi_cell(0, 10, f'{horas_totais:.1f}h | {int(dias_estudados)} dias | {media_diaria:.1f}h/dia')
     
     pdf.ln(10)
     
     # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, '2. DETALHAMENTO DE TEMPO INVESTIDO', 0, 1, 'L')
+    pdf.multi_cell(0, 10, '2. DETALHAMENTO DE TEMPO INVESTIDO')
     pdf.ln(2)
     
     # Lógica de Agrupamento
@@ -348,12 +346,12 @@ def gerar_pdf_carga_horaria(df, missao):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_fill_color(240, 240, 245)
         pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {row_mat['materia'].upper()}", 1, 1, 'L', True)
+        pdf.multi_cell(0, 8, f" {row_mat['materia'].upper()}")
         
         # Total da matéria
         pdf.set_font('Arial', 'I', 8)
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h", 0, 1, 'L')
+        pdf.multi_cell(0, 6, f"  Carga Horaria Total: {row_mat['tempo']/60:.1f}h")
         
         # Listagem de Assuntos
         pdf.set_font('Arial', '', 9)
@@ -367,8 +365,9 @@ def gerar_pdf_carga_horaria(df, missao):
             texto_esq = f"      - {nome_ass}"
             texto_dir = f"{row_ass['tempo']/60:.1f}h"
             
-            pdf.cell(160, 6, texto_esq, 0, 0, 'L')
-            pdf.cell(0, 6, texto_dir, 0, 1, 'R')
+            # Usar multi_cell em vez de células duplas
+            linha_completa = f"{texto_esq}    {texto_dir}"
+            pdf.multi_cell(0, 6, linha_completa)
             
         pdf.ln(4)
         
