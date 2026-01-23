@@ -121,7 +121,7 @@ class EstudoPDF(FPDF):
         self.set_text_color(150, 150, 150)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
-def gerar_pdf_estratégico(df_estudos, missao, proj=None):
+def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -338,6 +338,53 @@ def gerar_pdf_estratégico(df_estudos, missao, proj=None):
         pdf.set_font('Arial', 'I', 10)
         pdf.set_text_color(16, 185, 129)
         pdf.cell(0, 10, "Parabéns! Nenhum tópico específico está com desempenho abaixo de 70%.", 0, 1, 'L')
+
+    # 6. BENCHMARK DE SIMULADOS
+    # Usar filtro flexível no dataframe bruto para capturar variações (Simulado, SIMULADOS, etc)
+    df_sim = df_bruto[df_bruto['materia'].str.upper().str.contains('SIMULADO', na=False)].sort_values('data_estudo')
+    if not df_sim.empty:
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(0, 10, '6. BENCHMARK DE SIMULADOS (EVOLUÇÃO)', 0, 1, 'L')
+        
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.multi_cell(0, 6, "Acompanhamento cronológico do seu desempenho em provas completas (Simulados).")
+        pdf.ln(5)
+        
+        # Cabeçalho da Tabela
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(40, 7, ' Data', 1, 0, 'C', True)
+        pdf.cell(100, 7, ' Simulado', 1, 0, 'C', True)
+        pdf.cell(40, 7, ' Pontuação (%)', 1, 1, 'C', True)
+        
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(60, 60, 60)
+        for _, row in df_sim.iterrows():
+            pdf.cell(40, 6, pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y'), 1, 0, 'C')
+            pdf.cell(100, 6, f" {row['assunto'][:55]}", 1, 0, 'L')
+            pdf.cell(40, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
+            
+        # Insights de Tendência no PDF
+        pdf.ln(5)
+        ult_nota = df_sim['taxa'].iloc[-1]
+        med_nota = df_sim['taxa'].mean()
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 8, f"Resumo: Última Nota: {ult_nota:.1f}% | Precisão Média: {med_nota:.1f}%", 0, 1)
+        
+        pdf.set_font('Arial', 'I', 9)
+        pdf.set_text_color(100, 100, 100)
+        if len(df_sim) >= 2:
+            gap = df_sim['taxa'].iloc[-1] - df_sim['taxa'].iloc[-2]
+            tendencia = "em ascensão" if gap > 0 else "em queda" if gap < 0 else "estabilizado"
+            msg_sim = f"Seu desempenho está {tendencia} em relação ao último simulado ({'+' if gap>0 else ''}{gap:.1f}%)."
+        else:
+            msg_sim = "Continue realizando simulados regularmente para consolidar sua curva de aprendizado."
+        pdf.multi_cell(0, 6, f"Análise: {msg_sim}")
 
     return bytes(pdf.output())
 
@@ -650,9 +697,10 @@ if not df_raw.empty:
     if 'materia' in df_raw.columns:
         df_raw['materia'] = df_raw['materia'].fillna("Desconhecido")
         
-        # Filtros
-        df_simulados = df_raw[df_raw['materia'] == 'SIMULADO'].copy()
-        df_estudos = df_raw[df_raw['materia'] != 'SIMULADO'].copy()
+        # Filtros Flexíveis para Simulados (Insensível a maiúsculas e variações)
+        simulado_mask = df_raw['materia'].str.upper().str.contains('SIMULADO', na=False)
+        df_simulados = df_raw[simulado_mask].copy()
+        df_estudos = df_raw[~simulado_mask].copy()
     else:
         df_simulados = pd.DataFrame()
         df_estudos = df_raw.copy()
@@ -2992,7 +3040,7 @@ else:
             
             if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
                 try:
-                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, proj)
+                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
                     st.success("✅ Relatório gerado!")
                     st.download_button(
                         label="📥 Baixar (PDF)",
@@ -3058,7 +3106,8 @@ else:
         # --- SEÇÃO: BENCHMARK DE SIMULADOS ---
         st.markdown('<h3 style="color: #fff; margin-bottom: 20px;">📈 Benchmark de Simulados</h3>', unsafe_allow_html=True)
         
-        df_sim_bench = df_estudos[df_estudos['materia'] == "SIMULADO"].sort_values('data_estudo')
+        # Usar df_simulados carregado no início da aplicação
+        df_sim_bench = df_simulados.sort_values('data_estudo')
         
         if df_sim_bench.empty:
             st.info("Registre pelo menos um Simulado para habilitar o Benchmark.")
