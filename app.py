@@ -552,6 +552,64 @@ def render_progress_bar(percentage, height=8, color_start=None, color_end=None):
     """, unsafe_allow_html=True)
 
 
+# --- FUNÇÃO: Barra de progresso moderna ---
+def render_consistency_heatmap(df):
+    """Renderiza um mapa de calor estilo GitHub para constância de estudos (Últimos 6 meses)"""
+    if df.empty:
+        st.info("📚 Estude seu primeiro tópico para começar a preencher seu mapa de constância!")
+        return
+
+    # Preparar dados: Soma de minutos por data
+    df_day = df.groupby('data_estudo')['tempo'].sum().reset_index()
+    df_day['data_estudo'] = pd.to_datetime(df_day['data_estudo']).dt.date
+    
+    # Criar dict para busca rápida
+    data_map = dict(zip(df_day['data_estudo'], df_day['tempo']))
+    
+    # Gerar range de datas (últimos 180 dias)
+    hoje = get_br_date()
+    datas = [hoje - timedelta(days=x) for x in range(180, -1, -1)]
+    
+    # Organizar por semanas para o grid (transposto: colunas são semanas)
+    # Precisamos de 7 linhas (seg a dom)
+    rows = [[] for _ in range(7)]
+    for d in datas:
+        rows[d.weekday()].append(d)
+        
+    # Cores
+    COLOR_EMPTY = "rgba(255, 255, 255, 0.05)"
+    COLORS_INTENS = [
+        "rgba(139, 92, 246, 0.2)", # Nível 1 (Pouco)
+        "rgba(139, 92, 246, 0.5)", # Nível 2
+        "rgba(139, 92, 246, 0.8)", # Nível 3
+        "#8B5CF6"                  # Nível 4 (Muito)
+    ]
+    
+    html = '<div style="display: flex; gap: 3px; overflow-x: auto; padding-bottom: 15px; mask-image: linear-gradient(to right, black 85%, transparent);">'
+    
+    # Renderizar colunas (Semanas)
+    num_weeks = len(rows[0])
+    for w in range(num_weeks):
+        html += '<div style="display: flex; flex-direction: column; gap: 3px;">'
+        for r in range(7):
+            if w < len(rows[r]):
+                d = rows[r][w]
+                tempo = data_map.get(d, 0)
+                
+                # Definir cor baseada no tempo (minutos)
+                if tempo == 0: color = COLOR_EMPTY
+                elif tempo < 120: color = COLORS_INTENS[0]
+                elif tempo < 240: color = COLORS_INTENS[1]
+                elif tempo < 480: color = COLORS_INTENS[2]
+                else: color = COLORS_INTENS[3]
+                
+                tip = f"{d.strftime('%d/%m')}: {tempo/60:.1f}h"
+                html += f'<div title="{tip}" style="width: 12px; height: 12px; background-color: {color}; border-radius: 2px;"></div>'
+        html += '</div>'
+    
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
 # --- FUNÇÃO ADICIONADA: Fuso Horário Brasília ---
 def get_br_date():
     """Retorna a data atual no fuso horário de Brasília (UTC-3)."""
@@ -1654,6 +1712,7 @@ else:
         # Mapeamento do Menu (Opção UI -> Estado Interno)
         mapa_menu = {
             "HOME": "Home",
+            "GUIA SEMANAL": "Guia Semanal",
             "REVISÕES": "Revisões",
             "REGISTRAR": "Registrar",
             "DASHBOARD": "Dashboard",
@@ -2035,6 +2094,92 @@ else:
                 </div>
                 ''', unsafe_allow_html=True)
 
+    # --- ABA: GUIA SEMANAL (PLANNER INTELIGENTE) ---
+    elif menu == "Guia Semanal":
+        st.markdown('<h2 class="main-title">📅 Guia da Semana</h2>', unsafe_allow_html=True)
+        st.markdown("<p style='color: #94A3B8; font-size: 1.1rem; margin-top: -1rem;'>Suas recomendações baseadas no radar de performance.</p>", unsafe_allow_html=True)
+        
+        if df_estudos.empty:
+            st.info("Registre alguns estudos para que eu possa planejar sua semana estrategicamente.")
+        else:
+            # Lógica de Recomendação (Priority Engine)
+            df_matriz = df_estudos.groupby('materia').agg({
+                'acertos': 'sum',
+                'total': 'sum',
+                'relevancia': 'mean'
+            }).reset_index()
+            df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
+            
+            # Quadrante: Foco Crítico (Taxa < 75 e Relevância > 5)
+            criticos = df_matriz[(df_matriz['taxa'] < 75) & (df_matriz['relevancia'] >= 5)].sort_values(['relevancia', 'taxa'], ascending=[False, True])
+            
+            col_rec1, col_rec2 = st.columns([2, 1])
+            
+            with col_rec1:
+                st.markdown("#### 🎯 Alvos Prioritários")
+                if criticos.empty:
+                    st.success("✨ Sem gargalos críticos no momento! Recomendo avançar em novos tópicos do edital.")
+                else:
+                    for _, row in criticos.head(3).iterrows():
+                        # Buscar o pior assunto desta materia
+                        df_ass = df_estudos[df_estudos['materia'] == row['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
+                        pior_ass = df_ass.sort_values('taxa').iloc[0]['assunto']
+                        
+                        st.markdown(f"""
+                        <div class="modern-card" style="border-left: 5px solid #EF4444;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-weight: 800; color: #E2E8F0; font-size: 1.1rem;">{row['materia'].upper()}</span>
+                                <span style="background: rgba(239, 68, 68, 0.1); color: #EF4444; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">URGENTE</span>
+                            </div>
+                            <div style="margin-top: 10px; color: #94A3B8; font-size: 0.9rem;">
+                                Sua precisão média é de <b>{row['taxa']:.0f}%</b>. O maior gargalo identificado é:
+                            </div>
+                            <div style="margin-top: 8px; color: #FFFFFF; font-weight: 600; font-size: 1rem;">
+                                ⚠️ {pior_ass}
+                            </div>
+                            <div style="margin-top: 15px; font-size: 0.85rem; color: #8B5CF6;">
+                                💡 Sugestão: Dedicar 2h de teoria + 30 questões comentadas nesta semana.
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            with col_rec2:
+                st.markdown("#### ⚡ Check-list Estratégico")
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                
+                # Gerar checks dinâmicos
+                checks = [
+                    "Revisar 'Foco Crítico'",
+                    "Realizar 1 Simulado de Elite",
+                    "Manter meta de questões",
+                    "Zerar 2 novos tópicos"
+                ]
+                
+                for c in checks:
+                    st.checkbox(c, key=f"check_{c}")
+                
+                st.divider()
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Dica: O sucesso é o acúmulo de pequenas vitórias diárias.</p>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            st.divider()
+            
+            # Gráfico de Alocação de Tempo Sugerida
+            st.markdown("#### 📊 Alocação de Tempo Recomendada")
+            if not criticos.empty:
+                df_pie = criticos.head(5).copy()
+                df_pie['sugestao'] = [40, 25, 15, 10, 10][:len(df_pie)] # Exemplo de pesos
+                
+                fig_planner = px.pie(
+                    df_pie, values='sugestao', names='materia', 
+                    hole=0.5, template="plotly_dark",
+                    color_discrete_sequence=px.colors.sequential.Purp_r
+                )
+                fig_planner.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
+                st.plotly_chart(fig_planner, use_container_width=True)
+            else:
+                st.info("Distribua seu tempo igualmente entre as matérias restantes do edital.")
+
     # --- ABA: REVISÕES (LISTA REDESENHADA) ---
     elif menu == "Revisões":
         st.markdown('<h2 class="main-title">🔄 Radar de Revisões</h2>', unsafe_allow_html=True)
@@ -2255,6 +2400,13 @@ else:
                 col_idx += 1
             st.markdown('</div>', unsafe_allow_html=True)
             st.divider()
+
+        # --- NOVO: MAPA DE CALOR DE CONSTÂNCIA ---
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("##### 🔥 Mapa de Calor: Sua Constância (6 meses)")
+        render_consistency_heatmap(df_estudos)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.divider()
 
         # Métricas Gerais
         if df_estudos.empty:
