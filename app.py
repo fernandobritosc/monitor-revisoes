@@ -103,13 +103,16 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
 
 class EstudoPDF(FPDF):
     def header(self):
-        # Logo ou Título
-        self.set_font('Arial', 'B', 15)
+        # Título principal
+        self.set_font('Arial', 'B', 16)
         self.set_text_color(139, 92, 246) # Roxo do tema
         self.cell(0, 10, 'RELATÓRIO ESTRATÉGICO DE DESEMPENHO', 0, 1, 'C')
-        self.set_font('Arial', '', 10)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 5, f'Gerado em: {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1, 'C')
+        
+        # Horário de Brasília
+        agora_br = (datetime.datetime.utcnow() - datetime.timedelta(hours=3))
+        self.set_font('Arial', '', 9)
+        self.set_text_color(120, 120, 120)
+        self.cell(0, 5, f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")} (Horário de Brasília)', 0, 1, 'C')
         self.ln(10)
 
     def footer(self):
@@ -123,26 +126,42 @@ def gerar_pdf_estratégico(df_estudos, missao):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # 1. RESUMO GERAL
+    # 1. RESUMO GERAL (Layout em Grid/Tabela)
     pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 10, '1. RESUMO GERAL', 0, 1, 'L')
-    pdf.set_font('Arial', '', 10)
     
-    t_q = df_estudos['total'].sum()
-    a_q = df_estudos['acertos'].sum()
-    precisao = (a_q / t_q * 100) if t_q > 0 else 0
-    tempo_total = df_estudos['tempo'].sum() / 60
+    # Grid de métricas
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(248, 248, 255)
+    pdf.set_text_color(100, 100, 100)
     
-    pdf.cell(0, 8, f'- Missão: {missao}', 0, 1)
-    pdf.cell(0, 8, f'- Tempo Total de Estudo: {tempo_total:.1f} horas', 0, 1)
-    pdf.cell(0, 8, f'- Total de Questões: {int(t_q)}', 0, 1)
-    pdf.cell(0, 8, f'- Precisão Média: {precisao:.1f}%', 0, 1)
-    pdf.ln(5)
+    # Linha 1
+    pdf.cell(95, 8, ' MISSAO ATIVA', 1, 0, 'L', True)
+    pdf.cell(95, 8, ' TEMPO TOTAL', 1, 1, 'L', True)
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(95, 10, f' {missao}', 1, 0, 'L')
+    pdf.cell(95, 10, f' {tempo_total:.1f} horas', 1, 1, 'L')
+    
+    # Linha 2
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(95, 8, ' TOTAL DE QUESTOES', 1, 0, 'L', True)
+    pdf.cell(95, 8, ' PRECISAO MEDIA', 1, 1, 'L', True)
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(95, 10, f' {int(t_q)}', 1, 0, 'L')
+    pdf.cell(95, 10, f' {precisao:.1f}%', 1, 1, 'L')
+    
+    pdf.ln(10)
     
     # 2. MATRIZ DE PRIORIZAÇÃO
     pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 10, '2. MATRIZ DE PRIORIZAÇÃO (AÇÕES RECOMENDADAS)', 0, 1, 'L')
-    pdf.set_font('Arial', '', 9)
     
     # Lógica da Matriz
     df_matriz = df_estudos.groupby('materia').agg({
@@ -170,23 +189,29 @@ def gerar_pdf_estratégico(df_estudos, missao):
         else:
             otimizar.append(f"{row['materia']} ({row['taxa']:.0f}%)")
             
-    # Escrever no PDF
-    def write_section(title, items, color):
+    # Escrever no PDF com design melhorado
+    def write_block(title, items, border_color, bg_color):
+        pdf.set_fill_color(*bg_color)
+        pdf.set_draw_color(*border_color)
         pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(*color)
-        pdf.cell(0, 7, title, 0, 1)
+        pdf.set_text_color(*border_color)
+        
+        # Cabeçalho do Bloco
+        pdf.cell(0, 8, f"  {title}", 1, 1, 'L', True)
+        
+        # Conteúdo do Bloco
         pdf.set_font('Arial', '', 9)
         pdf.set_text_color(0, 0, 0)
-        if items:
-            pdf.multi_cell(0, 5, ", ".join(items))
-        else:
-            pdf.cell(0, 5, "Nenhuma disciplina nesta categoria.", 0, 1)
-        pdf.ln(3)
+        pdf.set_fill_color(255, 255, 255)
+        
+        content = ", ".join(items) if items else "Nenhuma disciplina nesta categoria."
+        pdf.multi_cell(0, 6, f"  {content}\n ", 1, 'L')
+        pdf.ln(5)
 
-    write_section("FOCO CRÍTICO (Baixo acerto + Alto volume de questões):", focar, (239, 68, 68))
-    write_section("MANUTENÇÃO (Bom acerto + Alto volume):", manter, (16, 185, 129))
-    write_section("VOLTAR NA BASE (Baixo acerto + Poucas questões):", revisar_base, (245, 158, 11))
-    write_section("OTIMIZAR (Excelente acerto + Poucas questões):", otimizar, (6, 182, 212))
+    write_block("FOCO CRÍTICO: Baixo acerto + Alto volume", focar, (239, 68, 68), (254, 242, 242))
+    write_block("MANUTENÇÃO: Bom acerto + Alto volume", manter, (16, 185, 129), (240, 253, 244))
+    write_block("REVISAR BASE: Baixo acerto + Poucas questões", revisar_base, (245, 158, 11), (255, 251, 235))
+    write_block("OTIMIZAR: Excelente acerto + Poucas questões", otimizar, (6, 182, 212), (236, 254, 255))
     
     pdf.ln(5)
     
