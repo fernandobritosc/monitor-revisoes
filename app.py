@@ -219,7 +219,8 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.set_xy(10, y_start_cols)
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(220, 38, 38) # Vermelho
-    pdf.cell(90, 8, fix_text("🚨 ATENÇÃO (Taxa < 75%)"), 0, 1, 'L')
+    # Substituído emoji por [!]
+    pdf.cell(90, 8, fix_text("[!] ATENÇÃO (Taxa < 75%)"), 0, 1, 'L')
     
     pdf.set_font('Arial', '', 9)
     pdf.set_text_color(60, 60, 60)
@@ -227,13 +228,15 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
         pdf.cell(90, 6, fix_text("Nenhum ponto crítico identificado!"), 0, 1)
     else:
         for _, row in criticos.iterrows():
-            pdf.cell(90, 6, fix_text(f"• {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
+            # Substituído bullet por hífen
+            pdf.cell(90, 6, fix_text(f"- {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
             
     # Coluna 2: Pontos Fortes (Direita)
     pdf.set_xy(105, y_start_cols)
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(22, 163, 74) # Verde
-    pdf.cell(90, 8, fix_text("✅ PONTOS FORTES (Taxa >= 75%)"), 0, 1, 'L')
+    # Substituído emoji por [OK]
+    pdf.cell(90, 8, fix_text("[OK] PONTOS FORTES (Taxa >= 75%)"), 0, 1, 'L')
     
     pdf.set_font('Arial', '', 9)
     pdf.set_text_color(60, 60, 60)
@@ -243,7 +246,8 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     else:
         for _, row in bons.iterrows():
             pdf.set_xy(105, pdf.get_y())
-            pdf.cell(90, 6, fix_text(f"• {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
+            # Substituído bullet por hífen
+            pdf.cell(90, 6, fix_text(f"- {row['materia']}: {row['taxa']:.1f}%"), 0, 1)
             
     # Restaurar posição Y para continuar o fluxo
     pdf.set_y(max(pdf.get_y(), y_start_cols + 20)) 
@@ -281,7 +285,8 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
             
             stats = f"{int(row_ass['acertos'])}/{int(row_ass['total'])} ({row_ass['taxa']:.0f}%)"
             
-            pdf.cell(130, 6, fix_text(f"   • {nome}"), 0, 0, 'L')
+            # Substituído bullet por hífen
+            pdf.cell(130, 6, fix_text(f"   - {nome}"), 0, 0, 'L')
             
             # Colorir a taxa se for baixa ou alta
             if row_ass['taxa'] < 70:
@@ -395,7 +400,8 @@ def gerar_pdf_carga_horaria(df, missao):
             # Truncar nome longo
             if len(nome_ass) > 65: nome_ass = nome_ass[:62] + "..."
             
-            pdf.cell(140, 6, fix_text(f"    • {nome_ass}"), 0, 0, 'L')
+            # Substituído bullet por hífen
+            pdf.cell(140, 6, fix_text(f"    - {nome_ass}"), 0, 0, 'L')
             pdf.cell(0, 6, f"{horas_ass:.1f}h  ({pct_ass_relativo:.0f}%)", 0, 1, 'R')
             
         pdf.ln(3) # Espaço entre matérias
