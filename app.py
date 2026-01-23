@@ -253,77 +253,173 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # 1. RESUMO DE CARGA HORÁRIA
-    pdf.set_font('Arial', 'B', 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('1. RESUMO DE CARGA HORÁRIA'), 0, 1, 'L')
-    
+    # Métricas Globais
     minutos_totais = df['tempo'].sum()
     horas_totais = minutos_totais / 60
-    dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
-    media_diaria = horas_totais / dias_estudados if dias_estudados > 0 else 0
     
-    # Grid de métricas
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(248, 248, 255)
-    pdf.set_text_color(100, 100, 100)
+    # Calcular Matéria com Maior Dedicação (Top 1)
+    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
+    if not df_agrup_mat.empty:
+        top_mat = df_agrup_mat.sort_values('tempo', ascending=False).iloc[0]
+        nome_top = top_mat['materia']
+        horas_top = top_mat['tempo'] / 60
+        pct_top = (top_mat['tempo'] / minutos_totais * 100) if minutos_totais > 0 else 0
+        txt_top = f"{nome_top} ({pct_top:.1f}%)"
+    else:
+        txt_top = "N/A"
+        
+    # --- 1. DASHBOARD DE RESUMO ---
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(139, 92, 246)
+    pdf.cell(0, 10, fix_text('1. DASHBOARD DE CARGA HORÁRIA'), 0, 1, 'L')
     
-    pdf.cell(63, 8, fix_text(' TOTAL DE HORAS'), 1, 0, 'L', True)
-    pdf.cell(63, 8, fix_text(' DIAS ESTUDADOS'), 1, 0, 'L', True)
-    pdf.cell(64, 8, fix_text(' MÉDIA DIÁRIA'), 1, 1, 'L', True)
+    # Layout de Cards em Grid
+    pdf.set_fill_color(248, 250, 252) # Fundo cinza muito claro
     
-    pdf.set_font('Arial', '', 11)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
-    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
-    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
+    # Linha de Títulos dos Cards
+    pdf.set_font('Arial', 'B', 8)
+    pdf.set_text_color(148, 163, 184) # Cinza texto secundário
+    pdf.cell(95, 8, fix_text("  TEMPO TOTAL ACUMULADO"), 0, 0, 'L', True)
+    pdf.cell(0, 8, fix_text("  FOCO PRINCIPAL (Maior Dedicação)"), 0, 1, 'L', True)
     
-    pdf.ln(10)
+    # Linha de Valores dos Cards
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(15, 23, 42) # Preto texto principal
+    pdf.cell(95, 12, f"  {horas_totais:.1f}h", 0, 0, 'L', True)
+    pdf.cell(0, 12, fix_text(f"  {txt_top}"), 0, 1, 'L', True)
     
-    # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
+    pdf.ln(8)
+    
+    # --- 2. RANKING DETALHADO ---
     pdf.set_font('Arial', 'B', 12)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('2. DETALHAMENTO DE TEMPO INVESTIDO'), 0, 1, 'L')
+    pdf.set_text_color(139, 92, 246)
+    pdf.cell(0, 10, fix_text('2. RANKING DE DEDICAÇÃO POR MATÉRIA'), 0, 1, 'L')
     pdf.ln(2)
     
-    # Lógica de Agrupamento
-    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
+    # Agrupamento para detalhamento
     df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
     
+    # Iterar sobre matérias ordenadas por tempo (Maior -> Menor)
+    ranking = 1
     for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
-        # Bloco de Título da Matéria
+        horas_mat = row_mat['tempo'] / 60
+        pct_mat = (row_mat['tempo'] / minutos_totais * 100) if minutos_totais > 0 else 0
+        
+        # Cabeçalho da Matéria com Totalizador
         pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(240, 240, 245)
-        pdf.set_text_color(139, 92, 246)
-        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
+        pdf.set_fill_color(240, 245, 255) # Azul bem claro para destaque
+        pdf.set_text_color(30, 41, 59)
         
-        # Total da matéria
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 6, fix_text(f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h"), 0, 1, 'L')
+        # Formatar texto da linha da matéria
+        texto_mat = f" #{ranking} {fix_text(row_mat['materia'].upper())}"
+        info_mat = f"{horas_mat:.1f}h ({pct_mat:.1f}%) "
         
-        # Listagem de Assuntos
-        pdf.set_font('Arial', '', 9)
-        pdf.set_text_color(60, 60, 60)
+        pdf.cell(140, 8, texto_mat, 1, 0, 'L', True)
+        pdf.cell(0, 8, info_mat, 1, 1, 'R', True)
+        
+        # Detalhamento de Assuntos (também ordenado por tempo)
         assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
+        
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(71, 85, 105) # Cinza escuro para itens
         
         for _, row_ass in assuntos_da_materia.iterrows():
             nome_ass = row_ass['assunto']
-            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            horas_ass = row_ass['tempo'] / 60
+            # Percentual relativo à matéria
+            pct_ass_relativo = (row_ass['tempo'] / row_mat['tempo'] * 100) if row_mat['tempo'] > 0 else 0
             
-            texto_esq = f"      - {nome_ass}"
-            texto_dir = f"{row_ass['tempo']/60:.1f}h"
+            # Truncar nome longo
+            if len(nome_ass) > 65: nome_ass = nome_ass[:62] + "..."
             
-            pdf.cell(160, 6, fix_text(texto_esq), 0, 0, 'L')
-            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
+            pdf.cell(140, 6, fix_text(f"    • {nome_ass}"), 0, 0, 'L')
+            pdf.cell(0, 6, f"{horas_ass:.1f}h  ({pct_ass_relativo:.0f}%)", 0, 1, 'R')
             
-        pdf.ln(4)
+        pdf.ln(3) # Espaço entre matérias
+        ranking += 1
         
     pdf.ln(5)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 5, fix_text("Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade."))
+    pdf.set_font('Arial', 'I', 8)
+    pdf.set_text_color(148, 163, 184)
+    pdf.multi_cell(0, 5, fix_text("Este relatório apresenta a distribuição do seu tempo de estudo ordenada pela maior dedicação. Use-o para verificar se o seu tempo está alinhado com a importância das disciplinas no edital."))
 
+    return safe_pdf_output(pdf)
+
+def gerar_pdf_simulados(df_simulados, missao):
+    pdf = EstudoPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Cabeçalho do Relatório
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(139, 92, 246)
+    pdf.cell(0, 10, fix_text(f'RELATÓRIO DE SIMULADOS - {missao}'), 0, 1, 'L')
+    
+    if df_simulados.empty:
+        pdf.set_font('Arial', '', 12)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(0, 10, fix_text("Nenhum simulado registrado."), 0, 1)
+        return safe_pdf_output(pdf)
+        
+    # Painel de Resumo
+    media_geral = df_simulados['taxa'].mean()
+    melhor_nota = df_simulados['taxa'].max()
+    total_simulados = len(df_simulados)
+    
+    pdf.set_fill_color(248, 250, 252)
+    pdf.cell(0, 15, "", 1, 1, 'L', True) # Fundo do painel
+    pdf.set_y(pdf.get_y() - 15) # Voltar cursor
+    
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(63, 15, f" Total: {total_simulados} provas", 0, 0, 'C')
+    pdf.cell(63, 15, f" Média: {media_geral:.1f}%", 0, 0, 'C')
+    pdf.cell(64, 15, f" Melhor: {melhor_nota:.1f}%", 0, 1, 'C')
+    pdf.ln(15)
+    pdf.ln(5)
+    
+    # Histórico Detalhado
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(139, 92, 246)
+    pdf.cell(0, 10, fix_text('HISTÓRICO DETALHADO'), 0, 1, 'L')
+    
+    # Cabeçalho da Tabela
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(226, 232, 240)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(30, 8, " DATA", 1, 0, 'L', True)
+    pdf.cell(90, 8, " PROVA / BANCA", 1, 0, 'L', True)
+    pdf.cell(30, 8, " ACERTOS", 1, 0, 'C', True)
+    pdf.cell(40, 8, " NOTA FINAL", 1, 1, 'C', True)
+    
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(60, 60, 60)
+    
+    # Linhas da tabela
+    for _, row in df_simulados.sort_values('data_estudo', ascending=False).iterrows():
+        dt = pd.to_datetime(row['data_estudo']).strftime('%d/%m/%Y')
+        nome = row['assunto']
+        if len(nome) > 45: nome = nome[:42] + "..."
+        acertos = f"{int(row['acertos'])}/{int(row['total'])}"
+        nota = f"{row['taxa']:.1f}%"
+        
+        pdf.cell(30, 8, f" {dt}", 1, 0, 'L')
+        pdf.cell(90, 8, fix_text(f" {nome}"), 1, 0, 'L')
+        pdf.cell(30, 8, f" {acertos}", 1, 0, 'C')
+        
+        # Colorir notas altas/baixas
+        if row['taxa'] >= 80:
+            pdf.set_text_color(22, 163, 74) # Verde
+            pdf.set_font('Arial', 'B', 9)
+        elif row['taxa'] < 60:
+            pdf.set_text_color(220, 38, 38) # Vermelho
+        
+        pdf.cell(40, 8, f" {nota}", 1, 1, 'C')
+        
+        # Resetar fonte
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_font('Arial', '', 9)
+        
     return safe_pdf_output(pdf)
 
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
@@ -3091,23 +3187,54 @@ else:
         
         st.divider()
         
-        col_rel1, col_rel2, col_rel3 = st.columns(3)
-        
         # Calcular Projeção
         proj = calcular_projecao_conclusao(df_estudos, dados)
         
+        # VISUALIZAÇÃO DE PROJEÇÃO (FULL WIDTH)
+        if proj:
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; margin-bottom: 30px;">
+                    <h3 style="color: #fff; margin-bottom: 15px;">📅 Previsão do Edital</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
+                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y')}</div>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
+                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['dias_para_fim']} dias</div>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="color: #94A3B8; font-size: 0.7rem;">RITMO (Tópicos/sem)</div>
+                            <div style="color: #10B981; font-size: 1.2rem; font-weight: 700;">{proj['ritmo']:.1f}</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Cadastre o edital para ver a previsão.")
+
+        col_rel1, col_rel2, col_rel3 = st.columns(3)
+        
         with col_rel1:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
-                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
-                        Análise de priorização (Esforço x Resultado), 
-                        detalhamento por matéria e gargalos de assuntos.
-                    </p>
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
+                        <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+                            Análise de priorização (Esforço x Resultado), 
+                            detalhamento por matéria e gargalos de assuntos.
+                        </p>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
             
-            if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
+            # Botão fora do HTML para funcionar o Streamlit
+            if st.button("🚀 Gerar PDF Estratégico", use_container_width=True, key="btn_gerar_pdf"):
                 try:
                     pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, df_raw, proj)
                     st.success("✅ Relatório gerado!")
@@ -3123,15 +3250,17 @@ else:
 
         with col_rel2:
             st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
-                    <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
-                        Planilha detalhada com todas as suas sessões de estudo e horas líquidas acumuladas.
-                    </p>
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
+                        <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+                            Ranking de dedicação por matéria (do maior para o menor), com destaque para seu foco principal e detalhamento de tópicos.
+                        </p>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
             
-            if st.button("📊 Gerar Log Detalhado", use_container_width=True, key="btn_gerar_pdf_horas"):
+            if st.button("📊 Gerar Diário de Horas", use_container_width=True, key="btn_gerar_pdf_horas"):
                 try:
                     pdf_bytes_h = gerar_pdf_carga_horaria(df_estudos, missao)
                     st.success("✅ Log gerado!")
@@ -3146,29 +3275,31 @@ else:
                     st.error(f"Erro: {e}")
 
         with col_rel3:
-            if proj:
-                # Layout de Projeção na Interface
-                st.markdown(f"""
-                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px;">
-                        <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
-                        <div style="margin: 10px 0;">
-                            <div style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase;">Progresso Único</div>
-                            <div style="font-size: 1.5rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <div>
-                                <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y')}</div>
-                            </div>
-                            <div>
-                                <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
-                                <div style="color: #fff; font-weight: 700;">{proj['dias_para_fim']} dias</div>
-                            </div>
-                        </div>
+            st.markdown(f"""
+                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 350px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3 style="color: #fff; margin-bottom: 10px;">📝 Relatório de Simulados</h3>
+                        <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+                            Histórico consolidado de todas as suas provas, com evolução de notas, média geral e recordes.
+                        </p>
                     </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.info("Cadastre o edital para ver a previsão.")
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("📜 Gerar Histórico Simulados", use_container_width=True, key="btn_gerar_pdf_sim"):
+                try:
+                    # Garantir que df_simulados esteja disponível
+                    pdf_bytes_s = gerar_pdf_simulados(df_simulados, missao)
+                    st.success("✅ Histórico gerado!")
+                    st.download_button(
+                        label="📥 Baixar Simulados (PDF)",
+                        data=pdf_bytes_s,
+                        file_name=f"Simulados_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
         st.divider()
 
