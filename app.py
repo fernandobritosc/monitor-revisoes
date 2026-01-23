@@ -618,6 +618,9 @@ if 'missao_ativa' not in st.session_state:
     except Exception:
         st.session_state.missao_ativa = None
 
+if 'nota_corte_alvo' not in st.session_state:
+    st.session_state.nota_corte_alvo = 80
+
 # Helper function to load all data
 def carregar_dados():
     if not supabase:
@@ -3049,6 +3052,92 @@ else:
                 """, unsafe_allow_html=True)
             else:
                 st.info("Cadastre o edital para ver a previsão.")
+
+        st.divider()
+
+        # --- SEÇÃO: BENCHMARK DE SIMULADOS ---
+        st.markdown('<h3 style="color: #fff; margin-bottom: 20px;">📈 Benchmark de Simulados</h3>', unsafe_allow_html=True)
+        
+        df_sim_bench = df_estudos[df_estudos['materia'] == "SIMULADO"].sort_values('data_estudo')
+        
+        if df_sim_bench.empty:
+            st.info("Registre pelo menos um Simulado para habilitar o Benchmark.")
+        else:
+            col_b1, col_b2 = st.columns([1, 2])
+            
+            with col_b1:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                # Configurar Nota de Corte
+                st.session_state.nota_corte_alvo = st.slider(
+                    "Sua Nota de Corte Alvo (%)", 
+                    min_value=50, max_value=100, 
+                    value=st.session_state.nota_corte_alvo,
+                    step=1
+                )
+                
+                # Métricas de Evolução
+                ult_nota = df_sim_bench['taxa'].iloc[-1]
+                med_nota = df_sim_bench['taxa'].mean()
+                diff_corte = ult_nota - st.session_state.nota_corte_alvo
+                
+                st.markdown("---")
+                st.markdown(f"**Última Nota:** {ult_nota:.1f}%")
+                if diff_corte >= 0:
+                    st.success(f"🔥 +{diff_corte:.1f}% ACIMA da meta!")
+                else:
+                    st.warning(f"⚠️ {abs(diff_corte):.1f}% ABAIXO da meta.")
+                
+                st.markdown(f"**Média Geral:** {med_nota:.1f}%")
+                
+                # Tendência
+                if len(df_sim_bench) >= 2:
+                    tendencia = "Subindo 📈" if df_sim_bench['taxa'].iloc[-1] > df_sim_bench['taxa'].iloc[-2] else "Caindo 📉" if df_sim_bench['taxa'].iloc[-1] < df_sim_bench['taxa'].iloc[-2] else "Estável ➖"
+                else:
+                    tendencia = "Mantenha o Ritmo!"
+                
+                st.markdown(f"**Tendência:** {tendencia}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_b2:
+                # Gráfico de Evolução de simulados
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                
+                df_plt = df_sim_bench.copy()
+                df_plt['data_estudo'] = pd.to_datetime(df_plt['data_estudo'])
+                
+                fig_bench = go.Figure()
+                
+                # Linha de Corte
+                fig_bench.add_hline(
+                    y=st.session_state.nota_corte_alvo, 
+                    line_dash="dash", 
+                    line_color="#EF4444", 
+                    annotation_text="Nota de Corte", 
+                    annotation_position="top left"
+                )
+                
+                # Linha de Performance
+                fig_bench.add_trace(go.Scatter(
+                    x=df_plt['data_estudo'], 
+                    y=df_plt['taxa'],
+                    name='Seu Desempenho',
+                    line=dict(color='#06B6D4', width=3),
+                    mode='lines+markers',
+                    marker=dict(size=8, symbol='diamond')
+                ))
+                
+                fig_bench.update_layout(
+                    title="Evolução de Notas vs Meta",
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color="#fff"),
+                    height=300,
+                    margin=dict(t=30, b=10, l=10, r=10),
+                    yaxis=dict(range=[max(0, df_plt['taxa'].min()-10), 105], gridcolor='rgba(255,255,255,0.05)')
+                )
+                
+                st.plotly_chart(fig_bench, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
