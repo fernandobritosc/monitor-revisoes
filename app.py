@@ -246,7 +246,6 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
             pdf.cell(0, 6, f"{row_ass['taxa']:.0f}% ({int(row_ass['total'])})", 0, 1, 'R')
         pdf.ln(2)
 
-    # Retorna bytes seguros
     return safe_pdf_output(pdf)
 
 def gerar_pdf_carga_horaria(df, missao):
@@ -254,28 +253,77 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
+    # 1. RESUMO DE CARGA HORÁRIA
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 10, fix_text('1. DIÁRIO DE CARGA HORÁRIA'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('1. RESUMO DE CARGA HORÁRIA'), 0, 1, 'L')
     
-    minutos = df['tempo'].sum()
+    minutos_totais = df['tempo'].sum()
+    horas_totais = minutos_totais / 60
+    dias_estudados = df[df['tempo'] > 0]['data_estudo'].nunique()
+    media_diaria = horas_totais / dias_estudados if dias_estudados > 0 else 0
+    
+    # Grid de métricas
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(248, 248, 255)
+    pdf.set_text_color(100, 100, 100)
+    
+    pdf.cell(63, 8, fix_text(' TOTAL DE HORAS'), 1, 0, 'L', True)
+    pdf.cell(63, 8, fix_text(' DIAS ESTUDADOS'), 1, 0, 'L', True)
+    pdf.cell(64, 8, fix_text(' MÉDIA DIÁRIA'), 1, 1, 'L', True)
+    
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 10, fix_text(f"Total Acumulado: {minutos/60:.1f} horas"), 0, 1, 'L')
-    pdf.ln(5)
+    pdf.cell(63, 10, f' {horas_totais:.1f}h', 1, 0, 'L')
+    pdf.cell(63, 10, f' {int(dias_estudados)}', 1, 0, 'L')
+    pdf.cell(64, 10, f' {media_diaria:.1f}h/dia', 1, 1, 'L')
     
-    df_agrup = df.groupby('materia').agg({'tempo': 'sum'}).reset_index().sort_values('tempo', ascending=False)
+    pdf.ln(10)
     
-    pdf.set_fill_color(240, 240, 245)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(140, 8, fix_text(' MATÉRIA'), 1, 0, 'L', True)
-    pdf.cell(0, 8, fix_text(' TEMPO'), 1, 1, 'R', True)
+    # 2. LOG DE HORAS POR MATÉRIA E ASSUNTO
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, fix_text('2. DETALHAMENTO DE TEMPO INVESTIDO'), 0, 1, 'L')
+    pdf.ln(2)
     
-    pdf.set_font('Arial', '', 10)
-    for _, row in df_agrup.iterrows():
-        pdf.cell(140, 8, fix_text(f" {row['materia']}"), 1, 0, 'L')
-        pdf.cell(0, 8, f"{row['tempo']/60:.1f}h ", 1, 1, 'R')
+    # Lógica de Agrupamento
+    df_agrup_mat = df.groupby('materia').agg({'tempo': 'sum'}).reset_index()
+    df_agrup_ass = df.groupby(['materia', 'assunto']).agg({'tempo': 'sum'}).reset_index()
+    
+    for _, row_mat in df_agrup_mat.sort_values('tempo', ascending=False).iterrows():
+        # Bloco de Título da Matéria
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(240, 240, 245)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(0, 8, f" {fix_text(row_mat['materia'].upper())}", 1, 1, 'L', True)
         
+        # Total da matéria
+        pdf.set_font('Arial', 'I', 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, fix_text(f"  Carga Horária Total: {row_mat['tempo']/60:.1f}h"), 0, 1, 'L')
+        
+        # Listagem de Assuntos
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(60, 60, 60)
+        assuntos_da_materia = df_agrup_ass[df_agrup_ass['materia'] == row_mat['materia']].sort_values('tempo', ascending=False)
+        
+        for _, row_ass in assuntos_da_materia.iterrows():
+            nome_ass = row_ass['assunto']
+            if len(nome_ass) > 60: nome_ass = nome_ass[:57] + "..."
+            
+            texto_esq = f"      - {nome_ass}"
+            texto_dir = f"{row_ass['tempo']/60:.1f}h"
+            
+            pdf.cell(160, 6, fix_text(texto_esq), 0, 0, 'L')
+            pdf.cell(0, 6, fix_text(texto_dir), 0, 1, 'R')
+            
+        pdf.ln(4)
+        
+    pdf.ln(5)
+    pdf.set_font('Arial', 'I', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.multi_cell(0, 5, fix_text("Este relatório apresenta a distribuição do seu tempo de estudo por disciplina e tópico. Use-o para avaliar se você está dedicando o tempo adequado às matérias de maior peso ou dificuldade."))
+
     return safe_pdf_output(pdf)
 
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
