@@ -183,6 +183,11 @@ def render_progress_bar(percentage, height=8, color_start=None, color_end=None):
     """, unsafe_allow_html=True)
 
 
+# --- FUNÇÃO ADICIONADA: Fuso Horário Brasília ---
+def get_br_date():
+    """Retorna a data atual no fuso horário de Brasília (UTC-3)."""
+    return (datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date()
+
 # --- FUNÇÃO ADICIONADA: Conversor de tempo ---
 def formatar_tempo_para_bigint(tempo_str):
     """Converte string HHMM para minutos inteiros."""
@@ -1006,7 +1011,7 @@ def tempo_recomendado_rev24h(dificuldade):
 @st.cache_data(ttl=300)
 def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
     """Calcula revisões pendentes com cache para melhor performance."""
-    hoje = datetime.date.today()
+    hoje = get_br_date()
     pend = []
     
     if df_estudos.empty:
@@ -1257,7 +1262,7 @@ else:
             if data_prova_direta:
                 try:
                     dt_prova = pd.to_datetime(data_prova_direta).date()
-                    dias_restantes = (dt_prova - datetime.date.today()).days
+                    dias_restantes = (dt_prova - get_br_date()).days
                 except Exception:
                     dias_restantes = None
             
@@ -1355,7 +1360,7 @@ else:
             
             with col_s3:
                 # Calcular dias estudados no mês
-                hoje = datetime.date.today()
+                hoje = get_br_date()
                 dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
                 dias_estudados_mes = len(set(pd.to_datetime(df_estudos['data_estudo']).dt.date.unique()))
                 percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
@@ -1385,7 +1390,7 @@ else:
                     df_day = df_heat.groupby('data')['tempo'].sum().reset_index()
                     
                     # Criar range das últimas 12 semanas (84 dias)
-                    fim = datetime.date.today()
+                    fim = get_br_date()
                     inicio = fim - timedelta(days=83) # 12 semanas
                     all_days = pd.date_range(start=inicio, end=fim)
                     
@@ -1691,7 +1696,7 @@ else:
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
                 c1, c2 = st.columns([2, 1])
-                dt_reg = c1.date_input("Data do Estudo", format="DD/MM/YYYY")
+                dt_reg = c1.date_input("Data do Estudo", value=get_br_date(), format="DD/MM/YYYY")
                 tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
                 
                 mat_reg = st.selectbox("Disciplina", mats)
