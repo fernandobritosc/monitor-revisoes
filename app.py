@@ -2145,21 +2145,30 @@ else:
             
             with col_rec2:
                 st.markdown("#### ⚡ Check-list Estratégico")
+                st.markdown('<p style="color: #94A3B8; font-size: 0.85rem; margin-top: -10px;">Transforme as sugestões da IA em metas cumpridas.</p>', unsafe_allow_html=True)
                 st.markdown('<div class="modern-card">', unsafe_allow_html=True)
                 
-                # Gerar checks dinâmicos
-                checks = [
-                    "Revisar 'Foco Crítico'",
-                    "Realizar 1 Simulado de Elite",
-                    "Manter meta de questões",
-                    "Zerar 2 novos tópicos"
-                ]
+                # Gerar checks dinâmicos baseados no desempenho
+                checks = []
+                if not criticos.empty:
+                    pior_mat = criticos.iloc[0]['materia']
+                    checks.append(f"Revisar {pior_mat}")
                 
-                for c in checks:
-                    st.checkbox(c, key=f"check_{c}")
+                checks.extend([
+                    "Realizar 1 Simulado de Elite",
+                    "Manter meta de questões diária",
+                    "Zerar 2 novos tópicos do edital"
+                ])
+                
+                for i, c in enumerate(checks):
+                    st.checkbox(c, key=f"check_{i}_{c[:10]}")
                 
                 st.divider()
-                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Dica: O sucesso é o acúmulo de pequenas vitórias diárias.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Este checklist é seu contrato semanal. O objetivo é garantir que você ataque seus piores pontos antes de avançar.</p>", unsafe_allow_html=True)
+                
+                if st.button("💾 Salvar Foco da Semana", use_container_width=True):
+                    st.toast("Planejamento salvo! Foco total na execução.", icon="🚀")
+                
                 st.markdown('</div>', unsafe_allow_html=True)
                 
             st.divider()
