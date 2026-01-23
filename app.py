@@ -121,7 +121,7 @@ class EstudoPDF(FPDF):
         self.set_text_color(150, 150, 150)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
-def gerar_pdf_estratégico(df_estudos, missao):
+def gerar_pdf_estratégico(df_estudos, missao, proj=None):
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -240,6 +240,48 @@ def gerar_pdf_estratégico(df_estudos, missao):
         pdf.cell(30, 6, str(int(row['acertos'])), 1, 0, 'C')
         pdf.cell(30, 6, f"{row['taxa']:.1f}%", 1, 1, 'C')
         
+    # 4. PROJEÇÃO DE CONCLUSÃO
+    if proj:
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(0, 10, '4. PROJEÇÃO DE CONCLUSÃO DO EDITAL', 0, 1, 'L')
+        
+        pdf.set_font('Arial', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.multi_cell(0, 7, f"Com base no seu ritmo de estudo dos últimos 30 dias (ou histórico total), aqui está a estimativa para conclusão do seu edital:")
+        pdf.ln(5)
+        
+        # Grid de Projeção
+        pdf.set_fill_color(240, 253, 244) # Verde bem claro
+        pdf.set_draw_color(16, 185, 129)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(95, 10, ' PROGRESSO DO EDITAL', 1, 0, 'L', True)
+        pdf.cell(95, 10, ' RITMO (PACE) ATUAL', 1, 1, 'L', True)
+        
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(95, 12, f" {proj['estudados']} de {proj['total']} tópicos ({proj['progresso']:.1f}%)", 1, 0, 'L')
+        pdf.cell(95, 12, f" {proj['ritmo']:.1f} tópicos por semana", 1, 1, 'L')
+        
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(95, 10, ' DIAS RESTANTES ESTIMADOS', 1, 0, 'L', True)
+        pdf.cell(95, 10, ' DATA PREVISTA PARA TERMINAR', 1, 1, 'L', True)
+        
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(95, 12, f" {proj['dias_para_fim']} dias", 1, 0, 'L')
+        pdf.cell(95, 12, f" {proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else '—'}", 1, 1, 'L')
+        
+        pdf.ln(10)
+        pdf.set_font('Arial', 'I', 10)
+        pdf.set_text_color(100, 100, 100)
+        if proj['progresso'] > 80:
+            msg = "Você está na reta final! Mantenha a constância para garantir a memorização dos últimos detalhes."
+        elif proj['ritmo'] < 1:
+            msg = "Atenção: Seu ritmo atual está baixo. Tente zerar ao menos 2-3 novos tópicos por semana para acelerar a conclusão."
+        else:
+            msg = "Continue assim! O segredo da aprovação é a regularidade. Cada tópico zerado é um passo rumo à vaga."
+        pdf.multi_cell(0, 7, f"Insight: {msg}")
+
     return bytes(pdf.output())
 def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
     """Renderiza cartões de métricas modernos com glassmorphism"""
@@ -1121,6 +1163,72 @@ def calcular_estudos_semana(df):
         return horas_semana, questoes_semana
     except (ValueError, TypeError, KeyError):
         return 0, 0
+
+def calcular_projecao_conclusao(df, dados_edital):
+    """
+    Calcula o ritmo de estudo e projeta a data de conclusão do edital.
+    """
+    if not dados_edital or 'materias' not in dados_edital:
+        return None
+    
+    # 1. Total de Tópicos no Edital
+    total_topicos = 0
+    for materia, topicos in dados_edital['materias'].items():
+        total_topicos += len(topicos)
+    
+    if total_topicos == 0:
+        return None
+        
+    # 2. Tópicos Estudados (Únicos)
+    if df.empty:
+        estudados = 0
+    else:
+        # Consideramos apenas tópicos que existem no edital atual
+        todos_topicos_edital = []
+        for materia, topicos in dados_edital['materias'].items():
+            todos_topicos_edital.extend(topicos)
+        
+        # Filtra registros que batem com o edital e conta únicos
+        estudados = df[df['assunto'].isin(todos_topicos_edital)]['assunto'].nunique()
+    
+    restantes = total_topicos - estudados
+    progresso_pct = (estudados / total_topicos * 100) if total_topicos > 0 else 0
+    
+    # 3. Ritmo (Pace)
+    if df.empty or estudados == 0:
+        return {
+            "total": total_topicos, "estudados": estudados, "restantes": restantes,
+            "progresso": progresso_pct, "ritmo": 0, "dias_para_fim": None, "data_fim": None
+        }
+    
+    # Ritmo nos últimos 30 dias (mais realista que o histórico total)
+    hoje = get_br_date()
+    inicio_janela = hoje - timedelta(days=30)
+    df_recente = df[pd.to_datetime(df['data_estudo']).dt.date >= inicio_janela]
+    
+    if len(df_recente) < 5: # Se tiver pouco dado recente, usa histórico total
+        data_inicio = pd.to_datetime(df['data_estudo']).min().date()
+        dias_totais = max((hoje - data_inicio).days, 1)
+        ritmo_diario = estudados / dias_totais
+    else:
+        topicos_30d = df_recente['assunto'].nunique()
+        ritmo_diario = topicos_30d / 30
+    
+    # Garantir ritmo mínimo para não dividir por zero
+    ritmo_diario = max(ritmo_diario, 0.01)
+    
+    dias_para_fim = int(restantes / ritmo_diario)
+    data_fim = hoje + timedelta(days=dias_para_fim)
+    
+    return {
+        "total": total_topicos,
+        "estudados": estudados,
+        "restantes": restantes,
+        "progresso": progresso_pct,
+        "ritmo": ritmo_diario * 7, # Tópicos por semana para exibição
+        "dias_para_fim": dias_para_fim,
+        "data_fim": data_fim
+    }
 
 # --- FUNÇÃO REMOVIDA: gerar_calendario_estudos (bolinhas) ---
 
@@ -2730,25 +2838,28 @@ else:
         
         col_rel1, col_rel2 = st.columns(2)
         
+        # Calcular Projeção
+        proj = calcular_projecao_conclusao(df_estudos, dados)
+        
         with col_rel1:
             st.markdown(f"""
                 <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório de Desempenho Estratégico</h3>
+                    <h3 style="color: #fff; margin-bottom: 10px;">🏆 Relatório Estratégico</h3>
                     <p style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 20px;">
                         Inclui a Matriz de Priorização (Esforço vs Resultado), 
-                        detalhamento por matéria e resumo de progresso do edital.
+                        detalhamento por matéria e resumo de performance.
                     </p>
                 </div>
             """, unsafe_allow_html=True)
             
-            if st.button("🚀 Gerar Relatório PDF", use_container_width=True, key="btn_gerar_pdf"):
+            if st.button("🚀 Gerar PDF Completo", use_container_width=True, key="btn_gerar_pdf"):
                 try:
-                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao)
+                    pdf_bytes = gerar_pdf_estratégico(df_estudos, missao, proj)
                     st.success("✅ Relatório gerado com sucesso!")
                     st.download_button(
                         label="📥 Baixar Relatório (PDF)",
                         data=pdf_bytes,
-                        file_name=f"Relatorio_Estrategico_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
+                        file_name=f"Relatorio_{missao}_{get_br_date().strftime('%d_%m_%Y')}.pdf",
                         mime="application/pdf",
                         use_container_width=True
                     )
@@ -2756,15 +2867,32 @@ else:
                     st.error(f"Erro ao gerar PDF: {e}")
 
         with col_rel2:
-            st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%; opacity: 0.6;">
-                    <h3 style="color: #fff; margin-bottom: 10px;">🕒 Planilha de Carga Horária</h3>
-                    <p style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 20px;">
-                        Detalhamento completo de horas líquidas estudadas por dia e por semana.
-                    </p>
-                    <span style="background: rgba(139, 92, 246, 0.2); color: #8B5CF6; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">EM BREVE</span>
-                </div>
-            """, unsafe_allow_html=True)
+            if proj:
+                # Layout de Projeção na Interface
+                st.markdown(f"""
+                    <div style="background: {COLORS['bg_card']}; padding: 25px; border-radius: 20px; border: 1px solid {COLORS['border']}; height: 100%;">
+                        <h3 style="color: #fff; margin-bottom: 10px;">📅 Previsão do Edital</h3>
+                        <div style="margin: 15px 0;">
+                            <div style="color: #94A3B8; font-size: 0.8rem; text-transform: uppercase;">Progresso Único</div>
+                            <div style="font-size: 1.8rem; font-weight: 800; color: #06B6D4;">{proj['progresso']:.1f}%</div>
+                        </div>
+                        <div style="display: flex; gap: 20px;">
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
+                                <div style="color: #fff; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else "—"}</div>
+                            </div>
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
+                                <div style="color: #fff; font-weight: 700;">{proj['dias_para_fim'] if proj['dias_para_fim'] is not None else "—"}</div>
+                            </div>
+                        </div>
+                        <p style="color: #94A3B8; font-size: 0.8rem; margin-top: 15px;">
+                            Pace atual: <b>{proj['ritmo']:.1f} tópicos/semana</b>
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.info("Cadastre matérias no edital para ver a projeção.")
 
     # --- ABA: CONFIGURAR ---
     elif menu == "Configurar":
