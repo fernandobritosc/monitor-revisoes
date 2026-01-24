@@ -661,7 +661,16 @@ def formatar_tempo_para_bigint(tempo_str):
         return 0
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
-st.set_page_config(page_title="Monitor de Revisões Pro", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Monitor de Revisões Pro", 
+    layout="wide", 
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "MonitorPro - Sistema Inteligente de Gestão de Estudos"
+    }
+)
 
 # --- INTEGRAÇÃO: SUPABASE ---
 from supabase import create_client, Client
@@ -727,14 +736,55 @@ def excluir_concurso_completo(supabase, missao):
 def apply_styles():
     st.markdown("""
         <style>
-        .block-container { padding-top: 2rem !important; padding-bottom: 5rem !important; }
+        /* Container principal - responsivo ao sidebar */
+        .block-container { 
+            padding-top: 2rem !important; 
+            padding-bottom: 5rem !important;
+            transition: all 0.3s ease;
+        }
+        
+        /* Quando sidebar está recolhida, expandir conteúdo */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
+            max-width: 100% !important;
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
+        }
+        
+        /* Quando sidebar está expandida */
+        [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
+            max-width: calc(100% - 21rem) !important;
+        }
+        
+        /* Badges */
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
         .badge-green { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
         .badge-red { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .badge-gray { background-color: rgba(148, 163, 184, 0.2); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
         .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
-        .modern-progress-container { width: 100%; background-color: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 6px; overflow: hidden; }
-        .modern-progress-fill { height: 100%; background: linear-gradient(90deg, #8B5CF6, #06B6D4); border-radius: 10px; transition: width 0.5s ease; }
+        
+        /* Progress bars */
+        .modern-progress-container { 
+            width: 100%; 
+            background-color: rgba(255, 255, 255, 0.1); 
+            border-radius: 10px; 
+            height: 6px; 
+            overflow: hidden; 
+        }
+        .modern-progress-fill { 
+            height: 100%; 
+            background: linear-gradient(90deg, #8B5CF6, #06B6D4); 
+            border-radius: 10px; 
+            transition: width 0.5s ease; 
+        }
+        
+        /* Animações suaves */
+        .modern-card {
+            transition: all 0.3s ease;
+        }
+        .modern-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -1839,8 +1889,39 @@ else:
 </div>
 """, unsafe_allow_html=True)
             else:
-                # Estado vazio elegante para incentivar o início
-                st.markdown(f"""<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);"><span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span></div>""", unsafe_allow_html=True)
+                # --- RESUMO DIÁRIO INTELIGENTE (Estado vazio + Notificações) ---
+                hora_atual = datetime.datetime.now().hour
+                
+                # Notificações contextuais baseadas no horário e histórico
+                if hora_atual >= 20:
+                    st.error(f"⚠️ **{hoje.strftime('%d/%m')}**: Você ainda não estudou hoje! Restam poucas horas. Que tal 30min agora?")
+                elif hora_atual >= 18:
+                    st.warning(f"🌆 **Boa noite!** Ainda dá tempo de estudar hoje. Sua meta diária é próxima!")
+                elif hora_atual >= 12:
+                    st.info(f"☀️ **Boa tarde!** O dia está pela metade. Reserve um tempo para os estudos!")
+                else:
+                    st.success(f"🌅 **Bom dia!** Comece o dia com foco. Registre seu primeiro estudo!")
+
+            # --- RESUMO DIÁRIO INTELIGENTE (Com dados) ---
+            if not df_hoje.empty:
+                # Análise inteligente do desempenho de hoje
+                taxa_hoje = (df_hoje['acertos'].sum() / df_hoje['total'].sum() * 100) if df_hoje['total'].sum() > 0 else 0
+                meta_min_dia = 120  # 2h por dia
+                
+                st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True)
+                
+                # Feedback inteligente
+                if min_hoje < meta_min_dia:
+                    deficit = meta_min_dia - min_hoje
+                    st.info(f"💡 Você estudou **{formatar_minutos(min_hoje)}** hoje. Que tal mais **{deficit}min** para bater a meta diária de 2h?")
+                else:
+                    st.success(f"🎉 Parabéns! Você já estudou **{formatar_minutos(min_hoje)}** hoje e bateu sua meta diária!")
+                
+                # Alerta de precisão
+                if taxa_hoje < 60:
+                    st.warning(f"⚠️ Sua precisão hoje está em **{taxa_hoje:.0f}%**. Considere revisar os conceitos antes de continuar.")
+                elif taxa_hoje >= 80:
+                    st.success(f"🎯 Excelente! Precisão de **{taxa_hoje:.0f}%** hoje. Continue assim!")
 
             # --- VISÃO GERAL DO EDITAL ---
             st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
@@ -2610,6 +2691,44 @@ else:
     # --- ABA: DASHBOARD ---
     elif menu == "Dashboard":
         st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
+        
+        # --- FILTRO DE PERÍODO ---
+        st.markdown('<div class="modern-card" style="padding: 15px; margin-bottom: 20px;">', unsafe_allow_html=True)
+        col_periodo, col_info = st.columns([3, 1])
+        
+        with col_periodo:
+            periodo = st.segmented_control(
+                "📅 Período de Análise:",
+                ["Última Semana", "Último Mês", "Últimos 3 Meses", "Tudo"],
+                default="Último Mês",
+                key="filtro_periodo_dashboard"
+            )
+        
+        # Filtrar df_estudos baseado no período
+        hoje = get_br_date()
+        df_estudos_filtrado = df_estudos.copy()
+        
+        if periodo == "Última Semana" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=7))]
+        elif periodo == "Último Mês" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=30))]
+        elif periodo == "Últimos 3 Meses" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=90))]
+        
+        with col_info:
+            registros_filtrados = len(df_estudos_filtrado)
+            st.markdown(f"""
+            <div style="text-align: right; padding-top: 8px;">
+                <span style="color: {COLORS['secondary']}; font-size: 0.9rem; font-weight: 600;">
+                    {registros_filtrados} registros
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Usar df_estudos_filtrado daqui em diante
+        df_estudos = df_estudos_filtrado
         
         # --- NOVO: EDITAL VERTICALIZADO (COBERTURA) ---
         if dados.get('materias'):
