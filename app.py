@@ -1815,7 +1815,79 @@ else:
                 # Estado vazio elegante para incentivar o início
                 st.markdown(f"""<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);"><span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span></div>""", unsafe_allow_html=True)
 
+            # --- VISÃO GERAL DO EDITAL ---
+            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
+            
+            # Calcular métricas
+            t_q = df_estudos['total'].sum()
+            a_q = df_estudos['acertos'].sum()
+            precisao = (a_q / t_q * 100) if t_q > 0 else 0
+            minutos_totais = int(df_estudos['tempo'].sum())
+            tempo_formatado = formatar_minutos(minutos_totais)
 
+            # Dias para a prova
+            dias_restantes = None
+            if data_prova_direta:
+                try:
+                    dt_prova = pd.to_datetime(data_prova_direta).date()
+                    dias_restantes = (dt_prova - get_br_date()).days
+                except Exception:
+                    dias_restantes = None
+            
+            # 4 cartões de métricas com ANÉIS CIRCULARES (SEM DELTA)
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            
+            # Calcular percentuais para os anéis
+            horas_totais = minutos_totais / 60
+            meta_horas_mes = 80
+            pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
+            pct_precisao = min(precisao, 100)
+            meta_questoes_mes = 1000
+            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
+            
+            with c1:
+                render_circular_progress(
+                    percentage=pct_tempo,
+                    label="TEMPO TOTAL",
+                    value=tempo_formatado,
+                    color_start=COLORS["primary"],
+                    color_end=COLORS["secondary"],
+                    icon="⏱️"
+                )
+            with c2:
+                render_circular_progress(
+                    percentage=pct_precisao,
+                    label="PRECISÃO",
+                    value=f"{precisao:.0f}%",
+                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                    color_end=COLORS["secondary"],
+                    icon="🎯"
+                )
+            with c3:
+                render_circular_progress(
+                    percentage=pct_questoes,
+                    label="QUESTÕES",
+                    value=f"{int(t_q)}",
+                    color_start=COLORS["accent"],
+                    color_end=COLORS["primary"],
+                    icon="📝"
+                )
+            with c4:
+                if dias_restantes is not None:
+                    pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
+                    cor = COLORS["danger"] if dias_restantes <= 30 else COLORS["warning"] if dias_restantes <= 60 else COLORS["success"]
+                    render_circular_progress(
+                        percentage=pct_dias,
+                        label="DIAS PARA PROVA",
+                        value=f"{dias_restantes}",
+                        color_start=cor,
+                        color_end=COLORS["secondary"],
+                        icon="📅"
+                    )
+                else:
+                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅")
+            
+            st.divider()
 
             # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
@@ -2192,70 +2264,95 @@ else:
             st.write(f"**{len(pend)} revisões encontradas**")
             st.markdown("---")
             
-            # Lista de Cards com Expander (Suspensa/Minimizada)
+            # Lista de Cards com Expander (Suspensa/Minimizada) - VERSÃO MELHORADA
             for idx, p in enumerate(pend):
-                # Status e cor
-                border_color = "#EF4444" if p['atraso'] > 0 else "#10B981" if p['atraso'] == 0 else "#94A3B8"
-                status_badge = f"⚠️ {p['atraso']}d Atraso" if p['atraso'] > 0 else "🎯 É Hoje" if p['atraso'] == 0 else f"📅 {p['data_prevista'].strftime('%d/%m')}"
+                # Status e cores do sistema
+                if p['atraso'] > 0:
+                    border_color = COLORS["danger"]
+                    status_icon = "⚠️"
+                    status_text = f"{p['atraso']}d Atraso"
+                    bg_color = "rgba(239, 68, 68, 0.05)"
+                elif p['atraso'] == 0:
+                    border_color = COLORS["success"]
+                    status_icon = "🎯"
+                    status_text = "É Hoje"
+                    bg_color = "rgba(16, 185, 129, 0.05)"
+                else:
+                    border_color = COLORS["secondary"]
+                    status_icon = "📅"
+                    status_text = p['data_prevista'].strftime('%d/%m')
+                    bg_color = "rgba(6, 182, 212, 0.05)"
                 
-                # Título do Expander
-                titulo_expander = f"{p['assunto']} - {status_badge}"
+                # Ícone de dificuldade
+                dif_icon = p.get('dificuldade', '🟡 Médio').split()[0]
+                
+                # Título do Expander melhorado
+                titulo_expander = f"{status_icon} {p['assunto']} · {status_text}"
                 
                 with st.expander(titulo_expander, expanded=False):
-                    # Card Container
+                    # Cabeçalho do card
                     st.markdown(f"""
                     <div style="
-                        border-left: 4px solid {border_color};
-                        background: rgba(30, 41, 59, 0.3);
-                        padding: 12px 15px;
-                        border-radius: 8px;
-                        margin-bottom: 10px;
+                        background: linear-gradient(135deg, {bg_color}, rgba(15, 15, 35, 0.3));
+                        border-left: 3px solid {border_color};
+                        padding: 15px;
+                        border-radius: 12px;
+                        margin-bottom: 15px;
                     ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <div>
-                                <span style="color: #94A3B8; font-size: 0.8rem;">{p['materia']}</span>
+                                <span style="background: {border_color}30; color: {border_color}; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">{p['materia']}</span>
                             </div>
-                             <div style="color: #64748B; font-size: 0.75rem;">
-                                 ⭐ R{int(p.get('relevancia', 5))} | Rev de {p['tipo']}
-                             </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <span style="color: #94A3B8; font-size: 0.8rem;">{dif_icon} {p['tipo']}</span>
+                                <span style="color: {COLORS['warning']}; font-size: 0.8rem; font-weight: 600;">⭐ R{int(p.get('relevancia', 5))}</span>
+                            </div>
                         </div>
-                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 4px;">📝 {p['coment'] if p['coment'] else 'Sem anotações'}</div>
+                        <div style="color: #94A3B8; font-size: 0.85rem; line-height: 1.5;">
+                            📝 {p['coment'] if p['coment'] else '<i style="color: #64748B;">Sem anotações</i>'}
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Área de Ação (Inputs, Tempo e Botão)
-                    c_input, c_btn = st.columns([3, 1])
+                    # Área de Ação
+                    st.markdown("#### 📊 Registrar Revisão")
                     
-                    with c_input:
+                    col_inputs, col_btn = st.columns([3, 1])
+                    
+                    with col_inputs:
                         ci1, ci2, ci3 = st.columns(3)
-                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}_{idx}")
-                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}_{idx}")
-                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}_{idx}")
+                        acertos = ci1.number_input("✅ Acertos", min_value=0, value=0, key=f"ac_{p['id']}_{p['col']}_{idx}")
+                        total = ci2.number_input("📝 Total", min_value=0, value=0, key=f"to_{p['id']}_{p['col']}_{idx}")
+                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, value=0, step=5, key=f"tm_{p['id']}_{p['col']}_{idx}")
                     
-                    with c_btn:
+                    with col_btn:
+                        st.write("")  # Espaço
+                        st.write("")  # Espaço
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}_{idx}", use_container_width=True, type="primary"):
-                            try:
-                                res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
-                                if res_db.data:
-                                    n_ac = res_db.data[0]['acertos'] + acertos
-                                    n_to = res_db.data[0]['total'] + total
-                                    # Soma o tempo antigo com o novo tempo de revisão
-                                    n_tempo = (res_db.data[0].get('tempo') or 0) + tempo_rev
-                                    
-                                    supabase.table("registros_estudos").update({
-                                        p['col']: True, 
-                                        "comentarios": f"{p['coment']} | Rev: {acertos}/{total} ({tempo_rev}min)", 
-                                        "acertos": n_ac, 
-                                        "total": n_to, 
-                                        "tempo": n_tempo,
-                                        "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
-                                    }).eq("id", p['id']).execute()
-                                    
-                                    st.toast(f"Revisão de {p['assunto']} concluída (+{tempo_rev}min)!")
-                                    time.sleep(1)
-                                    st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro: {e}")
+                            if total == 0:
+                                st.error("⚠️ Informe o total de questões!")
+                            else:
+                                try:
+                                    res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
+                                    if res_db.data:
+                                        n_ac = res_db.data[0]['acertos'] + acertos
+                                        n_to = res_db.data[0]['total'] + total
+                                        n_tempo = (res_db.data[0].get('tempo') or 0) + tempo_rev
+                                        
+                                        supabase.table("registros_estudos").update({
+                                            p['col']: True, 
+                                            "comentarios": f"{p['coment']} | Rev: {acertos}/{total} ({tempo_rev}min)", 
+                                            "acertos": n_ac, 
+                                            "total": n_to, 
+                                            "tempo": n_tempo,
+                                            "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
+                                        }).eq("id", p['id']).execute()
+                                        
+                                        st.success(f"✅ Revisão concluída! +{tempo_rev}min registrados")
+                                        time.sleep(1.5)
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro: {e}")
 
     # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
