@@ -491,11 +491,36 @@ def gerar_pdf_simulados(df_simulados, missao):
         
     return safe_pdf_output(pdf)
 
-def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None):
-    """Renderiza cartões de métricas modernos com glassmorphism"""
+def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None, delta=None):
+    """Renderiza cartões de métricas modernos com glassmorphism e suporte a Delta"""
     if color is None:
         color = COLORS["primary"]
     
+    delta_html = ""
+    if delta:
+        # Lógica para cor do delta (verde se positivo, vermelho se negativo)
+        # Adaptar conforme contexto, mas assumiremos que aumento é "bom" para volume
+        # e para taxa. Se for algo como 'erros', seria invertido, mas não estamos usando para erros aqui.
+        is_positive = "+" in str(delta)
+        delta_color = "#10B981" if is_positive else "#EF4444" 
+        
+        delta_html = f"""
+        <div style="
+            margin-top: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: {delta_color};
+            background: {delta_color}15;
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-block;
+        ">
+            {delta}
+        </div>
+        """
+    
+    subtitle_html = f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle and not delta else ''
+
     st.markdown(f"""
         <div style="
             text-align: center;
@@ -509,6 +534,7 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
             display: flex;
             flex-direction: column;
             justify-content: center;
+            align-items: center;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
@@ -536,7 +562,8 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
                 background-clip: text;
                 line-height: 1;
             ">{value}</div>
-            {f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle else ''}
+            {delta_html}
+            {subtitle_html}
         </div>
     """, unsafe_allow_html=True)
 
@@ -1815,8 +1842,8 @@ else:
                 # Estado vazio elegante para incentivar o início
                 st.markdown(f"""<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);"><span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span></div>""", unsafe_allow_html=True)
 
-            # --- VISÃO GERAL DO EDITAL (como na imagem) ---
-            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
+            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
+            st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
             
             # Calcular métricas
             t_q = df_estudos['total'].sum()
@@ -2532,6 +2559,7 @@ else:
         # Métricas Gerais
         if df_estudos.empty:
             t_q, precisao, horas, ritmo = 0, 0, 0, 0
+            d_q, d_p, d_h, d_r = None, None, None, None
         else:
             t_q = df_estudos['total'].sum()
             a_q = df_estudos['acertos'].sum()
@@ -2539,13 +2567,59 @@ else:
             tempo_min = df_estudos['tempo'].sum()
             horas = tempo_min/60
             ritmo = (tempo_min / t_q) if t_q > 0 else 0
+            
+            # --- CÁLCULO DE DELTAS (Comparativo com semana anterior) ---
+            hoje = get_br_date()
+            inicio_sem_atual = hoje - timedelta(days=hoje.weekday())
+            inicio_sem_passada = inicio_sem_atual - timedelta(days=7)
+            fim_sem_passada = inicio_sem_atual - timedelta(days=1)
+            
+            # Converter coluna de data para date objects para comparação
+            df_estudos['dt_obj'] = pd.to_datetime(df_estudos['data_estudo']).dt.date
+            
+            # Filtrar semana passada
+            df_last_week = df_estudos[
+                (df_estudos['dt_obj'] >= inicio_sem_passada) & 
+                (df_estudos['dt_obj'] <= fim_sem_passada)
+            ]
+            
+            # Filtrar semana atual (até agora)
+            df_curr_week = df_estudos[
+                (df_estudos['dt_obj'] >= inicio_sem_atual)
+            ]
+            
+            # Cálculos Semana Atual
+            q_curr = df_curr_week['total'].sum()
+            h_curr = df_curr_week['tempo'].sum() / 60
+            acc_curr = (df_curr_week['acertos'].sum() / q_curr * 100) if q_curr > 0 else 0
+            
+            # Cálculos Semana Passada
+            q_last = df_last_week['total'].sum()
+            h_last = df_last_week['tempo'].sum() / 60
+            acc_last = (df_last_week['acertos'].sum() / q_last * 100) if q_last > 0 else 0
+            
+            # Gerar Strings de Delta
+            # Questões
+            diff_q = q_curr - q_last
+            d_q = f"{'+' if diff_q >=0 else ''}{int(diff_q)} vs sem. ant." if q_last > 0 else None
+            
+            # Precisão
+            diff_p = acc_curr - acc_last
+            d_p = f"{'+' if diff_p >=0 else ''}{diff_p:.1f}% vs sem. ant." if q_last > 0 else None
+            
+            # Horas
+            diff_h = h_curr - h_last
+            d_h = f"{'+' if diff_h >=0 else ''}{diff_h:.1f}h vs sem. ant." if h_last > 0 else None
+            
+            # Ritmo (Global)
+            d_r = None # Manter simples
         
         # 1. MÉTRICAS PRINCIPAIS
         m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric_card("Questões", int(t_q), "📝")
-        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
+        with m1: render_metric_card_modern("Questões (Total)", int(t_q), "📝", delta=d_q, color=COLORS['secondary'])
+        with m2: render_metric_card_modern("Precisão Global", f"{precisao:.1f}%", "🎯", delta=d_p, color=COLORS['success'] if precisao >= 80 else COLORS['warning'])
+        with m3: render_metric_card_modern("Horas Totais", f"{horas:.1f}h", "⏱️", delta=d_h, color=COLORS['primary'])
+        with m4: render_metric_card_modern("Ritmo Médio", f"{ritmo:.1f} min/q", "⚡", subtitle="Média global", color=COLORS['accent'])
         
         st.divider()
         
