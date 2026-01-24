@@ -2757,8 +2757,9 @@ else:
                     priority_badge = ""
                     priority_color = ""
                 
-                # Título do Expander melhorado
-                titulo_expander = f"{status_icon} {p['assunto']} · {status_text}"
+                # Título do Expander melhorado com ID
+                id_visual = f"#{p['id']}"
+                titulo_expander = f"{id_visual} {status_icon} {p['assunto']} · {status_text}"
                 if priority_badge:
                     titulo_expander = f"{priority_badge} | {titulo_expander}"
                 
@@ -2773,7 +2774,8 @@ else:
                         margin-bottom: 15px;
                     ">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <span style="background: rgba(139, 92, 246, 0.2); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; font-family: monospace;">ID: {p['id']}</span>
                                 <span style="background: {border_color}30; color: {border_color}; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">{p['materia']}</span>
                             </div>
                             <div style="display: flex; gap: 10px; align-items: center;">
