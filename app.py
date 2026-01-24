@@ -30,9 +30,9 @@ COLORS = {
     "border": "rgba(139, 92, 246, 0.15)",
 }
 
-# --- FUNÇÃO: Anel circular de progresso (SVG) - VERSÃO RESPONSIVA ---
+# --- FUNÇÃO: Anel circular de progresso (SVG) ---
 def render_circular_progress(percentage, label, value, color_start=None, color_end=None, size=120, icon=""):
-    """Renderiza um anel circular de progresso com SVG - Totalmente Responsivo"""
+    """Renderiza um anel circular de progresso com SVG"""
     if color_start is None:
         color_start = COLORS["primary"]
     if color_end is None:
@@ -45,32 +45,23 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
     gradient_id = f"grad_{label.replace(' ', '_')}_{percentage}"
     
     st.markdown(f"""
-        <div class="circular-progress-card" style="
+        <div style="
             text-align: center;
-            padding: clamp(15px, 3vw, 20px);
+            padding: 20px 15px;
             background: {COLORS['bg_card']};
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid {COLORS['border']};
             border-radius: 16px;
-            min-height: clamp(160px, 20vh, 180px);
-            width: 100%;
-            max-width: 100%;
+            min-height: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
-        " onmouseover="if(window.innerWidth > 768) {{ this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.boxShadow='0 0 30px rgba(139, 92, 246, 0.2)'; }}"
+        " onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.boxShadow='0 0 30px rgba(139, 92, 246, 0.2)';"
         onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.boxShadow='none';">
-            <div style="
-                position: relative; 
-                width: min({size}px, 30vw, 90%); 
-                height: min({size}px, 30vw, 90%);
-                max-width: {size}px;
-                max-height: {size}px;
-                margin: 0 auto 10px auto;
-            ">
+            <div style="position: relative; width: {size}px; height: {size}px; margin-bottom: 10px;">
                 <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 100%; height: 100%;">
                     <defs>
                         <linearGradient id="{gradient_id}" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -89,21 +80,17 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
                     left: 50%;
                     transform: translate(-50%, -50%);
                     text-align: center;
-                    width: 100%;
                 ">
-                    <div style="font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: 2px;">{icon}</div>
-                    <div style="font-size: clamp(1.1rem, 3.5vw, 1.4rem); font-weight: 800; color: #fff; white-space: nowrap;">{value}</div>
+                    <div style="font-size: 1.1rem; margin-bottom: 2px;">{icon}</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: #fff;">{value}</div>
                 </div>
             </div>
             <div style="
                 color: {COLORS['text_secondary']};
-                font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+                font-size: 0.75rem;
                 text-transform: uppercase;
-                letter-spacing: clamp(0.5px, 0.3vw, 1.5px);
+                letter-spacing: 1.5px;
                 font-weight: 600;
-                text-align: center;
-                word-break: break-word;
-                max-width: 100%;
             ">{label}</div>
         </div>
     """, unsafe_allow_html=True)
@@ -745,270 +732,59 @@ def excluir_concurso_completo(supabase, missao):
         st.error(f"Erro ao excluir concurso: {e}")
         return False
 
-# --- INTEGRAÇÃO: ESTILOS RESPONSIVOS ---
+# --- INTEGRAÇÃO: ESTILOS ---
 def apply_styles():
     st.markdown("""
         <style>
-        /* ═══════════════════════════════════════════════════════════════════
-           🎨 CSS RESPONSIVO GLOBAL - MonitorPro
-           ═══════════════════════════════════════════════════════════════════ */
-        
-        /* Reset básico */
-        * { box-sizing: border-box; }
-        html, body { overflow-x: hidden; max-width: 100vw; }
-        
-        /* ═══ SIDEBAR RESPONSIVA ═══ */
-        
-        /* Desktop (>1025px) */
-        @media (min-width: 1025px) {
-            [data-testid="stSidebar"] {
-                min-width: 21rem !important;
-                max-width: 21rem !important;
-            }
-            
-            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: calc(100% - 21rem) !important;
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
-            }
-            
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: 100% !important;
-                padding-left: 3rem !important;
-                padding-right: 3rem !important;
-            }
-        }
-        
-        /* Tablet (769-1024px) */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            [data-testid="stSidebar"] {
-                min-width: 18rem !important;
-                max-width: 18rem !important;
-            }
-            
-            [data-testid="stSidebar"] > div {
-                padding: 1.25rem 0.75rem;
-            }
-            
-            .block-container {
-                padding-left: 1.5rem !important;
-                padding-right: 1.5rem !important;
-            }
-        }
-        
-        /* Mobile (<768px) - Sidebar Overlay Fullscreen */
-        @media (max-width: 768px) {
-            [data-testid="stSidebar"] {
-                position: fixed !important;
-                left: 0 !important;
-                top: 0 !important;
-                height: 100vh !important;
-                width: 100vw !important;
-                max-width: 100vw !important;
-                min-width: 100vw !important;
-                z-index: 999999 !important;
-                background: rgba(15, 15, 35, 0.98) !important;
-                backdrop-filter: blur(20px);
-            }
-            
-            [data-testid="stSidebar"] > div {
-                padding: 1rem 0.75rem;
-                overflow-y: auto;
-                max-height: 100vh;
-            }
-            
-            .block-container {
-                max-width: 100% !important;
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-top: 1rem !important;
-            }
-        }
-        
-        /* ═══ CONTAINER PRINCIPAL ═══ */
-        
-        .block-container {
-            padding-top: 2rem !important;
+        /* Container principal - responsivo ao sidebar */
+        .block-container { 
+            padding-top: 2rem !important; 
             padding-bottom: 5rem !important;
             transition: all 0.3s ease;
         }
         
-        @media (max-width: 768px) {
-            .block-container {
-                padding-top: 1rem !important;
-                padding-bottom: 3rem !important;
-            }
+        /* Quando sidebar está recolhida, expandir conteúdo */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
+            max-width: 100% !important;
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
         }
         
-        /* ═══ CARDS RESPONSIVOS ═══ */
-        
-        .modern-card {
-            width: 100%;
-            max-width: 100%;
-            padding: clamp(1rem, 3vw, 1.5rem);
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-            border-radius: 12px;
+        /* Quando sidebar está expandida */
+        [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
+            max-width: calc(100% - 21rem) !important;
         }
         
-        .modern-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
-        }
-        
-        @media (max-width: 768px) {
-            .modern-card {
-                padding: 0.875rem;
-                margin-bottom: 0.75rem;
-                border-radius: 10px;
-            }
-            .modern-card:hover {
-                transform: none;
-            }
-        }
-        
-        /* ═══ TIPOGRAFIA FLUIDA ═══ */
-        
-        h1 { font-size: clamp(1.5rem, 5vw, 2.5rem) !important; line-height: 1.2 !important; }
-        h2 { font-size: clamp(1.25rem, 4vw, 2rem) !important; line-height: 1.3 !important; }
-        h3 { font-size: clamp(1.1rem, 3vw, 1.5rem) !important; line-height: 1.4 !important; }
-        h4 { font-size: clamp(1rem, 2.5vw, 1.25rem) !important; }
-        p, div, span { font-size: clamp(0.875rem, 2vw, 1rem) !important; line-height: 1.6 !important; }
-        
-        /* ═══ BOTÕES RESPONSIVOS ═══ */
-        
-        button {
-            min-height: 44px !important;
-            padding: 0.75rem 1.5rem !important;
-            font-size: clamp(0.875rem, 2vw, 1rem) !important;
-            border-radius: 8px !important;
-            transition: all 0.2s ease !important;
-        }
-        
-        @media (max-width: 768px) {
-            button {
-                width: 100% !important;
-                margin-bottom: 0.5rem !important;
-                font-size: 0.9rem !important;
-                padding: 0.875rem 1rem !important;
-            }
-        }
-        
-        /* ═══ INPUTS RESPONSIVOS ═══ */
-        
-        input, textarea, select {
-            font-size: clamp(0.875rem, 2vw, 1rem) !important;
-            padding: 0.75rem !important;
-            border-radius: 6px !important;
-        }
-        
-        @media (max-width: 768px) {
-            input, textarea, select {
-                font-size: 16px !important; /* Evita zoom no iOS */
-                padding: 0.875rem !important;
-            }
-        }
-        
-        /* ═══ BADGES ═══ */
-        
-        .badge {
-            padding: 0.25rem 0.625rem;
-            border-radius: 6px;
-            font-size: clamp(0.65rem, 1.5vw, 0.75rem);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
-        }
-        
+        /* Badges */
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
         .badge-green { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
         .badge-red { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .badge-gray { background-color: rgba(148, 163, 184, 0.2); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
         .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
         
-        /* ═══ PROGRESS BARS ═══ */
-        
-        .modern-progress-container {
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            height: 6px;
-            overflow: hidden;
-            margin: 0.5rem 0;
+        /* Progress bars */
+        .modern-progress-container { 
+            width: 100%; 
+            background-color: rgba(255, 255, 255, 0.1); 
+            border-radius: 10px; 
+            height: 6px; 
+            overflow: hidden; 
+        }
+        .modern-progress-fill { 
+            height: 100%; 
+            background: linear-gradient(90deg, #8B5CF6, #06B6D4); 
+            border-radius: 10px; 
+            transition: width 0.5s ease; 
         }
         
-        .modern-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #8B5CF6, #06B6D4);
-            border-radius: 10px;
-            transition: width 0.5s ease;
+        /* Animações suaves */
+        .modern-card {
+            transition: all 0.3s ease;
         }
-        
-        @media (max-width: 768px) {
-            .modern-progress-container { height: 8px; }
+        .modern-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
         }
-        
-        /* ═══ COLUNAS RESPONSIVAS ═══ */
-        
-        [data-testid="column"] {
-            padding: 0 0.5rem;
-        }
-        
-        @media (max-width: 768px) {
-            [data-testid="column"] {
-                padding: 0 0.25rem;
-                margin-bottom: 0.75rem;
-            }
-        }
-        
-        /* ═══ TABELAS RESPONSIVAS ═══ */
-        
-        [data-testid="stDataFrame"] {
-            width: 100% !important;
-            overflow-x: auto !important;
-        }
-        
-        @media (max-width: 768px) {
-            [data-testid="stDataFrame"] {
-                font-size: 0.8rem !important;
-            }
-            table {
-                display: block !important;
-                overflow-x: auto !important;
-            }
-        }
-        
-        /* ═══ GRÁFICOS RESPONSIVOS ═══ */
-        
-        .js-plotly-plot {
-            width: 100% !important;
-        }
-        
-        /* ═══ CLASSES UTILITÁRIAS ═══ */
-        
-        @media (max-width: 768px) {
-            .desktop-only { display: none !important; }
-        }
-        
-        .mobile-only { display: none !important; }
-        
-        @media (max-width: 768px) {
-            .mobile-only { display: block !important; }
-        }
-        
-        /* ═══ SCROLL SUAVE ═══ */
-        
-        html { scroll-behavior: smooth; }
-        
-        /* ═══ ACESSIBILIDADE ═══ */
-        
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-        
         </style>
     """, unsafe_allow_html=True)
 
@@ -1035,7 +811,7 @@ def get_estudos_cached(missao):
     if not supabase:
         return []
     try:
-        response = supabase.table("registros_estudos").select("*, id_materia").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        response = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
         return response.data
     except Exception:
         return []
@@ -1858,8 +1634,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                     "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                     "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
                     "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                    "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5),
-                    "id_materia": row.get('id_materia')  # Adicionado id_materia
+                    "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
                 })
         
         # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
@@ -1880,8 +1655,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                         "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                         "tipo": lbl, "col": col_alv, "atraso": atraso, 
                         "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                        "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5),
-                        "id_materia": row.get('id_materia')  # Adicionado id_materia
+                        "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
                     })
     
     # Filtrar por dificuldade
@@ -2579,6 +2353,30 @@ else:
                 st.markdown("#### 🎯 Alvos Prioritários")
                 if criticos.empty:
                     st.success("✨ Sem gargalos críticos no momento! Recomendo avançar em novos tópicos do edital.")
+                else:
+                    for _, row in criticos.head(3).iterrows():
+                        # Buscar o pior assunto desta materia
+                        df_ass = df_estudos[df_estudos['materia'] == row['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
+                        pior_ass = df_ass.sort_values('taxa').iloc[0]['assunto']
+                        
+                        st.markdown(f"""
+                        <div class="modern-card" style="border-left: 5px solid #EF4444;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-weight: 800; color: #E2E8F0; font-size: 1.1rem;">{row['materia'].upper()}</span>
+                                <span style="background: rgba(239, 68, 68, 0.1); color: #EF4444; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">URGENTE</span>
+                            </div>
+                            <div style="margin-top: 10px; color: #94A3B8; font-size: 0.9rem;">
+                                Sua precisão média é de <b>{row['taxa']:.0f}%</b>. O maior gargalo identificado é:
+                            </div>
+                            <div style="margin-top: 8px; color: #FFFFFF; font-weight: 600; font-size: 1rem;">
+                                ⚠️ {pior_ass}
+                            </div>
+                            <div style="margin-top: 15px; font-size: 0.85rem; color: #8B5CF6;">
+                                💡 Sugestão: Dedicar 2h de teoria + 30 questões comentadas nesta semana.
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
             with col_rec2:
                 # 1. LÓGICA DE DADOS (Cálculos de Metas)
                 hoje = get_br_date()
@@ -2735,9 +2533,8 @@ else:
                     priority_badge = ""
                     priority_color = ""
                 
-                # Título do Expander melhorado com ID
-                id_visual = f"#{p['id']}"
-                titulo_expander = f"{id_visual} {status_icon} {p['assunto']} · {status_text}"
+                # Título do Expander melhorado
+                titulo_expander = f"{status_icon} {p['assunto']} · {status_text}"
                 if priority_badge:
                     titulo_expander = f"{priority_badge} | {titulo_expander}"
                 
@@ -2752,10 +2549,8 @@ else:
                         margin-bottom: 15px;
                     ">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <span style="background: rgba(139, 92, 246, 0.2); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; font-family: monospace;">ID: {p['id']}</span>
+                            <div>
                                 <span style="background: {border_color}30; color: {border_color}; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">{p['materia']}</span>
-                                <span style="background: rgba(6, 182, 212, 0.2); color: #06B6D4; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; font-family: monospace;">ID-Mat: {p.get('id_materia', 'N/A')}</span>
                             </div>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <span style="color: #94A3B8; font-size: 0.8rem;">{dif_icon} {p['tipo']}</span>
@@ -2868,16 +2663,6 @@ else:
                             t_b = formatar_tempo_para_bigint(tm_reg)
                             taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
                             
-                            # Buscar ID da matéria no banco
-                            try:
-                                res_id = supabase.table("editais_materias").select("id").eq("concurso", missao).eq("materia", mat_reg).execute()
-                                if res_id.data:
-                                    id_materia_val = res_id.data[0]['id']
-                                else:
-                                    id_materia_val = None
-                            except Exception:
-                                id_materia_val = None
-                            
                             payload = {
                                 "concurso": missao, 
                                 "materia": mat_reg, 
@@ -2893,8 +2678,7 @@ else:
                                 "rev_24h": not gerar_rev_reg, 
                                 "rev_07d": not gerar_rev_reg, 
                                 "rev_15d": not gerar_rev_reg, 
-                                "rev_30d": not gerar_rev_reg,
-                                "id_materia": id_materia_val  # NOVO CAMPO
+                                "rev_30d": not gerar_rev_reg
                             }
                             supabase.table("registros_estudos").insert(payload).execute()
                             st.success("✅ Registro salvo com sucesso!")
@@ -3319,8 +3103,7 @@ else:
                                 "concurso": st.session_state.missao_ativa,
                                 "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
                                 "dificuldade": "Simulado",
-                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}",
-                                "id_materia": None  # Simulados não têm ID de matéria
+                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
                             }
                             try:
                                 supabase.table("registros_estudos").insert(simulado_data).execute()
@@ -3709,16 +3492,6 @@ else:
                                 t_b = formatar_tempo_para_bigint(tm_edit)
                                 taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
                             
-                                # Buscar ID da nova matéria
-                                try:
-                                    res_id_edit = supabase.table("editais_materias").select("id").eq("concurso", missao).eq("materia", mat_edit).execute()
-                                    if res_id_edit.data:
-                                        id_materia_edit = res_id_edit.data[0]['id']
-                                    else:
-                                        id_materia_edit = None
-                                except Exception:
-                                    id_materia_edit = None
-                            
                                 supabase.table("registros_estudos").update({
                                     "data_estudo": dt_edit.strftime('%Y-%m-%d'),
                                     "materia": mat_edit,
@@ -3727,14 +3500,13 @@ else:
                                     "total": to_edit,
                                     "taxa": taxa,
                                     "dificuldade": dif_edit,
-                                    "relevancia": rel_edit,
+                                    "relevancia": rel_edit, # Novo campo
                                     "comentarios": com_edit,
                                     "tempo": t_b,
                                     "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
                                     "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_07d'])),
                                     "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_15d'])),
-                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d'])),
-                                    "id_materia": id_materia_edit  # Atualizar ID da matéria
+                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d']))
                                 }).eq("id", st.session_state.edit_id).execute()
                             
                                 st.success("✅ Registro atualizado com sucesso!")
@@ -3780,7 +3552,6 @@ else:
                                         <span style="color: #F59E0B; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
                                             ⭐ R{int(row.get('relevancia', 5))}
                                         </span>
-                                        {f'<span style="color: #06B6D4; font-size: 0.7rem; font-weight: 600; margin-left: 15px; background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">ID-Mat: {row.get("id_materia", "N/A")}</span>' if row.get("id_materia") else ''}
                                     </div>
                                     <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
                                     <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
@@ -3966,7 +3737,7 @@ else:
         # --- SEÇÃO: BENCHMARK DE SIMULADOS ---
         st.markdown('<h3 style="color: #fff; margin-bottom: 20px;">📈 Benchmark de Simulados</h3>', unsafe_allow_html=True)
         
-        # Usar df_sim_bench carregado no início da aplicação
+        # Usar df_simulados carregado no início da aplicação
         df_sim_bench = df_simulados.sort_values('data_estudo')
         
         if df_sim_bench.empty:
