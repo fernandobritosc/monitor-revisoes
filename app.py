@@ -499,8 +499,6 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
     delta_html = ""
     if delta:
         # Lógica para cor do delta (verde se positivo, vermelho se negativo)
-        # Adaptar conforme contexto, mas assumiremos que aumento é "bom" para volume
-        # e para taxa. Se for algo como 'erros', seria invertido, mas não estamos usando para erros aqui.
         is_positive = "+" in str(delta)
         delta_color = "#10B981" if is_positive else "#EF4444" 
         
@@ -519,7 +517,9 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
         </div>
         """
     
-    subtitle_html = f'<div style="color: {COLORS["text_secondary"]}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle and not delta else ''
+    # Prepara cor secundária com segurança para f-string
+    color_sec = COLORS["text_secondary"]
+    subtitle_html = f'<div style="color: {color_sec}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle and not delta else ''
 
     st.markdown(f"""
         <div style="
@@ -2549,13 +2549,6 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
             st.divider()
 
-        # --- NOVO: MAPA DE CALOR DE CONSTÂNCIA ---
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### 🔥 Mapa de Calor: Sua Constância (6 meses)")
-        render_consistency_heatmap(df_estudos)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.divider()
-
         # Métricas Gerais
         if df_estudos.empty:
             t_q, precisao, horas, ritmo = 0, 0, 0, 0
@@ -2592,11 +2585,13 @@ else:
             q_curr = df_curr_week['total'].sum()
             h_curr = df_curr_week['tempo'].sum() / 60
             acc_curr = (df_curr_week['acertos'].sum() / q_curr * 100) if q_curr > 0 else 0
+            r_curr = (df_curr_week['tempo'].sum() / q_curr) if q_curr > 0 else 0
             
             # Cálculos Semana Passada
             q_last = df_last_week['total'].sum()
             h_last = df_last_week['tempo'].sum() / 60
             acc_last = (df_last_week['acertos'].sum() / q_last * 100) if q_last > 0 else 0
+            r_last = (df_last_week['tempo'].sum() / q_last) if q_last > 0 else 0
             
             # Gerar Strings de Delta
             # Questões
@@ -2611,15 +2606,17 @@ else:
             diff_h = h_curr - h_last
             d_h = f"{'+' if diff_h >=0 else ''}{diff_h:.1f}h vs sem. ant." if h_last > 0 else None
             
-            # Ritmo (Global)
-            d_r = None # Manter simples
+            # Ritmo (Global) - Diferença
+            diff_r = r_curr - r_last
+            # Formatar para mostrar apenas 1 casa decimal e garantir texto limpo
+            d_r = f"{'+' if diff_r >=0 else ''}{diff_r:.1f} vs sem. ant." if r_last > 0 else None
         
         # 1. MÉTRICAS PRINCIPAIS
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card_modern("Questões (Total)", int(t_q), "📝", delta=d_q, color=COLORS['secondary'])
         with m2: render_metric_card_modern("Precisão Global", f"{precisao:.1f}%", "🎯", delta=d_p, color=COLORS['success'] if precisao >= 80 else COLORS['warning'])
         with m3: render_metric_card_modern("Horas Totais", f"{horas:.1f}h", "⏱️", delta=d_h, color=COLORS['primary'])
-        with m4: render_metric_card_modern("Ritmo Médio", f"{ritmo:.1f} min/q", "⚡", subtitle="Média global", color=COLORS['accent'])
+        with m4: render_metric_card_modern("Ritmo Médio", f"{ritmo:.1f} min/q", "⚡", delta=d_r, subtitle="Média global", color=COLORS['accent'])
         
         st.divider()
         
@@ -2737,58 +2734,76 @@ else:
                 st.plotly_chart(fig_bar, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICO DE EVOLUÇÃO (Precisão com Média Móvel)
+        # 3. GRÁFICO DE EVOLUÇÃO SEMANAL (Reformulado)
         if not df_estudos.empty:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📈 Evolução de Precisão & Tendência")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 7 dias).</p>", unsafe_allow_html=True)
+            st.markdown("##### 📈 Evolução Semanal de Desempenho")
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Média de acertos agrupada por semana. Mais limpo e objetivo.</p>", unsafe_allow_html=True)
             
-            # Preparar dados de evolução
-            # Agrupar por data calculando somas para taxa ponderada
-            df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo').agg({
-                'acertos': 'sum',
-                'total': 'sum'
-            }).reset_index()
-            
-            # Calcular taxa diária
-            df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
-            
-            # Calcular Média Móvel (janela de 7 pontos para capturar ciclo semanal)
-            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(7, len(df_ev)), min_periods=1).mean()
-            
-            # Criar gráfico Plotly unificado
-            fig_evo = go.Figure()
-            
-            # Linha de Precisão Diária
-            fig_evo.add_trace(go.Scatter(
-                x=df_ev['data_estudo'], y=df_ev['taxa'],
-                name='Precisão Diária',
-                line=dict(color='#8B5CF6', width=2),
-                mode='lines+markers',
-                marker=dict(size=6)
-            ))
-            
-            # Linha de Tendência (Média Móvel)
-            fig_evo.add_trace(go.Scatter(
-                x=df_ev['data_estudo'], y=df_ev['Média Móvel'],
-                name='Tendência (Média Móvel)',
-                line=dict(color='#06B6D4', width=4, dash='dash'),
-                mode='lines'
-            ))
-            
-            fig_evo.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(t=10, b=0, l=0, r=0),
-                xaxis_title=None,
-                yaxis_title="Taxa %",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                font=dict(color="#fff"),
-                height=400,
-                yaxis=dict(range=[0, 105], gridcolor='rgba(255,255,255,0.05)')
-            )
-            
-            st.plotly_chart(fig_evo, use_container_width=True)
+            try:
+                # Preparar dados: Converter data, agrupar por semana
+                df_evo = df_estudos.copy()
+                df_evo['data_estudo'] = pd.to_datetime(df_evo['data_estudo'])
+                
+                # Agrupar por semana (Segunda-feira como início)
+                # 'W-MON' frequency for weekly starting monday
+                df_evo_w = df_evo.resample('W-MON', on='data_estudo').agg({
+                    'acertos': 'sum',
+                    'total': 'sum',
+                    'tempo': 'sum'
+                }).reset_index()
+                
+                # Filtrar semanas sem estudo
+                df_evo_w = df_evo_w[df_evo_w['total'] > 0]
+                
+                # Calcular taxa
+                df_evo_w['taxa'] = (df_evo_w['acertos'] / df_evo_w['total'] * 100)
+                # Formatar data para exibição (Dia/Mês)
+                df_evo_w['semana_label'] = df_evo_w['data_estudo'].dt.strftime('%d/%m')
+                
+                if not df_evo_w.empty:
+                    # Gráfico de Linha Limpo
+                    fig_evo = go.Figure()
+                    
+                    # Adicionar Linha de Precisão
+                    fig_evo.add_trace(go.Scatter(
+                        x=df_evo_w['semana_label'], 
+                        y=df_evo_w['taxa'],
+                        mode='lines+markers+text',
+                        name='Precisão Semanal',
+                        line=dict(color='#00FFFF', width=3, shape='spline'), # Ciano Neon, curva suave
+                        marker=dict(size=8, color='#00FFFF', line=dict(width=2, color='#FFFFFF')),
+                        text=[f"{t:.0f}%" for t in df_evo_w['taxa']],
+                        textposition="top center",
+                        textfont=dict(color='white', size=10)
+                    ))
+                    
+                    fig_evo.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(t=20, b=20, l=10, r=10),
+                        xaxis=dict(
+                            showgrid=False, 
+                            color='#94A3B8',
+                            title="Semana (Início)"
+                        ),
+                        yaxis=dict(
+                            range=[0, 110], 
+                            showgrid=True, 
+                            gridcolor='rgba(255,255,255,0.05)',
+                            color='#94A3B8',
+                            title="Precisão (%)"
+                        ),
+                        height=350,
+                        showlegend=False
+                    )
+                    
+                    st.plotly_chart(fig_evo, use_container_width=True)
+                else:
+                    st.info("Dados insuficientes para agrpamento semanal.")
+            except Exception as e:
+                st.error(f"Erro ao gerar gráfico de evolução: {e}")
+                
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
