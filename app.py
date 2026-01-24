@@ -1839,17 +1839,17 @@ else:
                 delta_precisao = precisao - precisao_ontem
                 delta_questoes = t_q - t_q_ontem
 
-                # Formatar deltas
+                # Formatar deltas com setas e indicação clara
                 def format_delta(value, unit, is_better_when_lower=False):
                     if value > 0:
                         arrow = "▲"
-                        label = "(Pior)" if is_better_when_lower else "(Melhor)"
+                        label = "Pior" if is_better_when_lower else "Melhor"
                     elif value < 0:
                         arrow = "▼"
-                        label = "(Melhor)" if is_better_when_lower else "(Pior)"
+                        label = "Melhor" if is_better_when_lower else "Pior"
                     else:
                         return ""
-                    return f" {arrow} {abs(value):.0f}{unit} {label}"
+                    return f"{arrow} {abs(value):.0f}{unit} ({label})"
 
                 delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
                 delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
@@ -1885,30 +1885,36 @@ else:
             with c1:
                 render_circular_progress(
                     percentage=pct_tempo,
-                    label=f"TEMPO TOTAL{delta_time_str}",
+                    label="TEMPO TOTAL",
                     value=tempo_formatado,
                     color_start=COLORS["primary"],
                     color_end=COLORS["secondary"],
                     icon="⏱️"
                 )
+                if delta_time_str:
+                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_time_str}</div>', unsafe_allow_html=True)
             with c2:
                 render_circular_progress(
                     percentage=pct_precisao,
-                    label=f"PRECISÃO{delta_prec_str}",
+                    label="PRECISÃO",
                     value=f"{precisao:.0f}%",
                     color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
                     color_end=COLORS["secondary"],
                     icon="🎯"
                 )
+                if delta_prec_str:
+                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_prec_str}</div>', unsafe_allow_html=True)
             with c3:
                 render_circular_progress(
                     percentage=pct_questoes,
-                    label=f"QUESTÕES{delta_q_str}",
+                    label="QUESTÕES",
                     value=f"{int(t_q)}",
                     color_start=COLORS["accent"],
                     color_end=COLORS["primary"],
                     icon="📝"
                 )
+                if delta_q_str:
+                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_q_str}</div>', unsafe_allow_html=True)
             with c4:
                 if dias_restantes is not None:
                     # Calcular percentual baseado em 90 dias
