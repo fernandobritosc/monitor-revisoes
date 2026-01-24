@@ -2596,7 +2596,7 @@ else:
             # Gerar Strings de Delta
             # Questões
             diff_q = q_curr - q_last
-            d_q = f"{'+' if diff_q >=0 else ''}{int(diff_q)} vs sem. ant." if q_last > 0 else None
+            d_q = f"{'+' if diff_q >=0 else ''}{int(diff_q)} comparado com semana anterior" if q_last > 0 else None
             
             # Precisão
             diff_p = acc_curr - acc_last
