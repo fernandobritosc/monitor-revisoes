@@ -1798,58 +1798,57 @@ else:
                     m_nome = row['materia']
                     m_tempo = formatar_minutos(row['tempo'])
                     breakdown_html += f"""
-                    <span style="
-                        background: rgba(139, 92, 246, 0.1); 
-                        color: #E2E8F0; 
-                        padding: 6px 14px; 
-                        border-radius: 8px; 
-                        font-size: 0.85rem; 
-                        margin-right: 8px; 
-                        margin-bottom: 8px; 
-                        display: inline-block; 
-                        border: 1px solid rgba(139, 92, 246, 0.2);">
-                        <span style="color: #8B5CF6; font-weight: 700;">•</span> {m_nome} <span style="color: #64748B; margin: 0 6px;">|</span> <span style="font-weight:600; color:#fff;">{m_tempo}</span>
-                    </span>
-                    """
+<span style="
+    background: rgba(139, 92, 246, 0.1); 
+    color: #E2E8F0; 
+    padding: 6px 14px; 
+    border-radius: 8px; 
+    font-size: 0.85rem; 
+    margin-right: 8px; 
+    margin-bottom: 8px; 
+    display: inline-block; 
+    border: 1px solid rgba(139, 92, 246, 0.2);">
+    <span style="color: #8B5CF6; font-weight: 700;">•</span> {m_nome} <span style="color: #64748B; margin: 0 6px;">|</span> <span style="font-weight:600; color:#fff;">{m_tempo}</span>
+</span>"""
 
                 st.markdown(f"""
-                <div class="modern-card" style="border-left: 4px solid #06B6D4; background: linear-gradient(135deg, rgba(15, 15, 35, 0.95), rgba(15, 15, 35, 0.8)); padding: 25px;">
-                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 15px;">
-                        📅 RESUMO DE HOJE <span style="color: #06B6D4;">({hoje.strftime('%d/%m')})</span>
-                    </div>
-                    
-                    <div style="display: flex; flex-wrap: wrap; align-items: start; gap: 30px;">
-                        <!-- Métricas Principais -->
-                        <div style="display: flex; gap: 30px; padding-right: 30px; border-right: 1px solid rgba(255,255,255,0.1);">
-                            <div>
-                                <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 4px;">TEMPO LÍQUIDO</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #fff; line-height: 1;">
-                                    {formatar_minutos(min_hoje)}
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 4px;">QUESTÕES</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #fff; line-height: 1;">
-                                    {q_hoje}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Detalhamento -->
-                        <div style="flex: 1; min-width: 250px;">
-                             <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 8px;">DETALHAMENTO</div>
-                             {breakdown_html}
-                        </div>
-                    </div>
+<div class="modern-card" style="border-left: 4px solid #06B6D4; background: linear-gradient(135deg, rgba(15, 15, 35, 0.95), rgba(15, 15, 35, 0.8)); padding: 25px;">
+    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 15px;">
+        📅 RESUMO DE HOJE <span style="color: #06B6D4;">({hoje.strftime('%d/%m')})</span>
+    </div>
+    
+    <div style="display: flex; flex-wrap: wrap; align-items: start; gap: 30px;">
+        <!-- Métricas Principais -->
+        <div style="display: flex; gap: 30px; padding-right: 30px; border-right: 1px solid rgba(255,255,255,0.1);">
+            <div>
+                <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 4px;">TEMPO LÍQUIDO</div>
+                <div style="font-size: 2.2rem; font-weight: 800; color: #fff; line-height: 1;">
+                    {formatar_minutos(min_hoje)}
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            <div>
+                <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 4px;">QUESTÕES</div>
+                <div style="font-size: 2.2rem; font-weight: 800; color: #fff; line-height: 1;">
+                    {q_hoje}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detalhamento -->
+        <div style="flex: 1; min-width: 250px;">
+             <div style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 8px;">DETALHAMENTO</div>
+             {breakdown_html}
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             else:
                 # Estado vazio elegante para incentivar o início
                 st.markdown(f"""
-                <div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);">
-                    <span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span>
-                </div>
-                """, unsafe_allow_html=True)
+<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);">
+    <span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span>
+</div>
+""", unsafe_allow_html=True)
 
             # --- VISÃO DO MÊS ATUAL (como na imagem) ---
             st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
