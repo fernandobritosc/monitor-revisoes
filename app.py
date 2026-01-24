@@ -754,17 +754,39 @@ if 'nota_corte_alvo' not in st.session_state:
     st.session_state.nota_corte_alvo = 80
 
 # Helper function to load all data
+# --- CACHE DE QUERIES SUPABASE (Performance Boost) ---
+@st.cache_data(ttl=300)  # Cache de 5 minutos
+def get_estudos_cached(missao):
+    """Busca registros de estudos com cache para melhor performance"""
+    if not supabase:
+        return []
+    try:
+        response = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        return response.data
+    except Exception:
+        return []
+
+@st.cache_data(ttl=600)  # Cache de 10 minutos (dados menos voláteis)
+def get_editais_cached():
+    """Busca editais com cache"""
+    if not supabase:
+        return {}
+    try:
+        return get_editais(supabase)
+    except Exception:
+        return {}
+
 def carregar_dados():
     if not supabase:
         return {}, pd.DataFrame()
     try:
-        # Load editais
-        editais_data = get_editais(supabase)
+        # Load editais com cache
+        editais_data = get_editais_cached()
         
-        # Load all study records for the active mission
+        # Load all study records for the active mission com cache
         if st.session_state.missao_ativa:
-            response = supabase.table("registros_estudos").select("*").eq("concurso", st.session_state.missao_ativa).order("data_estudo", desc=True).execute()
-            df_raw = pd.DataFrame(response.data)
+            cached_data = get_estudos_cached(st.session_state.missao_ativa)
+            df_raw = pd.DataFrame(cached_data)
         else:
             df_raw = pd.DataFrame()
         
@@ -1755,7 +1777,12 @@ else:
             "CONFIGURAR": "Configurar"
         }
         
-        menu = mapa_menu.get(menu_selecionado, "Home")
+        # Suporte para navegação forçada (Quick Actions)
+        if 'menu_force' in st.session_state and st.session_state.menu_force:
+            menu = st.session_state.menu_force
+            st.session_state.menu_force = None  # Reset após uso
+        else:
+            menu = mapa_menu.get(menu_selecionado, "Home")
 
     # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
@@ -1889,6 +1916,33 @@ else:
             
             st.divider()
 
+            # --- QUICK ACTIONS (AÇÕES RÁPIDAS) ---
+            st.markdown('<div class="visao-mes-title">⚡ AÇÕES RÁPIDAS</div>', unsafe_allow_html=True)
+            
+            qa1, qa2, qa3, qa4 = st.columns(4)
+            
+            with qa1:
+                if st.button("📝 Novo Registro", use_container_width=True, type="primary"):
+                    st.session_state.menu_force = "Registrar"
+                    st.rerun()
+            
+            with qa2:
+                if st.button("🔄 Revisar Agora", use_container_width=True):
+                    st.session_state.menu_force = "Revisões"
+                    st.rerun()
+            
+            with qa3:
+                if st.button("📊 Ver Dashboard", use_container_width=True):
+                    st.session_state.menu_force = "Dashboard"
+                    st.rerun()
+            
+            with qa4:
+                if st.button("📈 Guia Semanal", use_container_width=True):
+                    st.session_state.menu_force = "Guia Semanal"
+                    st.rerun()
+            
+            st.divider()
+
             # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
             
@@ -1948,6 +2002,94 @@ else:
 
 
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
+
+            # --- PREVISÃO DE META SEMANAL ---
+            st.markdown('<div class="visao-mes-title">📈 PROJEÇÃO DA SEMANA</div>', unsafe_allow_html=True)
+            
+            # Calcular dados da semana
+            hoje = get_br_date()
+            inicio_semana = hoje - timedelta(days=hoje.weekday())
+            df_semana = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_semana]
+            
+            horas_semana = df_semana['tempo'].sum() / 60
+            questoes_semana = df_semana['total'].sum()
+            
+            # Meta semanal (usar do session_state ou padrão)
+            meta_horas = st.session_state.get('meta_horas_semana', 20)
+            meta_questoes = st.session_state.get('meta_questoes_semana', 300)
+            
+            # Calcular projeção
+            dias_semana_passados = hoje.weekday() + 1  # Segunda = 0, então +1
+            dias_restantes = 7 - dias_semana_passados
+            
+            if dias_semana_passados > 0:
+                projecao_horas = (horas_semana / dias_semana_passados) * 7
+                projecao_questoes = (questoes_semana / dias_semana_passados) * 7
+            else:
+                projecao_horas = 0
+                projecao_questoes = 0
+            
+            col_proj1, col_proj2 = st.columns(2)
+            
+            with col_proj1:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                
+                # Status da meta de horas
+                if projecao_horas >= meta_horas:
+                    status_icon = "✅"
+                    status_text = "No ritmo!"
+                    status_color = COLORS["success"]
+                else:
+                    status_icon = "⚠️"
+                    status_text = "Precisa acelerar"
+                    status_color = COLORS["warning"]
+                    deficit_horas = meta_horas - horas_semana
+                    horas_por_dia = deficit_horas / dias_restantes if dias_restantes > 0 else deficit_horas
+                
+                st.markdown(f"""
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">HORAS DE ESTUDO</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{horas_semana:.1f}h/{meta_horas}h</div>
+                    <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
+                    <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {projecao_horas:.1f}h</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if projecao_horas < meta_horas and dias_restantes > 0:
+                    st.info(f"💡 Estude **{horas_por_dia:.1f}h/dia** nos próximos {dias_restantes} dias para bater a meta")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col_proj2:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                
+                # Status da meta de questões
+                if projecao_questoes >= meta_questoes:
+                    status_icon = "✅"
+                    status_text = "No ritmo!"
+                    status_color = COLORS["success"]
+                else:
+                    status_icon = "⚠️"
+                    status_text = "Precisa acelerar"
+                    status_color = COLORS["warning"]
+                    deficit_q = meta_questoes - questoes_semana
+                    q_por_dia = deficit_q / dias_restantes if dias_restantes > 0 else deficit_q
+                
+                st.markdown(f"""
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">QUESTÕES RESOLVIDAS</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{int(questoes_semana)}/{meta_questoes}</div>
+                    <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
+                    <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {int(projecao_questoes)}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if projecao_questoes < meta_questoes and dias_restantes > 0:
+                    st.info(f"💡 Resolva **{int(q_por_dia)} questões/dia** nos próximos {dias_restantes} dias para bater a meta")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.divider()
 
             # --- SEÇÃO 3: PAINEL DE DISCIPLINAS ---
             st.markdown('<h3 style="margin-top:2rem; color:#fff;">📊 PAINEL DE DESEMPENHO</h3>', unsafe_allow_html=True)
@@ -2258,10 +2400,23 @@ else:
         if not pend: 
             st.success("✨ Tudo em dia! Nenhuma revisão pendente para os filtros selecionados.")
         else:
-            # Ordenar por prioridade (Atraso > Data)
-            pend = sorted(pend, key=lambda x: (x['atraso'] <= 0, x['data_prevista']))
+            # Sistema de Priorização Automática
+            for p in pend:
+                # Calcular score de prioridade
+                peso_atraso = max(0, p['atraso']) * 3  # Atraso tem peso 3x
+                peso_relevancia = p.get('relevancia', 5)  # Relevância de 1-10
+                
+                # Peso de dificuldade
+                dif_map = {"🔴 Difícil": 3, "🟡 Médio": 2, "🟢 Fácil": 1}
+                peso_dif = dif_map.get(p.get('dificuldade', '🟡 Médio'), 2)
+                
+                # Score final
+                p['priority_score'] = peso_atraso + peso_relevancia + peso_dif
             
-            st.write(f"**{len(pend)} revisões encontradas**")
+            # Ordenar por score de prioridade (maior primeiro)
+            pend = sorted(pend, key=lambda x: x['priority_score'], reverse=True)
+            
+            st.write(f"**{len(pend)} revisões encontradas** (ordenadas por prioridade)")
             st.markdown("---")
             
             # Lista de Cards com Expander (Suspensa/Minimizada) - VERSÃO MELHORADA
@@ -2286,8 +2441,21 @@ else:
                 # Ícone de dificuldade
                 dif_icon = p.get('dificuldade', '🟡 Médio').split()[0]
                 
+                # Badge de prioridade
+                if p['priority_score'] >= 15:
+                    priority_badge = "🔥 PRIORIDADE MÁXIMA"
+                    priority_color = COLORS["danger"]
+                elif p['priority_score'] >= 10:
+                    priority_badge = "⚡ ALTA PRIORIDADE"
+                    priority_color = COLORS["warning"]
+                else:
+                    priority_badge = ""
+                    priority_color = ""
+                
                 # Título do Expander melhorado
                 titulo_expander = f"{status_icon} {p['assunto']} · {status_text}"
+                if priority_badge:
+                    titulo_expander = f"{priority_badge} | {titulo_expander}"
                 
                 with st.expander(titulo_expander, expanded=False):
                     # Cabeçalho do card
