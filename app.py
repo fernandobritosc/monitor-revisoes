@@ -96,7 +96,7 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
     """, unsafe_allow_html=True)
 
 # ============================================================================
-# 📄 GERAÇÃO DE RELATÓRIOS PDF
+# 📄 GERAÇÃO DE RELATÓRIOS PDF (CORRIGIDO)
 # ============================================================================
 
 def fix_text(text):
@@ -491,24 +491,27 @@ def gerar_pdf_simulados(df_simulados, missao):
         
     return safe_pdf_output(pdf)
 
-def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None, delta=None):
+def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=None, delta=None, delta_color=None):
     """Renderiza cartões de métricas modernos com glassmorphism e suporte a Delta"""
     if color is None:
         color = COLORS["primary"]
     
     delta_html = ""
     if delta:
-        # Lógica para cor do delta (verde se positivo, vermelho se negativo)
-        is_positive = "+" in str(delta)
-        delta_color = "#10B981" if is_positive else "#EF4444" 
+        # Lógica para cor do delta
+        if delta_color:
+            final_delta_color = delta_color
+        else:
+            is_positive = "+" in str(delta) or "▲" in str(delta)
+            final_delta_color = "#10B981" if is_positive else "#EF4444" 
         
         delta_html = f"""
         <div style="
             margin-top: 8px;
             font-size: 0.75rem;
             font-weight: 700;
-            color: {delta_color};
-            background: {delta_color}15;
+            color: {final_delta_color};
+            background: {final_delta_color}15;
             padding: 4px 8px;
             border-radius: 6px;
             display: inline-block;
@@ -519,6 +522,7 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
     
     # Prepara cor secundária com segurança para f-string
     color_sec = COLORS["text_secondary"]
+    # Se houver delta, o subtitle pode ser redundante ou causar ruído visual, priorizamos o delta
     subtitle_html = f'<div style="color: {color_sec}; font-size: 0.75rem; margin-top: 6px;">{subtitle}</div>' if subtitle and not delta else ''
 
     st.markdown(f"""
@@ -2552,7 +2556,7 @@ else:
         # Métricas Gerais
         if df_estudos.empty:
             t_q, precisao, horas, ritmo = 0, 0, 0, 0
-            d_q, d_p, d_h, d_r = None, None, None, None
+            d_q, d_p, d_h, d_r, d_r_color = None, None, None, None, None
         else:
             t_q = df_estudos['total'].sum()
             a_q = df_estudos['acertos'].sum()
@@ -2596,7 +2600,7 @@ else:
             # Gerar Strings de Delta
             # Questões
             diff_q = q_curr - q_last
-            d_q = f"{'+' if diff_q >=0 else ''}{int(diff_q)} comparado com semana anterior" if q_last > 0 else None
+            d_q = f"{'+' if diff_q >=0 else ''}{int(diff_q)} vs sem. ant." if q_last > 0 else None
             
             # Precisão
             diff_p = acc_curr - acc_last
@@ -2606,17 +2610,31 @@ else:
             diff_h = h_curr - h_last
             d_h = f"{'+' if diff_h >=0 else ''}{diff_h:.1f}h vs sem. ant." if h_last > 0 else None
             
-            # Ritmo (Global) - Diferença
+            # Ritmo (Global) - Diferença com Frase Melhorada e Cor Invertida
             diff_r = r_curr - r_last
-            # Formatar para mostrar apenas 1 casa decimal e garantir texto limpo
-            d_r = f"{'+' if diff_r >=0 else ''}{diff_r:.1f} vs sem. ant." if r_last > 0 else None
+            if r_last > 0:
+                if diff_r < 0:
+                    # Tempo diminuiu = Performance melhorou (Menos tempo por questão)
+                    d_r = f"▼ {abs(diff_r):.1f}m (Melhor)" 
+                    d_r_color = "#10B981" # Verde
+                elif diff_r > 0:
+                    # Tempo aumentou = Performance piorou
+                    d_r = f"▲ {abs(diff_r):.1f}m (Pior)"
+                    d_r_color = "#EF4444" # Vermelho
+                else:
+                    d_r = "Estável"
+                    d_r_color = "#94A3B8"
+            else:
+                d_r = None
+                d_r_color = None
         
         # 1. MÉTRICAS PRINCIPAIS
         m1, m2, m3, m4 = st.columns(4)
         with m1: render_metric_card_modern("Questões (Total)", int(t_q), "📝", delta=d_q, color=COLORS['secondary'])
         with m2: render_metric_card_modern("Precisão Global", f"{precisao:.1f}%", "🎯", delta=d_p, color=COLORS['success'] if precisao >= 80 else COLORS['warning'])
         with m3: render_metric_card_modern("Horas Totais", f"{horas:.1f}h", "⏱️", delta=d_h, color=COLORS['primary'])
-        with m4: render_metric_card_modern("Ritmo Médio", f"{ritmo:.1f} min/q", "⚡", delta=d_r, subtitle="Média global", color=COLORS['accent'])
+        # Removido subtitle='Média global' para evitar bug visual e porque o delta já explica
+        with m4: render_metric_card_modern("Ritmo Médio", f"{ritmo:.1f} min/q", "⚡", delta=d_r, delta_color=d_r_color, subtitle=None, color=COLORS['accent'])
         
         st.divider()
         
