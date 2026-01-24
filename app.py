@@ -1815,8 +1815,8 @@ else:
                 # Estado vazio elegante para incentivar o início
                 st.markdown(f"""<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);"><span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span></div>""", unsafe_allow_html=True)
 
-            # --- VISÃO DO MÊS ATUAL (como na imagem) ---
-            st.markdown('<div class="visao-mes-title">VISÃO DO MÊS ATUAL</div>', unsafe_allow_html=True)
+            # --- VISÃO GERAL DO EDITAL (como na imagem) ---
+            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
             
             # Calcular métricas
             t_q = df_estudos['total'].sum()
