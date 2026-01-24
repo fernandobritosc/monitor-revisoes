@@ -1815,123 +1815,7 @@ else:
                 # Estado vazio elegante para incentivar o início
                 st.markdown(f"""<div class="modern-card" style="border: 1px dashed rgba(148, 163, 184, 0.3); padding: 15px; text-align: center; background: rgba(15, 15, 35, 0.3);"><span style="color: #94A3B8; font-size: 0.9rem;">📅 <b>{hoje.strftime('%d/%m')}</b>: Ainda sem registros hoje. Vamos começar? 🚀</span></div>""", unsafe_allow_html=True)
 
-            # --- VISÃO GERAL DO EDITAL (como na imagem) ---
-            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
-            
-            # Calcular métricas
-            t_q = df_estudos['total'].sum()
-            a_q = df_estudos['acertos'].sum()
-            precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df_estudos['tempo'].sum())
 
-            # Calcular deltas (comparação com ontem)
-            hoje = get_br_date()
-            ontem = hoje - timedelta(days=1)
-            df_ontem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
-
-            if not df_ontem.empty:
-                t_q_ontem = df_ontem['total'].sum()
-                a_q_ontem = df_ontem['acertos'].sum()
-                precisao_ontem = (a_q_ontem / t_q_ontem * 100) if t_q_ontem > 0 else 0
-                minutos_ontem = int(df_ontem['tempo'].sum())
-
-                delta_tempo = minutos_totais - minutos_ontem
-                delta_precisao = precisao - precisao_ontem
-                delta_questoes = t_q - t_q_ontem
-
-                # Formatar deltas com setas e indicação clara
-                def format_delta(value, unit, is_better_when_lower=False):
-                    if value > 0:
-                        arrow = "▲"
-                        label = "Pior" if is_better_when_lower else "Melhor"
-                    elif value < 0:
-                        arrow = "▼"
-                        label = "Melhor" if is_better_when_lower else "Pior"
-                    else:
-                        return ""
-                    return f"{arrow} {abs(value):.0f}{unit} ({label})"
-
-                delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
-                delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
-                delta_q_str = format_delta(delta_questoes, "", is_better_when_lower=False)
-            else:
-                delta_time_str = ""
-                delta_prec_str = ""
-                delta_q_str = ""
-
-            # Formatar tempo como na imagem (3h45min)
-            tempo_formatado = formatar_minutos(minutos_totais)
-
-            # Dias para a prova
-            dias_restantes = None
-            if data_prova_direta:
-                try:
-                    dt_prova = pd.to_datetime(data_prova_direta).date()
-                    dias_restantes = (dt_prova - get_br_date()).days
-                except Exception:
-                    dias_restantes = None
-            
-            # 4 cartões de métricas com ANÉIS CIRCULARES MODERNOS
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-            
-            # Calcular percentuais para os anéis
-            horas_totais = minutos_totais / 60
-            meta_horas_mes = 80  # Meta de horas por mês
-            pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
-            pct_precisao = min(precisao, 100)
-            meta_questoes_mes = 1000
-            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
-            
-            with c1:
-                render_circular_progress(
-                    percentage=pct_tempo,
-                    label="TEMPO TOTAL",
-                    value=tempo_formatado,
-                    color_start=COLORS["primary"],
-                    color_end=COLORS["secondary"],
-                    icon="⏱️"
-                )
-                if delta_time_str:
-                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_time_str}</div>', unsafe_allow_html=True)
-            with c2:
-                render_circular_progress(
-                    percentage=pct_precisao,
-                    label="PRECISÃO",
-                    value=f"{precisao:.0f}%",
-                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
-                    color_end=COLORS["secondary"],
-                    icon="🎯"
-                )
-                if delta_prec_str:
-                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_prec_str}</div>', unsafe_allow_html=True)
-            with c3:
-                render_circular_progress(
-                    percentage=pct_questoes,
-                    label="QUESTÕES",
-                    value=f"{int(t_q)}",
-                    color_start=COLORS["accent"],
-                    color_end=COLORS["primary"],
-                    icon="📝"
-                )
-                if delta_q_str:
-                    st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_q_str}</div>', unsafe_allow_html=True)
-            with c4:
-                if dias_restantes is not None:
-                    # Calcular percentual baseado em 90 dias
-                    pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
-                    cor = COLORS["danger"] if dias_restantes <= 30 else COLORS["warning"] if dias_restantes <= 60 else COLORS["success"]
-                    render_circular_progress(
-                        percentage=pct_dias,
-                        label="DIAS PARA PROVA",
-                        value=f"{dias_restantes}",
-                        color_start=cor,
-                        color_end=COLORS["secondary"],
-                        icon="📅"
-                    )
-                else:
-                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅")
-            
-            st.divider()
 
             # --- SEÇÃO DE CONSTÂNCIA MELHORADA (SEM A SEÇÃO DE DIAS DO MÊS) ---
             st.markdown('<div class="constancia-section">', unsafe_allow_html=True)
@@ -2308,34 +2192,33 @@ else:
             st.write(f"**{len(pend)} revisões encontradas**")
             st.markdown("---")
             
-            # Lista de Cards Alinhados
-            for p in pend:
-                with st.container():
-                    # Definir cor da borda baseada no status
-                    border_color = "#EF4444" if p['atraso'] > 0 else "#10B981" if p['atraso'] == 0 else "#94A3B8"
-                    status_badge = f"⚠️ {p['atraso']}d Atraso" if p['atraso'] > 0 else "🎯 É Hoje" if p['atraso'] == 0 else f"📅 {p['data_prevista'].strftime('%d/%m')}"
-                    
+            # Lista de Cards com Expander (Suspensa/Minimizada)
+            for idx, p in enumerate(pend):
+                # Status e cor
+                border_color = "#EF4444" if p['atraso'] > 0 else "#10B981" if p['atraso'] == 0 else "#94A3B8"
+                status_badge = f"⚠️ {p['atraso']}d Atraso" if p['atraso'] > 0 else "🎯 É Hoje" if p['atraso'] == 0 else f"📅 {p['data_prevista'].strftime('%d/%m')}"
+                
+                # Título do Expander
+                titulo_expander = f"{p['assunto']} - {status_badge}"
+                
+                with st.expander(titulo_expander, expanded=False):
                     # Card Container
                     st.markdown(f"""
                     <div style="
                         border-left: 4px solid {border_color};
-                        background: rgba(30, 41, 59, 0.5);
-                        padding: 15px 20px;
+                        background: rgba(30, 41, 59, 0.3);
+                        padding: 12px 15px;
                         border-radius: 8px;
-                        margin-bottom: 12px;
-                        display: flex;
-                        flex-direction: column;
+                        margin-bottom: 10px;
                     ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
                             <div>
-                                <span style="background: {border_color}20; color: {border_color}; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">{status_badge}</span>
-                                <span style="color: #94A3B8; font-size: 0.75rem; margin-left: 8px;">{p['materia']}</span>
+                                <span style="color: #94A3B8; font-size: 0.8rem;">{p['materia']}</span>
                             </div>
-                             <div style="color: #64748B; font-size: 0.8rem;">
+                             <div style="color: #64748B; font-size: 0.75rem;">
                                  ⭐ R{int(p.get('relevancia', 5))} | Rev de {p['tipo']}
                              </div>
                         </div>
-                        <div style="font-size: 1.1rem; font-weight: 600; color: white;">{p['assunto']}</div>
                         <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 4px;">📝 {p['coment'] if p['coment'] else 'Sem anotações'}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -2345,12 +2228,12 @@ else:
                     
                     with c_input:
                         ci1, ci2, ci3 = st.columns(3)
-                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}")
-                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}")
-                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}")
+                        acertos = ci1.number_input("✅ Acertos", min_value=0, key=f"ac_{p['id']}_{p['col']}_{idx}")
+                        total = ci2.number_input("📝 Total", min_value=0, key=f"to_{p['id']}_{p['col']}_{idx}")
+                        tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, step=5, key=f"tm_{p['id']}_{p['col']}_{idx}")
                     
                     with c_btn:
-                        if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}", use_container_width=True, type="primary"):
+                        if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}_{idx}", use_container_width=True, type="primary"):
                             try:
                                 res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
                                 if res_db.data:
@@ -2373,8 +2256,6 @@ else:
                                     st.rerun()
                             except Exception as e:
                                 st.error(f"Erro: {e}")
-                    
-                    st.divider()
 
     # --- ABA: REGISTRAR ---
     elif menu == "Registrar":
