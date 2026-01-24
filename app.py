@@ -2579,7 +2579,7 @@ else:
                 st.markdown("#### 🎯 Alvos Prioritários")
                 if criticos.empty:
                     st.success("✨ Sem gargalos críticos no momento! Recomendo avançar em novos tópicos do edital.")
-                           with col_rec2:
+            with col_rec2:
                 # 1. LÓGICA DE DADOS (Cálculos de Metas)
                 hoje = get_br_date()
                 in_sem = hoje - timedelta(days=hoje.weekday())
