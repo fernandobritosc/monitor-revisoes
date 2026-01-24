@@ -2506,30 +2506,115 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
             st.divider()
 
-        # --- NOVO: MAPA DE CALOR DE CONSTÂNCIA ---
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### 🔥 Mapa de Calor: Sua Constância (6 meses)")
-        render_consistency_heatmap(df_estudos)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.divider()
+
 
         # Métricas Gerais
         if df_estudos.empty:
-            t_q, precisao, horas, ritmo = 0, 0, 0, 0
+            t_q, precisao, minutos_totais, ritmo = 0, 0, 0, 0
         else:
             t_q = df_estudos['total'].sum()
             a_q = df_estudos['acertos'].sum()
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            tempo_min = df_estudos['tempo'].sum()
-            horas = tempo_min/60
-            ritmo = (tempo_min / t_q) if t_q > 0 else 0
+            minutos_totais = int(df_estudos['tempo'].sum())
+            ritmo = (minutos_totais / t_q) if t_q > 0 else 0
+
+        # Calcular deltas (comparação com ontem)
+        hoje = get_br_date()
+        ontem = hoje - timedelta(days=1)
+        df_ontem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
+
+        if not df_ontem.empty:
+            t_q_ontem = df_ontem['total'].sum()
+            a_q_ontem = df_ontem['acertos'].sum()
+            precisao_ontem = (a_q_ontem / t_q_ontem * 100) if t_q_ontem > 0 else 0
+            minutos_ontem = int(df_ontem['tempo'].sum())
+
+            delta_tempo = minutos_totais - minutos_ontem
+            delta_precisao = precisao - precisao_ontem
+            delta_questoes = t_q - t_q_ontem
+
+            # Formatar deltas com setas e indicação clara
+            def format_delta(value, unit, is_better_when_lower=False):
+                if value > 0:
+                    arrow = "▲"
+                    label = "Pior" if is_better_when_lower else "Melhor"
+                elif value < 0:
+                    arrow = "▼"
+                    label = "Melhor" if is_better_when_lower else "Pior"
+                else:
+                    return ""
+                return f"{arrow} {abs(value):.0f}{unit} ({label})"
+
+            delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
+            delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
+            delta_q_str = format_delta(delta_questoes, "", is_better_when_lower=False)
+        else:
+            delta_time_str = ""
+            delta_prec_str = ""
+            delta_q_str = ""
+
+        # Formatar tempo
+        tempo_formatado = formatar_minutos(minutos_totais)
         
-        # 1. MÉTRICAS PRINCIPAIS
+        # 1. MÉTRICAS PRINCIPAIS COM ANÉIS CIRCULARES
+        st.markdown('<div class="visao-mes-title">VISÃO GERAL DA MISSÃO</div>', unsafe_allow_html=True)
+        
         m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric_card("Questões", int(t_q), "📝")
-        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
-        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
+        
+        # Calcular percentuais para os anéis
+        horas_totais = minutos_totais / 60
+        meta_horas_mes = 80
+        pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
+        pct_precisao = min(precisao, 100)
+        meta_questoes_mes = 1000
+        pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
+        pct_ritmo = min((ritmo / 5) * 100, 100) if ritmo > 0 else 0
+        
+        with m1:
+            render_circular_progress(
+                percentage=pct_tempo,
+                label="TEMPO TOTAL",
+                value=tempo_formatado,
+                color_start=COLORS["primary"],
+                color_end=COLORS["secondary"],
+                icon="⏱️"
+            )
+            if delta_time_str:
+                st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_time_str}</div>', unsafe_allow_html=True)
+        
+        with m2:
+            render_circular_progress(
+                percentage=pct_precisao,
+                label="PRECISÃO",
+                value=f"{precisao:.0f}%",
+                color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                color_end=COLORS["secondary"],
+                icon="🎯"
+            )
+            if delta_prec_str:
+                st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_prec_str}</div>', unsafe_allow_html=True)
+        
+        with m3:
+            render_circular_progress(
+                percentage=pct_questoes,
+                label="QUESTÕES",
+                value=f"{int(t_q)}",
+                color_start=COLORS["accent"],
+                color_end=COLORS["primary"],
+                icon="📝"
+            )
+            if delta_q_str:
+                st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_q_str}</div>', unsafe_allow_html=True)
+        
+        with m4:
+            render_circular_progress(
+                percentage=pct_ritmo,
+                label="RITMO MÉDIO",
+                value=f"{ritmo:.1f}m/q",
+                color_start=COLORS["secondary"],
+                color_end=COLORS["primary"],
+                icon="⚡"
+            )
         
         st.divider()
         
