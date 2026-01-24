@@ -685,26 +685,21 @@ st.set_page_config(
     }
 )
 
-# --- INTEGRAÇÃO: SUPABASE ---
+# --- INTEGRAÇÃO: SUPABASE (MODO SEGURO PARA DEPLOY) ---
 from supabase import create_client, Client
 
-# Credenciais do Supabase (Hardcoded para arquivo único)
-SUPABASE_URL = "https://dyxtalcvjcprmhuktyfd.supabase.co"
-SUPABASE_KEY = "sb_secret_uEyhPGa8T-JUw0X1m5JyOA_PygMIKW3"
-
 def init_supabase():
-    url = SUPABASE_URL
-    key = SUPABASE_KEY
-    
-    if not url or not key:
-        return None
-    
+    # Agora o código busca as chaves no painel "Secrets" que você configurou
     try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
     except Exception as e:
-        st.error(f"Erro ao conectar ao Supabase: {e}")
+        # Se não encontrar nos secrets, ele tenta as variáveis locais (opcional)
+        st.error("Não foi possível carregar as credenciais do Supabase via Secrets.")
         return None
 
+# Inicializa o cliente
 try:
     supabase: Client = init_supabase()
 except Exception:
