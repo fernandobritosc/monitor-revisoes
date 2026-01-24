@@ -1035,7 +1035,7 @@ def get_estudos_cached(missao):
     if not supabase:
         return []
     try:
-        response = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        response = supabase.table("registros_estudos").select("*, id_materia").eq("concurso", missao).order("data_estudo", desc=True).execute()
         return response.data
     except Exception:
         return []
@@ -1858,7 +1858,8 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                     "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                     "tipo": "Revisão 24h", "col": "rev_24h", "atraso": atraso, 
                     "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                    "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
+                    "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5),
+                    "id_materia": row.get('id_materia')  # Adicionado id_materia
                 })
         
         # Lógica de Ciclos Longos (ADAPTATIVA) - CORRIGIDA: remove o elif problemático
@@ -1879,7 +1880,8 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
                         "id": row['id'], "materia": row['materia'], "assunto": row['assunto'], 
                         "tipo": lbl, "col": col_alv, "atraso": atraso, 
                         "data_prevista": dt_prev, "coment": row.get('comentarios', ''),
-                        "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5)
+                        "dificuldade": dif, "taxa": tx, "relevancia": row.get('relevancia', 5),
+                        "id_materia": row.get('id_materia')  # Adicionado id_materia
                     })
     
     # Filtrar por dificuldade
@@ -2577,31 +2579,7 @@ else:
                 st.markdown("#### 🎯 Alvos Prioritários")
                 if criticos.empty:
                     st.success("✨ Sem gargalos críticos no momento! Recomendo avançar em novos tópicos do edital.")
-                else:
-                    for _, row in criticos.head(3).iterrows():
-                        # Buscar o pior assunto desta materia
-                        df_ass = df_estudos[df_estudos['materia'] == row['materia']].groupby('assunto').agg({'taxa': 'mean'}).reset_index()
-                        pior_ass = df_ass.sort_values('taxa').iloc[0]['assunto']
-                        
-                        st.markdown(f"""
-                        <div class="modern-card" style="border-left: 5px solid #EF4444;">
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="font-weight: 800; color: #E2E8F0; font-size: 1.1rem;">{row['materia'].upper()}</span>
-                                <span style="background: rgba(239, 68, 68, 0.1); color: #EF4444; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">URGENTE</span>
-                            </div>
-                            <div style="margin-top: 10px; color: #94A3B8; font-size: 0.9rem;">
-                                Sua precisão média é de <b>{row['taxa']:.0f}%</b>. O maior gargalo identificado é:
-                            </div>
-                            <div style="margin-top: 8px; color: #FFFFFF; font-weight: 600; font-size: 1rem;">
-                                ⚠️ {pior_ass}
-                            </div>
-                            <div style="margin-top: 15px; font-size: 0.85rem; color: #8B5CF6;">
-                                💡 Sugestão: Dedicar 2h de teoria + 30 questões comentadas nesta semana.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-            with col_rec2:
+                           with col_rec2:
                 # 1. LÓGICA DE DADOS (Cálculos de Metas)
                 hoje = get_br_date()
                 in_sem = hoje - timedelta(days=hoje.weekday())
@@ -2777,6 +2755,7 @@ else:
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <span style="background: rgba(139, 92, 246, 0.2); color: #8B5CF6; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; font-family: monospace;">ID: {p['id']}</span>
                                 <span style="background: {border_color}30; color: {border_color}; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">{p['materia']}</span>
+                                <span style="background: rgba(6, 182, 212, 0.2); color: #06B6D4; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; font-family: monospace;">ID-Mat: {p.get('id_materia', 'N/A')}</span>
                             </div>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <span style="color: #94A3B8; font-size: 0.8rem;">{dif_icon} {p['tipo']}</span>
@@ -2889,6 +2868,16 @@ else:
                             t_b = formatar_tempo_para_bigint(tm_reg)
                             taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
                             
+                            # Buscar ID da matéria no banco
+                            try:
+                                res_id = supabase.table("editais_materias").select("id").eq("concurso", missao).eq("materia", mat_reg).execute()
+                                if res_id.data:
+                                    id_materia_val = res_id.data[0]['id']
+                                else:
+                                    id_materia_val = None
+                            except Exception:
+                                id_materia_val = None
+                            
                             payload = {
                                 "concurso": missao, 
                                 "materia": mat_reg, 
@@ -2904,7 +2893,8 @@ else:
                                 "rev_24h": not gerar_rev_reg, 
                                 "rev_07d": not gerar_rev_reg, 
                                 "rev_15d": not gerar_rev_reg, 
-                                "rev_30d": not gerar_rev_reg
+                                "rev_30d": not gerar_rev_reg,
+                                "id_materia": id_materia_val  # NOVO CAMPO
                             }
                             supabase.table("registros_estudos").insert(payload).execute()
                             st.success("✅ Registro salvo com sucesso!")
@@ -3329,7 +3319,8 @@ else:
                                 "concurso": st.session_state.missao_ativa,
                                 "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
                                 "dificuldade": "Simulado",
-                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
+                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}",
+                                "id_materia": None  # Simulados não têm ID de matéria
                             }
                             try:
                                 supabase.table("registros_estudos").insert(simulado_data).execute()
@@ -3718,6 +3709,16 @@ else:
                                 t_b = formatar_tempo_para_bigint(tm_edit)
                                 taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
                             
+                                # Buscar ID da nova matéria
+                                try:
+                                    res_id_edit = supabase.table("editais_materias").select("id").eq("concurso", missao).eq("materia", mat_edit).execute()
+                                    if res_id_edit.data:
+                                        id_materia_edit = res_id_edit.data[0]['id']
+                                    else:
+                                        id_materia_edit = None
+                                except Exception:
+                                    id_materia_edit = None
+                            
                                 supabase.table("registros_estudos").update({
                                     "data_estudo": dt_edit.strftime('%Y-%m-%d'),
                                     "materia": mat_edit,
@@ -3726,13 +3727,14 @@ else:
                                     "total": to_edit,
                                     "taxa": taxa,
                                     "dificuldade": dif_edit,
-                                    "relevancia": rel_edit, # Novo campo
+                                    "relevancia": rel_edit,
                                     "comentarios": com_edit,
                                     "tempo": t_b,
                                     "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
                                     "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_07d'])),
                                     "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_15d'])),
-                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d']))
+                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d'])),
+                                    "id_materia": id_materia_edit  # Atualizar ID da matéria
                                 }).eq("id", st.session_state.edit_id).execute()
                             
                                 st.success("✅ Registro atualizado com sucesso!")
@@ -3778,6 +3780,7 @@ else:
                                         <span style="color: #F59E0B; font-size: 0.85rem; font-weight: 700; margin-left: 15px;">
                                             ⭐ R{int(row.get('relevancia', 5))}
                                         </span>
+                                        {f'<span style="color: #06B6D4; font-size: 0.7rem; font-weight: 600; margin-left: 15px; background: rgba(6, 182, 212, 0.1); padding: 2px 6px; border-radius: 4px;">ID-Mat: {row.get("id_materia", "N/A")}</span>' if row.get("id_materia") else ''}
                                     </div>
                                     <h4 style="margin: 0; color: #fff; font-size: 1.1rem;">{row['materia']}</h4>
                                     <p style="color: #adb5bd; font-size: 0.9rem; margin: 5px 0 0 0;">{row['assunto']}</p>
@@ -3963,7 +3966,7 @@ else:
         # --- SEÇÃO: BENCHMARK DE SIMULADOS ---
         st.markdown('<h3 style="color: #fff; margin-bottom: 20px;">📈 Benchmark de Simulados</h3>', unsafe_allow_html=True)
         
-        # Usar df_simulados carregado no início da aplicação
+        # Usar df_sim_bench carregado no início da aplicação
         df_sim_bench = df_simulados.sort_values('data_estudo')
         
         if df_sim_bench.empty:
