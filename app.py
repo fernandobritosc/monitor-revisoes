@@ -2909,93 +2909,47 @@ else:
                             st.error(f"Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- NOVO DESIGN DO DASHBOARD (SITE PROFISSIONAL) ---
-def render_dashboard_profissional(df_stats):
-    # 1. Cabeçalho de Boas-Vindas com Glassmorphism
-    st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.1)); 
-                    padding: 2rem; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 2rem;">
-            <h1 style="margin:0; font-size: 2rem;">🎯 Central de Inteligência</h1>
-            <p style="color: #94A3B8; margin:0;">Análise estratégica de performance para a vitória.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # 2. Linha de Métricas (Anéis de Progresso)
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        render_circular_progress(df_stats['precisao'].mean(), "Precisão Média", f"{df_stats['precisao'].mean():.1f}%", COLORS["primary"], COLORS["secondary"])
-    with col_b:
-        render_circular_progress(75, "Meta de Acerto", "75%", COLORS["success"], "#059669")
-    with col_c:
-        vol_total = df_stats['questoes'].sum()
-        render_circular_progress(min(vol_total/10, 100), "Volume Total", f"{int(vol_total)} qst", COLORS["accent"], "#BE185D")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 3. Bloco de Análise Estratégica (A "Joia da Coroa")
-    # Usamos colunas com pesos diferentes para melhor equilíbrio visual
-    col_matrix, col_radar = st.columns([1.3, 1])
-
-    with col_matrix:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.subheader("📍 Matriz de Decisão (Relevância vs. Acerto)")
+    # --- ABA: DASHBOARD ---
+    elif menu == "Dashboard":
+        st.markdown('<h2 class="main-title">📊 Dashboard de Performance</h2>', unsafe_allow_html=True)
         
-        # Gráfico de Dispersão Estratégico
-        fig_matriz = px.scatter(
-            df_stats, x="relevancia", y="precisao",
-            size="questoes", color="precisao",
-            hover_name="materia", text="materia",
-            color_continuous_scale=[COLORS["danger"], COLORS["warning"], COLORS["success"]],
-            range_x=[0, 11], range_y=[0, 110],
-            labels={"relevancia": "Importância", "precisao": "Sua Precisão (%)"}
-        )
+        # --- FILTRO DE PERÍODO ---
+        st.markdown('<div class="modern-card" style="padding: 15px; margin-bottom: 20px;">', unsafe_allow_html=True)
+        col_periodo, col_info = st.columns([3, 1])
         
-        fig_matriz.update_traces(textposition='top center', marker=dict(line=dict(width=1, color='white')))
-        fig_matriz.update_layout(
-            margin=dict(l=0, r=0, t=30, b=0), # Margens Zero para evitar erro de espaço
-            height=400,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color="#FFFFFF",
-            xaxis=dict(showgrid=False, zeroline=False),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
-        )
-        st.plotly_chart(fig_matriz, use_container_width=True, config={'displayModeBar': False})
+        with col_periodo:
+            periodo = st.segmented_control(
+                "📅 Período de Análise:",
+                ["Última Semana", "Último Mês", "Últimos 3 Meses", "Tudo"],
+                default="Último Mês",
+                key="filtro_periodo_dashboard"
+            )
+        
+        # Filtrar df_estudos baseado no período
+        hoje = get_br_date()
+        df_estudos_filtrado = df_estudos.copy()
+        
+        if periodo == "Última Semana" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=7))]
+        elif periodo == "Último Mês" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=30))]
+        elif periodo == "Últimos 3 Meses" and not df_estudos.empty:
+            df_estudos_filtrado = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= (hoje - timedelta(days=90))]
+        
+        with col_info:
+            registros_filtrados = len(df_estudos_filtrado)
+            st.markdown(f"""
+            <div style="text-align: right; padding-top: 8px;">
+                <span style="color: {COLORS['secondary']}; font-size: 0.9rem; font-weight: 600;">
+                    {registros_filtrados} registros
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_radar:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.subheader("🛡️ Equilíbrio do Guerreiro")
         
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(
-            r=df_stats['precisao'],
-            theta=df_stats['materia'],
-            fill='toself',
-            fillcolor='rgba(139, 92, 246, 0.2)',
-            line=dict(color=COLORS["primary"], width=2)
-        ))
-        
-        fig_radar.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 100], gridcolor="rgba(255,255,255,0.1)", tickfont=dict(size=10)),
-                angularaxis=dict(gridcolor="rgba(255,255,255,0.1)", rotation=90),
-                bgcolor='rgba(0,0,0,0)'
-            ),
-            margin=dict(l=40, r=40, t=40, b=40),
-            height=400,
-            paper_bgcolor='rgba(0,0,0,0)',
-            showlegend=False
-        )
-        st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # 4. Heatmap no Fundo (Constância)
-    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-    st.subheader("🔥 Mapa de Calor de Atividade")
-    # Chame aqui a sua função de heatmap que já está no app(14).py
-    render_heatmap(df_stats) # Exemplo de chamada
-    st.markdown('</div>', unsafe_allow_html=True)
+        # Usar df_estudos_filtrado daqui em diante
+        df_estudos = df_estudos_filtrado
         
         # --- NOVO: EDITAL VERTICALIZADO (COBERTURA) ---
         if dados.get('materias'):
