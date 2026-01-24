@@ -1,60 +1,221 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from streamlit_option_menu import option_menu
+from supabase import create_client, Client
+import datetime
+
 # ============================================================================
-# 🚀 IDEIA PRO: TREEMAP E MOMENTUM INDICATORS
+# 💎 1. CONFIGURAÇÕES GERAIS E DESIGN SYSTEM
+# ============================================================================
+st.set_page_config(page_title="Monitor Pro | Inteligência de Revisão", layout="wide", initial_sidebar_state="expanded")
+
+# Paleta SaaS Moderno
+COLORS = {
+    "primary": "#8B5CF6",    # Roxo Real
+    "secondary": "#06B6D4",  # Ciano Digital
+    "success": "#10B981",    # Esmeralda
+    "danger": "#F43F5E",     # Rosa/Vermelho
+    "warning": "#F59E0B",    # Laranja
+    "bg": "#0B0B1E",         # Navy Profundo
+    "card": "rgba(30, 30, 60, 0.4)",
+    "text": "#F8FAFC"
+}
+
+# CSS Customizado
+st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    
+    .stApp {{ background-color: {COLORS["bg"]}; font-family: 'Inter', sans-serif; }}
+    
+    /* Header com Gradiente */
+    .main-header {{
+        background: linear-gradient(90deg, {COLORS["primary"]} 0%, {COLORS["secondary"]} 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800; font-size: 2.5rem; margin-bottom: 0.5rem;
+    }}
+    
+    /* Cartões de Vidro (Glassmorphism) */
+    .modern-card {{
+        background: {COLORS["card"]};
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        margin-bottom: 1rem;
+    }}
+    
+    /* Métricas */
+    .metric-value {{ font-size: 1.8rem; font-weight: 800; color: white; }}
+    .metric-label {{ color: #94A3B8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }}
+    
+    /* Ajustes do Plotly */
+    .js-plotly-plot .plotly .modebar {{ display: none !important; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# 🔐 2. CONEXÃO SUPABASE (COM FALLBACK)
+# ============================================================================
+@st.cache_resource
+def init_connection():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception:
+        return None
+
+supabase = init_connection()
+
+# ============================================================================
+# 📊 3. GERADORES DE GRÁFICOS (VISUAL DE ELITE)
 # ============================================================================
 
-def render_treemap_performance(df):
-    """Gera um Treemap onde o tamanho é a Relevância e a cor é a Precisão"""
+def plot_priority_matrix(df):
+    """Matriz de Prioridade: Relevância vs Precisão"""
+    fig = px.scatter(
+        df, x="relevancia", y="precisao", size="questoes", color="precisao",
+        hover_name="materia", text="materia",
+        color_continuous_scale=[COLORS["danger"], COLORS["warning"], COLORS["success"]],
+        range_x=[0, 11], range_y=[0, 110]
+    )
+    fig.update_traces(textposition='top center', marker=dict(line=dict(width=1, color='white')))
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font_color="#94A3B8", height=350, showlegend=False,
+        margin=dict(l=0, r=0, t=0, b=0),
+        xaxis=dict(title="Importância (FGV)", showgrid=False, zeroline=False),
+        yaxis=dict(title="Precisão (%)", showgrid=True, gridcolor='rgba(255,255,255,0.05)')
+    )
+    return fig
+
+def plot_radar_chart(df):
+    """Radar de Equilíbrio"""
+    fig = go.Figure(data=go.Scatterpolar(
+        r=df['precisao'], theta=df['materia'], fill='toself',
+        fillcolor='rgba(139, 92, 246, 0.2)', 
+        line=dict(color=COLORS["primary"], width=2)
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], gridcolor="rgba(255,255,255,0.1)"),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=40, r=40, t=20, b=20), height=350,
+        showlegend=False
+    )
+    return fig
+
+def plot_treemap(df):
+    """Treemap: Tamanho = Relevância, Cor = Precisão"""
     fig = px.treemap(
-        df, 
-        path=['materia'], 
-        values='relevancia', # O tamanho do bloco depende do quanto a matéria cai
-        color='precisao',    # A cor depende do seu acerto
+        df, path=['materia'], values='relevancia', color='precisao',
         color_continuous_scale=[COLORS["danger"], COLORS["warning"], COLORS["success"]],
         range_color=[0, 100]
     )
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
         font_color="white"
     )
-    # Remove as bordas brancas padrão para manter o look dark
-    fig.update_traces(marker_line_width=1, marker_line_color="rgba(255,255,255,0.1)")
     return fig
 
-# --- NOVO BLOCO PARA O DASHBOARD ---
+# ============================================================================
+# 📱 4. INTERFACE PRINCIPAL
+# ============================================================================
 
-st.markdown("### 🧠 Inteligência Preditiva")
+# --- SIDEBAR ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/1063/1063376.png", width=60)
+    st.markdown("### Monitor Pro")
+    selected = option_menu(
+        menu_title=None,
+        options=["Dashboard", "Registrar", "Configurações"],
+        icons=["speedometer2", "pencil-square", "gear"],
+        default_index=0,
+        styles={
+            "container": {"background-color": "transparent"},
+            "nav-link-selected": {"background-color": COLORS["primary"]},
+            "nav-link": {"--hover-color": "rgba(139, 92, 246, 0.2)"}
+        }
+    )
 
-# Banner de Recomendação (Simulado)
-st.info("🤖 **IA de Performance:** Você atingiu 90% em Direito Adm. Sugiro reduzir a carga horária desta matéria e focar 20min extras em RLM para recuperar o Momentum.")
+# --- DADOS (MOCKUP PARA GARANTIR QUE RODE SEM ERRO AGORA) ---
+# Se tiver dados reais do Supabase, substitua aqui depois.
+df_data = pd.DataFrame({
+    'materia': ['Português', 'RLM', 'Dir. Const.', 'Dir. Adm.', 'Informática', 'AFO'],
+    'precisao': [88, 62, 74, 95, 40, 55],
+    'relevancia': [10, 8, 9, 7, 5, 6],
+    'questoes': [320, 150, 450, 280, 90, 110],
+    'momentum': ['up', 'down', 'stable', 'up', 'down', 'up'], # up, down, stable
+    'delta': ['+5%', '-2%', '0%', '+8%', '-10%', '+3%']
+})
 
-col_tree, col_delta = st.columns([1.5, 1])
-
-with col_tree:
-    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-    st.markdown("#### 📐 Mapa de Calor de Relevância")
-    st.plotly_chart(render_treemap_performance(df_data), use_container_width=True, config={'displayModeBar': False})
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col_delta:
-    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-    st.markdown("#### ⚡ Momentum (Últimos 7 dias)")
+if selected == "Dashboard":
+    # Cabeçalho
+    st.markdown('<h1 class="main-header">Cockpit de Aprovação</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p style="color:{COLORS["text"]}; margin-bottom: 2rem;">Análise estratégica para dominar a banca FGV.</p>', unsafe_allow_html=True)
     
-    # Exemplo de como exibir deltas de performance
-    materias_momentum = [
-        {"nome": "Português", "valor": "+5.2%", "status": "up"},
-        {"nome": "RLM", "valor": "-2.1%", "status": "down"},
-        {"nome": "Informática", "valor": "+12.0%", "status": "up"}
-    ]
+    # 1. Linha de KPIs (Indicadores)
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(f'<div class="modern-card"><span class="metric-label">Precisão Global</span><br><span class="metric-value" style="color:{COLORS["primary"]}">78%</span></div>', unsafe_allow_html=True)
+    with k2:
+        st.markdown(f'<div class="modern-card"><span class="metric-label">Questões Hoje</span><br><span class="metric-value" style="color:{COLORS["secondary"]}">45</span></div>', unsafe_allow_html=True)
+    with k3:
+        st.markdown(f'<div class="modern-card"><span class="metric-label">Streak</span><br><span class="metric-value" style="color:{COLORS["success"]}">🔥 12 Dias</span></div>', unsafe_allow_html=True)
+    with k4:
+        st.markdown(f'<div class="modern-card"><span class="metric-label">Próx. Simulado</span><br><span class="metric-value" style="color:{COLORS["warning"]}">3 Dias</span></div>', unsafe_allow_html=True)
+
+    # 2. IA de Recomendação (Banner)
+    st.info("🤖 **IA Insight:** Notei uma queda de Momentum em **RLM**. Sugiro 20 questões de Lógica Proposicional hoje para recuperar.")
+
+    # 3. Gráficos Principais (Matriz e Radar)
+    c1, c2 = st.columns([1.3, 1])
+    with c1:
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("### 🎯 Matriz de Ataque (Prioridade)")
+        st.plotly_chart(plot_priority_matrix(df_data), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    for m in materias_momentum:
-        cor = COLORS["success"] if m["status"] == "up" else COLORS["danger"]
-        seta = "▲" if m["status"] == "up" else "▼"
-        st.markdown(f"""
-            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <span>{m['nome']}</span>
-                <span style="color: {cor}; font-weight: bold;">{seta} {m['valor']}</span>
-            </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("### 🛡️ Escudo de Competência")
+        st.plotly_chart(plot_radar_chart(df_data), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 4. Treemap e Momentum (NOVIDADE)
+    st.markdown("### 🧠 Mapa de Ocupação & Momentum")
+    t1, t2 = st.columns([2, 1])
+    
+    with t1:
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("#### 📐 Distribuição de Peso na Prova")
+        st.caption("Tamanho do bloco = Importância na Prova. Cor = Seu desempenho.")
+        st.plotly_chart(plot_treemap(df_data), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with t2:
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("#### ⚡ Momentum (7 Dias)")
+        for index, row in df_data.iterrows():
+            cor = COLORS["success"] if row['momentum'] == 'up' else (COLORS["danger"] if row['momentum'] == 'down' else COLORS["text"])
+            seta = "▲" if row['momentum'] == 'up' else ("▼" if row['momentum'] == 'down' else "●")
+            st.markdown(f"""
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: white;">{row['materia']}</span>
+                    <span style="color: {cor}; font-weight: bold;">{seta} {row['delta']}</span>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+elif selected == "Registrar":
+    st.markdown('<div class="modern-card"><h3>📝 Registrar Sessão</h3><p>Funcionalidade de registro aqui...</p></div>', unsafe_allow_html=True)
+
+elif selected == "Configurações":
+    st.markdown('<div class="modern-card"><h3>⚙️ Configurações</h3><p>Ajuste suas metas e API keys.</p></div>', unsafe_allow_html=True)
