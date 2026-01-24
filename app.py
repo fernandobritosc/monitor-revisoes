@@ -4,10 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
 from supabase import create_client, Client
-import datetime
 
 # ============================================================================
-# 💎 1. CONFIGURAÇÕES GERAIS E DESIGN SYSTEM
+# 1. CONFIGURAÇÕES GERAIS E DESIGN SYSTEM
 # ============================================================================
 st.set_page_config(page_title="Monitor Pro | Inteligência de Revisão", layout="wide", initial_sidebar_state="expanded")
 
@@ -23,7 +22,7 @@ COLORS = {
     "text": "#F8FAFC"
 }
 
-# CSS Customizado
+# CSS Customizado (Glassmorphism + Layout Profissional)
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -53,27 +52,32 @@ st.markdown(f"""
     .metric-value {{ font-size: 1.8rem; font-weight: 800; color: white; }}
     .metric-label {{ color: #94A3B8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }}
     
-    /* Ajustes do Plotly */
+    /* Remover barra de ferramentas do Plotly para visual limpo */
     .js-plotly-plot .plotly .modebar {{ display: none !important; }}
+    
+    /* Ajuste de padding padrão do Streamlit */
+    .block-container {{ padding-top: 2rem; padding-bottom: 2rem; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# 🔐 2. CONEXÃO SUPABASE (COM FALLBACK)
+# 2. CONEXÃO SUPABASE (COM FALLBACK)
 # ============================================================================
 @st.cache_resource
 def init_connection():
     try:
+        # Tenta pegar dos Secrets do Streamlit Cloud
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
     except Exception:
+        # Se falhar (rodando local sem secrets), retorna None
         return None
 
 supabase = init_connection()
 
 # ============================================================================
-# 📊 3. GERADORES DE GRÁFICOS (VISUAL DE ELITE)
+# 3. GERADORES DE GRÁFICOS (PLOTLY)
 # ============================================================================
 
 def plot_priority_matrix(df):
@@ -123,13 +127,15 @@ def plot_treemap(df):
         paper_bgcolor='rgba(0,0,0,0)',
         font_color="white"
     )
+    # Ajuste visual das bordas do Treemap
+    fig.update_traces(marker_line_width=1, marker_line_color=COLORS["bg"])
     return fig
 
 # ============================================================================
-# 📱 4. INTERFACE PRINCIPAL
+# 4. INTERFACE PRINCIPAL
 # ============================================================================
 
-# --- SIDEBAR ---
+# --- SIDEBAR DE NAVEGAÇÃO ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/1063/1063376.png", width=60)
     st.markdown("### Monitor Pro")
@@ -145,8 +151,8 @@ with st.sidebar:
         }
     )
 
-# --- DADOS (MOCKUP PARA GARANTIR QUE RODE SEM ERRO AGORA) ---
-# Se tiver dados reais do Supabase, substitua aqui depois.
+# --- DADOS (MOCKUP PARA EVITAR ERROS SE O BANCO ESTIVER VAZIO) ---
+# Aqui simulamos o banco de dados. Quando conectar o Supabase, substituiremos isso.
 df_data = pd.DataFrame({
     'materia': ['Português', 'RLM', 'Dir. Const.', 'Dir. Adm.', 'Informática', 'AFO'],
     'precisao': [88, 62, 74, 95, 40, 55],
@@ -156,12 +162,14 @@ df_data = pd.DataFrame({
     'delta': ['+5%', '-2%', '0%', '+8%', '-10%', '+3%']
 })
 
+# --- LÓGICA DAS PÁGINAS ---
+
 if selected == "Dashboard":
-    # Cabeçalho
+    # 1. CABEÇALHO DO COCKPIT
     st.markdown('<h1 class="main-header">Cockpit de Aprovação</h1>', unsafe_allow_html=True)
     st.markdown(f'<p style="color:{COLORS["text"]}; margin-bottom: 2rem;">Análise estratégica para dominar a banca FGV.</p>', unsafe_allow_html=True)
     
-    # 1. Linha de KPIs (Indicadores)
+    # 2. LINHA DE KPIs (INDICADORES)
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f'<div class="modern-card"><span class="metric-label">Precisão Global</span><br><span class="metric-value" style="color:{COLORS["primary"]}">78%</span></div>', unsafe_allow_html=True)
@@ -172,10 +180,10 @@ if selected == "Dashboard":
     with k4:
         st.markdown(f'<div class="modern-card"><span class="metric-label">Próx. Simulado</span><br><span class="metric-value" style="color:{COLORS["warning"]}">3 Dias</span></div>', unsafe_allow_html=True)
 
-    # 2. IA de Recomendação (Banner)
+    # 3. BANNER DE RECOMENDAÇÃO (IA INSIGHT)
     st.info("🤖 **IA Insight:** Notei uma queda de Momentum em **RLM**. Sugiro 20 questões de Lógica Proposicional hoje para recuperar.")
 
-    # 3. Gráficos Principais (Matriz e Radar)
+    # 4. GRÁFICOS DE ELITE (LINHA SUPERIOR)
     c1, c2 = st.columns([1.3, 1])
     with c1:
         st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -189,14 +197,14 @@ if selected == "Dashboard":
         st.plotly_chart(plot_radar_chart(df_data), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 4. Treemap e Momentum (NOVIDADE)
+    # 5. TREEMAP E MOMENTUM (LINHA INFERIOR - NOVIDADE)
     st.markdown("### 🧠 Mapa de Ocupação & Momentum")
     t1, t2 = st.columns([2, 1])
     
     with t1:
         st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("#### 📐 Distribuição de Peso na Prova")
-        st.caption("Tamanho do bloco = Importância na Prova. Cor = Seu desempenho.")
+        st.markdown("#### 📐 Peso na Prova vs. Seu Desempenho")
+        st.caption("Tamanho do bloco = Importância na Prova. Cor = Sua Precisão (Verde é bom).")
         st.plotly_chart(plot_treemap(df_data), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -204,11 +212,17 @@ if selected == "Dashboard":
         st.markdown('<div class="modern-card">', unsafe_allow_html=True)
         st.markdown("#### ⚡ Momentum (7 Dias)")
         for index, row in df_data.iterrows():
-            cor = COLORS["success"] if row['momentum'] == 'up' else (COLORS["danger"] if row['momentum'] == 'down' else COLORS["text"])
-            seta = "▲" if row['momentum'] == 'up' else ("▼" if row['momentum'] == 'down' else "●")
+            # Lógica de cores e setas para o Momentum
+            if row['momentum'] == 'up':
+                cor, seta = COLORS["success"], "▲"
+            elif row['momentum'] == 'down':
+                cor, seta = COLORS["danger"], "▼"
+            else:
+                cor, seta = COLORS["text"], "●"
+                
             st.markdown(f"""
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: white;">{row['materia']}</span>
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: white; font-weight: 500;">{row['materia']}</span>
                     <span style="color: {cor}; font-weight: bold;">{seta} {row['delta']}</span>
                 </div>
             """, unsafe_allow_html=True)
