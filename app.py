@@ -1823,10 +1823,45 @@ else:
             a_q = df_estudos['acertos'].sum()
             precisao = (a_q / t_q * 100) if t_q > 0 else 0
             minutos_totais = int(df_estudos['tempo'].sum())
-            
+
+            # Calcular deltas (comparação com ontem)
+            hoje = get_br_date()
+            ontem = hoje - timedelta(days=1)
+            df_ontem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
+
+            if not df_ontem.empty:
+                t_q_ontem = df_ontem['total'].sum()
+                a_q_ontem = df_ontem['acertos'].sum()
+                precisao_ontem = (a_q_ontem / t_q_ontem * 100) if t_q_ontem > 0 else 0
+                minutos_ontem = int(df_ontem['tempo'].sum())
+
+                delta_tempo = minutos_totais - minutos_ontem
+                delta_precisao = precisao - precisao_ontem
+                delta_questoes = t_q - t_q_ontem
+
+                # Formatar deltas
+                def format_delta(value, unit, is_better_when_lower=False):
+                    if value > 0:
+                        arrow = "▲"
+                        label = "(Pior)" if is_better_when_lower else "(Melhor)"
+                    elif value < 0:
+                        arrow = "▼"
+                        label = "(Melhor)" if is_better_when_lower else "(Pior)"
+                    else:
+                        return ""
+                    return f" {arrow} {abs(value):.0f}{unit} {label}"
+
+                delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
+                delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
+                delta_q_str = format_delta(delta_questoes, "", is_better_when_lower=False)
+            else:
+                delta_time_str = ""
+                delta_prec_str = ""
+                delta_q_str = ""
+
             # Formatar tempo como na imagem (3h45min)
             tempo_formatado = formatar_minutos(minutos_totais)
-            
+
             # Dias para a prova
             dias_restantes = None
             if data_prova_direta:
@@ -1850,7 +1885,7 @@ else:
             with c1:
                 render_circular_progress(
                     percentage=pct_tempo,
-                    label="TEMPO TOTAL",
+                    label=f"TEMPO TOTAL{delta_time_str}",
                     value=tempo_formatado,
                     color_start=COLORS["primary"],
                     color_end=COLORS["secondary"],
@@ -1859,7 +1894,7 @@ else:
             with c2:
                 render_circular_progress(
                     percentage=pct_precisao,
-                    label="PRECISÃO",
+                    label=f"PRECISÃO{delta_prec_str}",
                     value=f"{precisao:.0f}%",
                     color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
                     color_end=COLORS["secondary"],
@@ -1868,7 +1903,7 @@ else:
             with c3:
                 render_circular_progress(
                     percentage=pct_questoes,
-                    label="QUESTÕES",
+                    label=f"QUESTÕES{delta_q_str}",
                     value=f"{int(t_q)}",
                     color_start=COLORS["accent"],
                     color_end=COLORS["primary"],
@@ -1948,64 +1983,7 @@ else:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
                 st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px;">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
-            # --- NOVO: HEATMAP DE ATIVIDADE (ESTILO GITHUB) ---
-            st.divider()
-            st.markdown('<div style="text-align: center; color: #94A3B8; font-size: 0.85rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;">🔥 MAPA DE CALOR (ÚLTIMAS 12 SEMANAS)</div>', unsafe_allow_html=True)
-            
-            if not df_estudos.empty:
-                try:
-                    # Preparar dados: Soma de tempo por dia
-                    df_heat = df_estudos.copy()
-                    df_heat['data'] = pd.to_datetime(df_heat['data_estudo']).dt.date
-                    df_day = df_heat.groupby('data')['tempo'].sum().reset_index()
-                    
-                    # Criar range das últimas 12 semanas (84 dias)
-                    fim = get_br_date()
-                    inicio = fim - timedelta(days=83) # 12 semanas
-                    all_days = pd.date_range(start=inicio, end=fim)
-                    
-                    # Merge para garantir todos os dias
-                    df_all = pd.DataFrame({'data': all_days.date})
-                    df_final = pd.merge(df_all, df_day, on='data', how='left').fillna(0)
-                    
-                    # Preparar matriz para o heatmap (7 linhas para dias da semana)
-                    # 0=Monday, ..., 6=Sunday
-                    df_final['weekday'] = pd.to_datetime(df_final['data']).dt.weekday
-                    df_final['week'] = df_final['data'].apply(lambda x: (x - inicio).days // 7)
-                    
-                    # Matriz de dados
-                    matrix = [[0 for _ in range(12)] for _ in range(7)]
-                    for _, r in df_final.iterrows():
-                        if r['week'] < 12:
-                            matrix[int(r['weekday'])][int(r['week'])] = r['tempo'] / 60 # Horas
-                    
-                    weekdays_labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-                    
-                    fig_heat = go.Figure(data=go.Heatmap(
-                        z=matrix,
-                        x=[f"Sem {i+1}" for i in range(12)],
-                        y=weekdays_labels,
-                        colorscale=[[0, 'rgba(139, 92, 246, 0.05)'], [0.1, '#1E1B4B'], [0.5, '#8B5CF6'], [1, '#00FFFF']],
-                        showscale=False,
-                        xgap=3, ygap=3,
-                        hoverinfo='z',
-                        hovertemplate='Horas estudadas: %{z:.1f}h<extra></extra>'
-                    ))
-                    
-                    fig_heat.update_layout(
-                        height=220,
-                        margin=dict(t=0, b=10, l=0, r=0),
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        yaxis=dict(autorange='reversed', fixedrange=True),
-                        xaxis=dict(fixedrange=True, side='top'),
-                        font=dict(color="#94A3B8", size=10)
-                    )
-                    st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
-                except Exception as e:
-                    st.error(f"Erro ao gerar heatmap: {e}")
-            else:
-                st.info("Inicie seus estudos para gerar seu mapa de calor!")
+
 
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
@@ -2522,6 +2500,13 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
             st.divider()
 
+        # --- NOVO: MAPA DE CALOR DE CONSTÂNCIA ---
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown("##### 🔥 Mapa de Calor: Sua Constância (6 meses)")
+        render_consistency_heatmap(df_estudos)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.divider()
+
         # Métricas Gerais
         if df_estudos.empty:
             t_q, precisao, horas, ritmo = 0, 0, 0, 0
@@ -2531,41 +2516,14 @@ else:
             precisao = (a_q/t_q*100 if t_q > 0 else 0)
             tempo_min = df_estudos['tempo'].sum()
             horas = tempo_min/60
-            ritmo_global = (tempo_min / t_q) if t_q > 0 else 0
-            
-            # --- CÁLCULO DE RITMO COM DELTA (Melhor/Pior) ---
-            # Ritmo Global já calculado como ritmo_global
-            
-            # Ritmo Recente (Últimos 7 dias)
-            dt_ref = get_br_date() - timedelta(days=7)
-            df_7d = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= dt_ref]
-            t_q_7d = df_7d['total'].sum()
-            tempo_7d = df_7d['tempo'].sum()
-            ritmo_recent = (tempo_7d / t_q_7d) if t_q_7d > 0 else ritmo_global # Fallback para global se sem dados recentes
-            
-            # Calcular Delta
-            # No ritmo (min/q), MENOR É MELHOR.
-            # Se ritmo_recent < ritmo_global -> Melhorou (Verde)
-            # Se ritmo_recent > ritmo_global -> Piorou (Vermelho)
-            
-            if ritmo_recent > 0:
-                delta_val = ritmo_recent - ritmo_global
-                if delta_val < -0.1: # Melhorou significativamente (pelo menos 0.1 min/q a menos)
-                    sub_ritmo = f"<span style='color:#10B981'>▼ {abs(delta_val):.1f}m (Melhor)</span>"
-                elif delta_val > 0.1: # Piorou
-                    sub_ritmo = f"<span style='color:#EF4444'>▲ {abs(delta_val):.1f}m (Pior)</span>"
-                else:
-                    sub_ritmo = "<span style='color:#94A3B8'>➖ Estável</span>"
-            else:
-                sub_ritmo = None
-
+            ritmo = (tempo_min / t_q) if t_q > 0 else 0
         
         # 1. MÉTRICAS PRINCIPAIS
         m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric_card_modern("Questões", int(t_q), "📝")
-        with m2: render_metric_card_modern("Precisão", f"{precisao:.1f}%", "🎯")
-        with m3: render_metric_card_modern("Horas", f"{horas:.1f}h", "⏱️")
-        with m4: render_metric_card_modern("Ritmo (7d)", f"{ritmo_recent:.1f} m/q", "⚡", subtitle=sub_ritmo)
+        with m1: render_metric_card("Questões", int(t_q), "📝")
+        with m2: render_metric_card("Precisão", f"{precisao:.1f}%", "🎯")
+        with m3: render_metric_card("Horas", f"{horas:.1f}h", "⏱️")
+        with m4: render_metric_card("Ritmo", f"{ritmo:.1f} min/q", "⚡")
         
         st.divider()
         
@@ -2683,28 +2641,25 @@ else:
                 st.plotly_chart(fig_bar, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICO DE EVOLUÇÃO (Precisão com Média Móvel)
+        # 3. GRÁFICO DE EVOLUÇÃO (Precisão)
         if not df_estudos.empty:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown("##### 📈 Evolução de Precisão & Tendência")
-            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%) vs Média Móvel (tendência dos últimos 7 dias).</p>", unsafe_allow_html=True)
-            
+            st.markdown("##### 📈 Evolução de Precisão")
+            st.markdown("<p style='font-size: 0.8rem; color: #94A3B8;'>Precisão diária (%).</p>", unsafe_allow_html=True)
+
             # Preparar dados de evolução
             # Agrupar por data calculando somas para taxa ponderada
             df_ev = df_estudos.sort_values('data_estudo').groupby('data_estudo').agg({
                 'acertos': 'sum',
                 'total': 'sum'
             }).reset_index()
-            
+
             # Calcular taxa diária
             df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
-            
-            # Calcular Média Móvel (janela de 7 pontos para capturar ciclo semanal)
-            df_ev['Média Móvel'] = df_ev['taxa'].rolling(window=min(7, len(df_ev)), min_periods=1).mean()
-            
-            # Criar gráfico Plotly unificado
+
+            # Criar gráfico Plotly
             fig_evo = go.Figure()
-            
+
             # Linha de Precisão Diária
             fig_evo.add_trace(go.Scatter(
                 x=df_ev['data_estudo'], y=df_ev['taxa'],
@@ -2713,15 +2668,7 @@ else:
                 mode='lines+markers',
                 marker=dict(size=6)
             ))
-            
-            # Linha de Tendência (Média Móvel)
-            fig_evo.add_trace(go.Scatter(
-                x=df_ev['data_estudo'], y=df_ev['Média Móvel'],
-                name='Tendência (Média Móvel)',
-                line=dict(color='#06B6D4', width=4, dash='dash'),
-                mode='lines'
-            ))
-            
+
             fig_evo.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
@@ -2733,7 +2680,7 @@ else:
                 height=400,
                 yaxis=dict(range=[0, 105], gridcolor='rgba(255,255,255,0.05)')
             )
-            
+
             st.plotly_chart(fig_evo, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
         else:
