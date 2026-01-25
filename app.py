@@ -761,29 +761,33 @@ def apply_styles():
                 max-width: 21rem !important;
             }
             
+            /* Quando sidebar está EXPANDIDA */
+            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] {
+                margin-left: 21rem !important;
+            }
+            
             [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: calc(100% - 21rem) !important;
+                max-width: calc(100vw - 21rem) !important;
                 padding-left: 2rem !important;
                 padding-right: 2rem !important;
             }
             
-            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA */
+            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA/RECOLHIDA */
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+                margin-left: 0 !important;
                 width: 100vw !important;
                 max-width: 100vw !important;
-                margin-left: 0 !important;
-                padding-left: 0 !important;
             }
             
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
-                width: 100% !important;
-                max-width: 100% !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
                 margin-left: 0 !important;
             }
             
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: 100% !important;
-                width: 100% !important;
+                max-width: 100vw !important;
+                width: 100vw !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
                 margin-left: 0 !important;
@@ -793,6 +797,12 @@ def apply_styles():
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div {
                 width: 100% !important;
                 max-width: 100% !important;
+            }
+            
+            /* Garantir que colunas também expandam */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 auto !important;
             }
         }
         
