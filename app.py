@@ -767,6 +767,20 @@ def apply_styles():
                 padding-right: 2rem !important;
             }
             
+            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                margin-left: 0 !important;
+                padding-left: 0 !important;
+            }
+            
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+            }
+            
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
                 max-width: 100% !important;
                 width: 100% !important;
@@ -775,10 +789,10 @@ def apply_styles():
                 margin-left: 0 !important;
             }
             
-            /* Força a expansão do conteúdo quando sidebar está minimizada */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+            /* Força expansão de todas as seções internas */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div {
                 width: 100% !important;
-                margin-left: 0 !important;
+                max-width: 100% !important;
             }
         }
         
@@ -844,6 +858,29 @@ def apply_styles():
         /* Expansão completa quando sidebar minimizada */
         [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
             flex-grow: 1;
+        }
+        
+        /* Regras adicionais para forçar expansão total do conteúdo */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stVerticalBlock"] {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stHorizontalBlock"] {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* Remove qualquer constraint de largura */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .element-container {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* Força todos os containers a usarem 100% */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         @media (max-width: 768px) {
