@@ -1,5 +1,3 @@
-[file name]: app_final_funcional.py
-[file content begin]
 import streamlit as st
 import pandas as pd
 import datetime
