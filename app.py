@@ -754,61 +754,36 @@ def apply_styles():
         
         /* ═══ SIDEBAR RESPONSIVA ═══ */
         
-        /* Desktop (>1025px) - SIDEBAR RESPONSIVA MELHORADA */
+        /* Desktop (>1025px) - SIDEBAR RESPONSIVA FUNCIONAL */
         @media (min-width: 1025px) {
-            /* Tamanho fixo da sidebar */
+            /* Sidebar fixa */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
-            /* Container principal com transição suave */
-            [data-testid="stAppViewContainer"] {
-                transition: margin-left 0.3s ease !important;
-            }
-            
-            /* Quando sidebar está ABERTA */
-            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] {
+            /* Container principal - ajuste dinâmico baseado no estado da sidebar */
+            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] {
                 margin-left: 21rem !important;
             }
             
-            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
+            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] .main .block-container {
                 max-width: calc(100vw - 21rem - 4rem) !important;
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
             }
             
-            /* EXPANSÃO TOTAL quando sidebar está FECHADA */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+            /* QUANDO SIDEBAR ESTÁ FECHADA - EXPANSÃO TOTAL */
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
                 margin-left: 0 !important;
-                width: 100vw !important;
+            }
+            
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main {
                 max-width: 100vw !important;
             }
             
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
-                width: 100vw !important;
-                max-width: 100vw !important;
-            }
-            
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
                 max-width: calc(100vw - 6rem) !important;
-                width: calc(100vw - 6rem) !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
-            }
-            
-            /* Força expansão de todos os elementos internos */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div,
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stVerticalBlock"],
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stHorizontalBlock"] {
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-            
-            /* Colunas expandem proporcionalmente */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
-                width: 100% !important;
-                flex: 1 1 auto !important;
             }
         }
         
@@ -2009,22 +1984,28 @@ if not ed and st.session_state.missao_ativa is None:
 # Se existem missões mas nenhuma está ativa, selecionar baseado na missão principal
 elif st.session_state.missao_ativa is None and ed:
     # Tentar buscar a missão marcada como principal
+    missao_a_carregar = None
+    
     try:
-        res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).execute()
+        # Buscar TODAS as linhas que têm is_principal = True
+        res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
+        
         if res_principal.data and len(res_principal.data) > 0:
+            # Pegar o primeiro resultado (pode haver duplicatas se múltiplas linhas da mesma missão)
             missao_principal = res_principal.data[0]['concurso']
-            # Verificar se essa missão ainda existe
+            
+            # Verificar se essa missão ainda existe no dicionário de editais
             if missao_principal in ed:
-                st.session_state.missao_ativa = missao_principal
-            else:
-                # Se não existe mais, pegar a primeira disponível
-                st.session_state.missao_ativa = list(ed.keys())[0]
-        else:
-            # Se não há missão principal definida, pegar a primeira
-            st.session_state.missao_ativa = list(ed.keys())[0]
-    except Exception:
-        # Em caso de erro, pegar a primeira disponível
-        st.session_state.missao_ativa = list(ed.keys())[0]
+                missao_a_carregar = missao_principal
+    except Exception as e:
+        # Em caso de erro na busca, continuar sem missão principal
+        pass
+    
+    # Se não encontrou missão principal válida, pegar a primeira disponível
+    if not missao_a_carregar:
+        missao_a_carregar = list(ed.keys())[0]
+    
+    st.session_state.missao_ativa = missao_a_carregar
     st.rerun()
 
 # Fluxo normal do app com missão ativa
@@ -4145,12 +4126,19 @@ if st.session_state.missao_ativa is not None:
         
         ed = get_editais(supabase)
         if ed:
-            # Buscar qual é a missão principal atual
+            # Buscar qual é a missão principal atual (com verificação mais robusta)
             try:
-                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
-                missao_principal_atual = res_principal.data[0]['concurso'] if res_principal.data else None
-            except Exception:
+                res_principal = supabase.table("editais_materias").select("concurso, is_principal").eq("is_principal", True).execute()
+                if res_principal.data and len(res_principal.data) > 0:
+                    missao_principal_atual = res_principal.data[0]['concurso']
+                    # Debug: mostrar quantas linhas têm is_principal = True
+                    if len(res_principal.data) > 1:
+                        st.info(f"🔍 Debug: {len(res_principal.data)} registros marcados como principal para '{missao_principal_atual}'")
+                else:
+                    missao_principal_atual = None
+            except Exception as e:
                 missao_principal_atual = None
+                st.warning(f"⚠️ Erro ao buscar missão principal: {e}")
             
             col_principal1, col_principal2 = st.columns([3, 1])
             
@@ -4168,24 +4156,34 @@ if st.session_state.missao_ativa is not None:
             
             with col_principal2:
                 st.write("")  # Espaçamento
-                if st.button("⭐ Definir", use_container_width=True, type="primary"):
+                if st.button("⭐ Definir", use_container_width=True, type="primary", key="btn_definir_principal"):
                     try:
-                        # Primeiro, remover o flag is_principal de todas as missões
-                        supabase.table("editais_materias").update({"is_principal": False}).neq("concurso", "___null___").execute()
+                        # PASSO 1: Remover is_principal de TODAS as linhas
+                        update_all = supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).execute()
                         
-                        # Depois, marcar a nova missão como principal
-                        supabase.table("editais_materias").update({"is_principal": True}).eq("concurso", nova_principal).execute()
+                        # PASSO 2: Marcar TODAS as linhas da missão escolhida como principal
+                        update_principal = supabase.table("editais_materias").update({"is_principal": True}).eq("concurso", nova_principal).execute()
                         
-                        st.success(f"✅ '{nova_principal}' definida como missão principal!")
-                        st.info("💡 Da próxima vez que abrir o app, esta missão será carregada automaticamente.")
+                        # Verificar se funcionou
+                        verificacao = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
+                        
+                        if verificacao.data and verificacao.data[0]['concurso'] == nova_principal:
+                            st.success(f"✅ '{nova_principal}' definida como missão principal!")
+                            st.info(f"💡 {len(verificacao.data)} registro(s) marcado(s). Esta missão será carregada automaticamente.")
+                        else:
+                            st.warning("⚠️ Missão salva, mas verificação falhou. Tente novamente.")
+                        
                         time.sleep(2)
                         st.cache_data.clear()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Erro ao definir missão principal: {e}")
             
+            # Mostrar status atual
             if missao_principal_atual:
-                st.info(f"📌 Missão principal atual: **{missao_principal_atual}**")
+                st.success(f"📌 Missão principal atual: **{missao_principal_atual}**")
+            else:
+                st.info("ℹ️ Nenhuma missão principal definida. A primeira missão disponível será carregada.")
         else:
             st.warning("Nenhuma missão cadastrada.")
         
