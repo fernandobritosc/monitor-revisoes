@@ -769,8 +769,16 @@ def apply_styles():
             
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
                 max-width: 100% !important;
+                width: 100% !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
+                margin-left: 0 !important;
+            }
+            
+            /* Força a expansão do conteúdo quando sidebar está minimizada */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+                width: 100% !important;
+                margin-left: 0 !important;
             }
         }
         
@@ -826,6 +834,16 @@ def apply_styles():
             padding-top: 2rem !important;
             padding-bottom: 5rem !important;
             transition: all 0.3s ease;
+        }
+        
+        /* Garantir que colunas se expandam proporcionalmente */
+        [data-testid="column"] {
+            transition: all 0.3s ease;
+        }
+        
+        /* Expansão completa quando sidebar minimizada */
+        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
+            flex-grow: 1;
         }
         
         @media (max-width: 768px) {
