@@ -754,45 +754,61 @@ def apply_styles():
         
         /* ═══ SIDEBAR RESPONSIVA ═══ */
         
-        /* Desktop (>1025px) */
+        /* Desktop (>1025px) - SIDEBAR RESPONSIVA MELHORADA */
         @media (min-width: 1025px) {
+            /* Tamanho fixo da sidebar */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
+            /* Container principal com transição suave */
+            [data-testid="stAppViewContainer"] {
+                transition: margin-left 0.3s ease !important;
+            }
+            
+            /* Quando sidebar está ABERTA */
+            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] {
+                margin-left: 21rem !important;
+            }
+            
             [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: calc(100% - 21rem) !important;
+                max-width: calc(100vw - 21rem - 4rem) !important;
                 padding-left: 2rem !important;
                 padding-right: 2rem !important;
             }
             
-            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA */
+            /* EXPANSÃO TOTAL quando sidebar está FECHADA */
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+                margin-left: 0 !important;
                 width: 100vw !important;
                 max-width: 100vw !important;
-                margin-left: 0 !important;
-                padding-left: 0 !important;
             }
             
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
-                width: 100% !important;
-                max-width: 100% !important;
-                margin-left: 0 !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
             }
             
             [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: 100% !important;
-                width: 100% !important;
+                max-width: calc(100vw - 6rem) !important;
+                width: calc(100vw - 6rem) !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
-                margin-left: 0 !important;
             }
             
-            /* Força expansão de todas as seções internas */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div {
+            /* Força expansão de todos os elementos internos */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div,
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stVerticalBlock"],
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stHorizontalBlock"] {
                 width: 100% !important;
                 max-width: 100% !important;
+            }
+            
+            /* Colunas expandem proporcionalmente */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 auto !important;
             }
         }
         
@@ -1990,9 +2006,25 @@ if not ed and st.session_state.missao_ativa is None:
                 st.warning("⚠️ Por favor, preencha o nome e o cargo.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Se existem missões mas nenhuma está ativa, selecionar a primeira automaticamente
+# Se existem missões mas nenhuma está ativa, selecionar baseado na missão principal
 elif st.session_state.missao_ativa is None and ed:
-    st.session_state.missao_ativa = list(ed.keys())[0]
+    # Tentar buscar a missão marcada como principal
+    try:
+        res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).execute()
+        if res_principal.data and len(res_principal.data) > 0:
+            missao_principal = res_principal.data[0]['concurso']
+            # Verificar se essa missão ainda existe
+            if missao_principal in ed:
+                st.session_state.missao_ativa = missao_principal
+            else:
+                # Se não existe mais, pegar a primeira disponível
+                st.session_state.missao_ativa = list(ed.keys())[0]
+        else:
+            # Se não há missão principal definida, pegar a primeira
+            st.session_state.missao_ativa = list(ed.keys())[0]
+    except Exception:
+        # Em caso de erro, pegar a primeira disponível
+        st.session_state.missao_ativa = list(ed.keys())[0]
     st.rerun()
 
 # Fluxo normal do app com missão ativa
@@ -4105,6 +4137,60 @@ if st.session_state.missao_ativa is not None:
     elif menu == "Configurar":
         st.markdown('<h2 class="main-title">⚙️ Configurações</h2>', unsafe_allow_html=True)
         st.markdown('<p class="section-subtitle">Gerenciar missões e preferências globais</p>', unsafe_allow_html=True)
+
+        # SEÇÃO: DEFINIR MISSÃO PRINCIPAL
+        st.markdown('<div class="modern-card" style="border-left: 4px solid #10B981;">', unsafe_allow_html=True)
+        st.markdown('### ⭐ Missão Principal', unsafe_allow_html=True)
+        st.markdown('<p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 15px;">A missão marcada como principal será carregada automaticamente quando você abrir o app.</p>', unsafe_allow_html=True)
+        
+        ed = get_editais(supabase)
+        if ed:
+            # Buscar qual é a missão principal atual
+            try:
+                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
+                missao_principal_atual = res_principal.data[0]['concurso'] if res_principal.data else None
+            except Exception:
+                missao_principal_atual = None
+            
+            col_principal1, col_principal2 = st.columns([3, 1])
+            
+            with col_principal1:
+                nomes_missoes_principal = list(ed.keys())
+                indice_principal = nomes_missoes_principal.index(missao_principal_atual) if missao_principal_atual in nomes_missoes_principal else 0
+                
+                nova_principal = st.selectbox(
+                    "Selecione a missão principal:",
+                    options=nomes_missoes_principal,
+                    index=indice_principal,
+                    key="select_missao_principal",
+                    help="Esta missão será carregada automaticamente ao abrir o app"
+                )
+            
+            with col_principal2:
+                st.write("")  # Espaçamento
+                if st.button("⭐ Definir", use_container_width=True, type="primary"):
+                    try:
+                        # Primeiro, remover o flag is_principal de todas as missões
+                        supabase.table("editais_materias").update({"is_principal": False}).neq("concurso", "___null___").execute()
+                        
+                        # Depois, marcar a nova missão como principal
+                        supabase.table("editais_materias").update({"is_principal": True}).eq("concurso", nova_principal).execute()
+                        
+                        st.success(f"✅ '{nova_principal}' definida como missão principal!")
+                        st.info("💡 Da próxima vez que abrir o app, esta missão será carregada automaticamente.")
+                        time.sleep(2)
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao definir missão principal: {e}")
+            
+            if missao_principal_atual:
+                st.info(f"📌 Missão principal atual: **{missao_principal_atual}**")
+        else:
+            st.warning("Nenhuma missão cadastrada.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.divider()
 
         # SEÇÃO: GERENCIAR MISSÕES
         st.markdown('<div class="modern-card">', unsafe_allow_html=True)
