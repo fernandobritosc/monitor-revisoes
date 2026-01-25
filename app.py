@@ -752,40 +752,76 @@ def apply_styles():
         * { box-sizing: border-box; }
         html, body { overflow-x: hidden; max-width: 100vw; }
         
-        /* ═══ SIDEBAR RESPONSIVA ═══ */
+        /* ═══ SIDEBAR RESPONSIVA COM JAVASCRIPT ═══ */
         
-        /* Desktop (>1025px) - SIDEBAR RESPONSIVA FUNCIONAL */
+        /* Desktop (>1025px) */
         @media (min-width: 1025px) {
-            /* Sidebar fixa */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
-            /* Container principal - ajuste dinâmico baseado no estado da sidebar */
-            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] {
+            /* Configuração padrão - sidebar aberta */
+            [data-testid="stAppViewContainer"] {
                 margin-left: 21rem !important;
+                transition: margin-left 0.3s ease !important;
             }
             
-            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] .main .block-container {
-                max-width: calc(100vw - 21rem - 4rem) !important;
+            .block-container {
+                max-width: calc(100vw - 25rem) !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+                transition: all 0.3s ease !important;
             }
             
-            /* QUANDO SIDEBAR ESTÁ FECHADA - EXPANSÃO TOTAL */
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
+            /* Classe custom para quando sidebar está fechada */
+            .sidebar-closed [data-testid="stAppViewContainer"] {
                 margin-left: 0 !important;
             }
             
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main {
-                max-width: 100vw !important;
-            }
-            
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
+            .sidebar-closed .block-container {
                 max-width: calc(100vw - 6rem) !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
             }
         }
+        </style>
+        
+        <script>
+        // Observar mudanças no estado da sidebar
+        const observer = new MutationObserver(function(mutations) {
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            const body = document.body;
+            
+            if (sidebar) {
+                const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+                
+                if (!isExpanded) {
+                    body.classList.add('sidebar-closed');
+                } else {
+                    body.classList.remove('sidebar-closed');
+                }
+            }
+        });
+        
+        // Iniciar observação quando o DOM carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                observer.observe(sidebar, {
+                    attributes: true,
+                    attributeFilter: ['aria-expanded']
+                });
+                
+                // Verificar estado inicial
+                const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+                if (!isExpanded) {
+                    document.body.classList.add('sidebar-closed');
+                }
+            }
+        });
+        </script>
+    """, unsafe_allow_html=True)
         
         /* Tablet (769-1024px) */
         @media (min-width: 769px) and (max-width: 1024px) {
@@ -1055,13 +1091,28 @@ def apply_styles():
 
 # --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
 if 'missao_ativa' not in st.session_state:
-    # Padrão Automático: tenta carregar a primeira missão disponível
+    # Tentar carregar a missão principal primeiro
+    missao_carregada = None
+    
     try:
         ed = get_editais(supabase)
         if ed:
-            st.session_state.missao_ativa = list(ed.keys())[0]
-        else:
-            st.session_state.missao_ativa = None
+            # PASSO 1: Tentar buscar missão principal do banco
+            try:
+                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).execute()
+                if res_principal.data and len(res_principal.data) > 0:
+                    missao_principal = res_principal.data[0]['concurso']
+                    # Verificar se ainda existe
+                    if missao_principal in ed:
+                        missao_carregada = missao_principal
+            except:
+                pass
+            
+            # PASSO 2: Se não encontrou missão principal, pega a primeira
+            if not missao_carregada:
+                missao_carregada = list(ed.keys())[0]
+        
+        st.session_state.missao_ativa = missao_carregada
     except Exception:
         st.session_state.missao_ativa = None
 
@@ -1932,6 +1983,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 # Verificar se existe pelo menos uma missão cadastrada
 ed = get_editais(supabase)
+
 if not ed and st.session_state.missao_ativa is None:
     # Primeira vez no app - mostrar tela de boas-vindas
     st.markdown("""
@@ -1957,6 +2009,8 @@ if not ed and st.session_state.missao_ativa is None:
         else:
             data_prova_input = None
         
+        marcar_principal = st.checkbox("⭐ Marcar como missão principal", value=True, help="Esta missão será carregada automaticamente ao abrir o app")
+        
         btn_cadastrar = st.form_submit_button("🚀 CRIAR MISSÃO", use_container_width=True, type="primary")
         
         if btn_cadastrar:
@@ -1966,7 +2020,8 @@ if not ed and st.session_state.missao_ativa is None:
                         "concurso": nome_concurso,
                         "cargo": cargo_concurso,
                         "materia": "Geral",
-                        "topicos": ["Introdução"]
+                        "topicos": ["Introdução"],
+                        "is_principal": marcar_principal
                     }
                     if data_prova_input:
                         payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
@@ -1980,33 +2035,6 @@ if not ed and st.session_state.missao_ativa is None:
             else:
                 st.warning("⚠️ Por favor, preencha o nome e o cargo.")
     st.markdown('</div>', unsafe_allow_html=True)
-
-# Se existem missões mas nenhuma está ativa, selecionar baseado na missão principal
-elif st.session_state.missao_ativa is None and ed:
-    # Tentar buscar a missão marcada como principal
-    missao_a_carregar = None
-    
-    try:
-        # Buscar TODAS as linhas que têm is_principal = True
-        res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
-        
-        if res_principal.data and len(res_principal.data) > 0:
-            # Pegar o primeiro resultado (pode haver duplicatas se múltiplas linhas da mesma missão)
-            missao_principal = res_principal.data[0]['concurso']
-            
-            # Verificar se essa missão ainda existe no dicionário de editais
-            if missao_principal in ed:
-                missao_a_carregar = missao_principal
-    except Exception as e:
-        # Em caso de erro na busca, continuar sem missão principal
-        pass
-    
-    # Se não encontrou missão principal válida, pegar a primeira disponível
-    if not missao_a_carregar:
-        missao_a_carregar = list(ed.keys())[0]
-    
-    st.session_state.missao_ativa = missao_a_carregar
-    st.rerun()
 
 # Fluxo normal do app com missão ativa
 if st.session_state.missao_ativa is not None:
@@ -4251,6 +4279,8 @@ if st.session_state.missao_ativa is not None:
                     else:
                         data_nova_prova = None
                 
+                marcar_como_principal = st.checkbox("⭐ Marcar como missão principal", key="check_principal_nova", help="Esta missão será carregada automaticamente ao abrir o app")
+                
                 btn_criar = st.form_submit_button("🚀 Criar Missão", use_container_width=True, type="primary")
                 
                 if btn_criar:
@@ -4261,17 +4291,24 @@ if st.session_state.missao_ativa is not None:
                             if check_existente.data:
                                 st.error(f"❌ Já existe uma missão com o nome '{nome_novo_concurso}'!")
                             else:
+                                # Se marcar como principal, desmarcar todas as outras primeiro
+                                if marcar_como_principal:
+                                    supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).execute()
+                                
                                 payload = {
                                     "concurso": nome_novo_concurso,
                                     "cargo": cargo_novo_concurso,
                                     "materia": "Geral",
-                                    "topicos": ["Introdução"]
+                                    "topicos": ["Introdução"],
+                                    "is_principal": marcar_como_principal
                                 }
                                 if data_nova_prova:
                                     payload["data_prova"] = data_nova_prova.strftime("%Y-%m-%d")
                                 
                                 supabase.table("editais_materias").insert(payload).execute()
-                                st.success(f"✅ Missão '{nome_novo_concurso}' criada com sucesso!")
+                                
+                                msg_principal = " e definida como principal" if marcar_como_principal else ""
+                                st.success(f"✅ Missão '{nome_novo_concurso}' criada{msg_principal}!")
                                 st.info("💡 Você pode ativá-la na aba 'Selecionar Missão' ou no HOME.")
                                 time.sleep(2)
                                 st.cache_data.clear()
