@@ -677,7 +677,7 @@ def formatar_tempo_para_bigint(tempo_str):
 st.set_page_config(
     page_title="Monitor de Revisões Pro", 
     layout="wide", 
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",  # COLLAPSED por padrão para melhor UX
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -745,146 +745,36 @@ def apply_styles():
     st.markdown("""
         <style>
         /* ═══════════════════════════════════════════════════════════════════
-           🎨 CSS RESPONSIVO GLOBAL - MonitorPro
+           🎨 CSS RESPONSIVO GLOBAL - MonitorPro (VERSÃO SIMPLIFICADA)
            ═══════════════════════════════════════════════════════════════════ */
         
         /* Reset básico */
         * { box-sizing: border-box; }
         html, body { overflow-x: hidden; max-width: 100vw; }
         
-        /* ═══ SIDEBAR RESPONSIVA - CSS PURO ═══ */
-        
-        /* Desktop (>1025px) */
-        @media (min-width: 1025px) {
-            /* Sidebar tamanho fixo */
-            [data-testid="stSidebar"] {
-                min-width: 21rem !important;
-                max-width: 21rem !important;
-            }
-            
-            /* Container principal */
-            [data-testid="stAppViewContainer"] {
-                transition: margin-left 0.3s ease !important;
-            }
-            
-            /* SIDEBAR ABERTA */
-            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] {
-                margin-left: 21rem !important;
-            }
-            
-            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] .main .block-container {
-                max-width: calc(100vw - 25rem) !important;
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
-            }
-            
-            /* SIDEBAR FECHADA - EXPANSÃO TOTAL */
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
-                margin-left: 0 !important;
-            }
-            
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main {
-                max-width: 100vw !important;
-            }
-            
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
-                max-width: calc(100vw - 6rem) !important;
-                padding-left: 3rem !important;
-                padding-right: 3rem !important;
-            }
+        /* Esconder navegação padrão da sidebar */
+        [data-testid="stSidebarNav"] {
+            display: none;
         }
         
-        /* Tablet (769-1024px) */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            [data-testid="stSidebar"] {
-                min-width: 18rem !important;
-                max-width: 18rem !important;
-            }
-            
-            [data-testid="stSidebar"] > div {
-                padding: 1.25rem 0.75rem;
-            }
-            
-            .block-container {
-                padding-left: 1.5rem !important;
-                padding-right: 1.5rem !important;
-            }
+        /* ═══ RESPONSIVIDADE AUTOMÁTICA ═══ */
+        /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
+        /* Apenas garantimos que os containers usem 100% do espaço disponível */
+        
+        .main .block-container {
+            max-width: 100% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            padding-top: 2rem !important;
+            padding-bottom: 5rem !important;
         }
         
-        /* Mobile (<768px) - Sidebar Overlay Fullscreen */
+        /* Em telas menores, reduzir padding */
         @media (max-width: 768px) {
-            [data-testid="stSidebar"] {
-                position: fixed !important;
-                left: 0 !important;
-                top: 0 !important;
-                height: 100vh !important;
-                width: 100vw !important;
-                max-width: 100vw !important;
-                min-width: 100vw !important;
-                z-index: 999999 !important;
-                background: rgba(15, 15, 35, 0.98) !important;
-                backdrop-filter: blur(20px);
-            }
-            
-            [data-testid="stSidebar"] > div {
-                padding: 1rem 0.75rem;
-                overflow-y: auto;
-                max-height: 100vh;
-            }
-            
-            .block-container {
-                max-width: 100% !important;
+            .main .block-container {
                 padding-left: 1rem !important;
                 padding-right: 1rem !important;
                 padding-top: 1rem !important;
-            }
-        }
-        
-        /* ═══ CONTAINER PRINCIPAL ═══ */
-        
-        .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 5rem !important;
-            transition: all 0.3s ease;
-        }
-        
-        /* Garantir que colunas se expandam proporcionalmente */
-        [data-testid="column"] {
-            transition: all 0.3s ease;
-        }
-        
-        /* Expansão completa quando sidebar minimizada */
-        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
-            flex-grow: 1;
-        }
-        
-        /* Regras adicionais para forçar expansão total do conteúdo */
-        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stVerticalBlock"] {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="stHorizontalBlock"] {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        /* Remove qualquer constraint de largura */
-        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .element-container {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        /* Força todos os containers a usarem 100% */
-        [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] > div {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        @media (max-width: 768px) {
-            .block-container {
-                padding-top: 1rem !important;
-                padding-bottom: 3rem !important;
             }
         }
         
