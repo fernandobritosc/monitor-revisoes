@@ -1,3 +1,5 @@
+[file name]: app_final_funcional.py
+[file content begin]
 import streamlit as st
 import pandas as pd
 import datetime
@@ -1104,11 +1106,21 @@ st.markdown("""
         background: #0E1117;
     }
     
-    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
+    /* ═══ LAYOUT RESPONSIVO DA SIDEBAR ═══ */
+    /* Container principal padrão */
+    .main .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        transition: all 0.3s ease;
+        width: 100%;
+        max-width: 100% !important;
+    }
+    
     /* Quando a sidebar está EXPANDIDA */
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        max-width: calc(100% - 300px) !important;
         margin-left: 300px !important;
+        width: calc(100% - 300px) !important;
+        max-width: calc(100% - 300px) !important;
         padding-left: 4rem !important;
         padding-right: 4rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -1116,19 +1128,83 @@ st.markdown("""
     
     /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 95% !important; 
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 4rem !important;
+        padding-right: 4rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
-    /* Container principal padrão */
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        transition: all 0.3s ease;
+    /* Responsividade para telas médias */
+    @media (max-width: 1200px) {
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
+        }
+    }
+    
+    /* Responsividade para tablets */
+    @media (max-width: 992px) {
+        .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+    }
+    
+    /* Responsividade para mobile */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+    }
+    
+    /* Responsividade para telas muito pequenas */
+    @media (max-width: 480px) {
+        .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
     }
 
     /* Cards Glassmorphism Modernos */
@@ -4649,3 +4725,4 @@ if st.session_state.missao_ativa is not None:
                         st.warning("⚠️ Por favor, informe o nome da matéria.")
         
             st.markdown('</div>', unsafe_allow_html=True)
+[file content end]
