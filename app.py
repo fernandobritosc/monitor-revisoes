@@ -744,37 +744,22 @@ def excluir_concurso_completo(supabase, missao):
 def apply_styles():
     st.markdown("""
         <style>
-        /* ═══════════════════════════════════════════════════════════════════
-           🎨 CSS RESPONSIVO GLOBAL - MonitorPro (VERSÃO SIMPLIFICADA)
-           ═══════════════════════════════════════════════════════════════════ */
-        
-        /* Reset básico */
-        * { box-sizing: border-box; }
-        html, body { overflow-x: hidden; max-width: 100vw; }
-        
-        /* Esconder navegação padrão da sidebar */
+        /* Esconde navegação padrão da sidebar */
         [data-testid="stSidebarNav"] {
             display: none;
         }
         
-        /* ═══ RESPONSIVIDADE AUTOMÁTICA ═══ */
-        /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
-        /* Apenas garantimos que os containers usem 100% do espaço disponível */
-        
+        /* Container principal usa toda largura disponível */
         .main .block-container {
-            max-width: 100% !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            padding-top: 2rem !important;
-            padding-bottom: 5rem !important;
+            max-width: 100%;
+            padding-left: 2rem;
+            padding-right: 2rem;
         }
         
-        /* Em telas menores, reduzir padding */
         @media (max-width: 768px) {
             .main .block-container {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-top: 1rem !important;
+                padding-left: 1rem;
+                padding-right: 1rem;
             }
         }
         
