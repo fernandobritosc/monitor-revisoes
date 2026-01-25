@@ -752,76 +752,47 @@ def apply_styles():
         * { box-sizing: border-box; }
         html, body { overflow-x: hidden; max-width: 100vw; }
         
-        /* ═══ SIDEBAR RESPONSIVA COM JAVASCRIPT ═══ */
+        /* ═══ SIDEBAR RESPONSIVA - CSS PURO ═══ */
         
         /* Desktop (>1025px) */
         @media (min-width: 1025px) {
+            /* Sidebar tamanho fixo */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
-            /* Configuração padrão - sidebar aberta */
+            /* Container principal */
             [data-testid="stAppViewContainer"] {
-                margin-left: 21rem !important;
                 transition: margin-left 0.3s ease !important;
             }
             
-            .block-container {
+            /* SIDEBAR ABERTA */
+            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] {
+                margin-left: 21rem !important;
+            }
+            
+            section[data-testid="stSidebar"][aria-expanded="true"] + div[data-testid="stAppViewContainer"] .main .block-container {
                 max-width: calc(100vw - 25rem) !important;
                 padding-left: 2rem !important;
                 padding-right: 2rem !important;
-                transition: all 0.3s ease !important;
             }
             
-            /* Classe custom para quando sidebar está fechada */
-            .sidebar-closed [data-testid="stAppViewContainer"] {
+            /* SIDEBAR FECHADA - EXPANSÃO TOTAL */
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
                 margin-left: 0 !important;
             }
             
-            .sidebar-closed .block-container {
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main {
+                max-width: 100vw !important;
+            }
+            
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
                 max-width: calc(100vw - 6rem) !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
             }
         }
-        </style>
-        
-        <script>
-        // Observar mudanças no estado da sidebar
-        const observer = new MutationObserver(function(mutations) {
-            const sidebar = document.querySelector('[data-testid="stSidebar"]');
-            const body = document.body;
-            
-            if (sidebar) {
-                const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
-                
-                if (!isExpanded) {
-                    body.classList.add('sidebar-closed');
-                } else {
-                    body.classList.remove('sidebar-closed');
-                }
-            }
-        });
-        
-        // Iniciar observação quando o DOM carregar
-        document.addEventListener('DOMContentLoaded', function() {
-            const sidebar = document.querySelector('[data-testid="stSidebar"]');
-            if (sidebar) {
-                observer.observe(sidebar, {
-                    attributes: true,
-                    attributeFilter: ['aria-expanded']
-                });
-                
-                // Verificar estado inicial
-                const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
-                if (!isExpanded) {
-                    document.body.classList.add('sidebar-closed');
-                }
-            }
-        });
-        </script>
-    """, unsafe_allow_html=True)
         
         /* Tablet (769-1024px) */
         @media (min-width: 769px) and (max-width: 1024px) {
