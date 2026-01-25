@@ -754,55 +754,38 @@ def apply_styles():
         
         /* ═══ SIDEBAR RESPONSIVA ═══ */
         
-        /* Desktop (>1025px) */
+        /* Desktop (>1025px) - SIDEBAR RESPONSIVA */
         @media (min-width: 1025px) {
+            /* Tamanho fixo da sidebar */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
-            /* Quando sidebar está EXPANDIDA */
-            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] {
-                margin-left: 21rem !important;
+            /* Container principal - comportamento padrão do Streamlit */
+            [data-testid="stAppViewContainer"] {
+                transition: margin-left 0.3s ease, width 0.3s ease !important;
             }
             
-            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: calc(100vw - 21rem) !important;
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
+            /* Quando sidebar está ABERTA - deixar o Streamlit controlar */
+            [data-testid="stSidebar"][aria-expanded="true"] {
+                display: block !important;
             }
             
-            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA/RECOLHIDA */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
-                margin-left: 0 !important;
-                width: 100vw !important;
-                max-width: 100vw !important;
+            /* Quando sidebar está FECHADA - expandir conteúdo */
+            [data-testid="stSidebar"][aria-expanded="false"] {
+                display: none !important;
             }
             
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
-                width: 100vw !important;
-                max-width: 100vw !important;
+            /* Forçar expansão quando sidebar fechada */
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
                 margin-left: 0 !important;
             }
             
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
-                max-width: 100vw !important;
-                width: 100vw !important;
+            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
+                max-width: 100% !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
-                margin-left: 0 !important;
-            }
-            
-            /* Força expansão de todas as seções internas */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div {
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-            
-            /* Garantir que colunas também expandam */
-            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] [data-testid="column"] {
-                width: 100% !important;
-                flex: 1 1 auto !important;
             }
         }
         
