@@ -754,38 +754,45 @@ def apply_styles():
         
         /* ═══ SIDEBAR RESPONSIVA ═══ */
         
-        /* Desktop (>1025px) - SIDEBAR RESPONSIVA */
+        /* Desktop (>1025px) */
         @media (min-width: 1025px) {
-            /* Tamanho fixo da sidebar */
             [data-testid="stSidebar"] {
                 min-width: 21rem !important;
                 max-width: 21rem !important;
             }
             
-            /* Container principal - comportamento padrão do Streamlit */
-            [data-testid="stAppViewContainer"] {
-                transition: margin-left 0.3s ease, width 0.3s ease !important;
+            [data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stAppViewContainer"] .block-container {
+                max-width: calc(100% - 21rem) !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
             }
             
-            /* Quando sidebar está ABERTA - deixar o Streamlit controlar */
-            [data-testid="stSidebar"][aria-expanded="true"] {
-                display: block !important;
+            /* EXPANSÃO TOTAL quando sidebar está MINIMIZADA */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                margin-left: 0 !important;
+                padding-left: 0 !important;
             }
             
-            /* Quando sidebar está FECHADA - expandir conteúdo */
-            [data-testid="stSidebar"][aria-expanded="false"] {
-                display: none !important;
-            }
-            
-            /* Forçar expansão quando sidebar fechada */
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] {
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .main {
+                width: 100% !important;
+                max-width: 100% !important;
                 margin-left: 0 !important;
             }
             
-            section[data-testid="stSidebar"][aria-expanded="false"] + div[data-testid="stAppViewContainer"] .main .block-container {
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .block-container {
                 max-width: 100% !important;
+                width: 100% !important;
                 padding-left: 3rem !important;
                 padding-right: 3rem !important;
+                margin-left: 0 !important;
+            }
+            
+            /* Força expansão de todas as seções internas */
+            [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] section.main > div {
+                width: 100% !important;
+                max-width: 100% !important;
             }
         }
         
@@ -1932,78 +1939,64 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
     return pend
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
-if st.session_state.missao_ativa is None:
-    st.markdown('<h1 class="main-title">🎯 Central de Comando</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Selecione sua missão ou inicie um novo ciclo</p>', unsafe_allow_html=True)
+# Verificar se existe pelo menos uma missão cadastrada
+ed = get_editais(supabase)
+if not ed and st.session_state.missao_ativa is None:
+    # Primeira vez no app - mostrar tela de boas-vindas
+    st.markdown("""
+        <div style="text-align: center; padding: 60px 20px;">
+            <div style="font-size: 80px; margin-bottom: 20px;">🎯</div>
+            <h1 style="color: white; margin-bottom: 10px;">Bem-vindo ao MonitorPro!</h1>
+            <p style="color: #94A3B8; font-size: 1.2rem; margin-bottom: 40px;">
+                Sistema Inteligente de Gestão de Estudos
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    ed = get_editais(supabase)
-    tabs = st.tabs(["🚀 Missões Ativas", "➕ Novo Cadastro"])
+    st.markdown('<div class="modern-card" style="max-width: 600px; margin: 0 auto;">', unsafe_allow_html=True)
+    st.markdown("### 🚀 Crie sua primeira missão")
+    st.markdown("Para começar, cadastre o concurso ou edital que você está estudando:")
     
-    with tabs[0]:
-        if not ed: 
-            st.info("Nenhuma missão ativa no momento.")
+    with st.form("form_primeira_missao", clear_on_submit=True):
+        nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
+        cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
+        informar_data_prova = st.checkbox("Informar data da prova (opcional)")
+        if informar_data_prova:
+            data_prova_input = st.date_input("Data da Prova")
         else:
-            cols = st.columns(2)
-            for i, (nome, d_concurso) in enumerate(ed.items()):
-                with cols[i % 2]:
-                    st.markdown(f"""
-                        <div class="modern-card">
-                            <h3 style="margin:0; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{nome}</h3>
-                            <p style="color:#94A3B8; font-size:0.9rem; margin-bottom:15px;">{d_concurso['cargo']}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"Acessar Missão", key=f"ac_{nome}", use_container_width=True, type="primary"):
-                        st.session_state.missao_ativa = nome
-                        st.rerun()
-    
-    with tabs[1]:
-        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-        st.markdown("##### Cadastrar Novo Concurso/Edital")
-        with st.form("form_novo_concurso", clear_on_submit=True):
-            nome_concurso = st.text_input("Nome do Concurso", placeholder="Ex: Receita Federal, TJ-SP, etc.")
-            cargo_concurso = st.text_input("Cargo", placeholder="Ex: Auditor Fiscal, Escrevente, etc.")
-            informar_data_prova = st.checkbox("Informar data da prova (opcional)")
-            if informar_data_prova:
-                data_prova_input = st.date_input("Data da Prova")
+            data_prova_input = None
+        
+        btn_cadastrar = st.form_submit_button("🚀 CRIAR MISSÃO", use_container_width=True, type="primary")
+        
+        if btn_cadastrar:
+            if nome_concurso and cargo_concurso:
+                try:
+                    payload = {
+                        "concurso": nome_concurso,
+                        "cargo": cargo_concurso,
+                        "materia": "Geral",
+                        "topicos": ["Introdução"]
+                    }
+                    if data_prova_input:
+                        payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
+                    supabase.table("editais_materias").insert(payload).execute()
+                    st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
+                    time.sleep(1)
+                    st.session_state.missao_ativa = nome_concurso
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro ao cadastrar: {e}")
             else:
-                data_prova_input = None
-            
-            btn_cadastrar = st.form_submit_button("🚀 INICIAR MISSÃO", use_container_width=True, type="primary")
-            
-            if btn_cadastrar:
-                if nome_concurso and cargo_concurso:
-                    try:
-                        payload = {
-                            "concurso": nome_concurso,
-                            "cargo": cargo_concurso,
-                            "materia": "Geral",
-                            "topicos": ["Introdução"]
-                        }
-                        if data_prova_input:
-                            payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
-                        res_ins = supabase.table("editais_materias").insert(payload).execute()
-                        # confirmar inserção
-                        try:
-                            check = supabase.table("editais_materias").select("data_prova").eq("concurso", nome_concurso).execute()
-                            if check.data and len(check.data) > 0:
-                                st.success(f"✅ Missão '{nome_concurso}' criada com sucesso!")
-                                time.sleep(1)
-                                st.session_state.missao_ativa = nome_concurso
-                                st.rerun()
-                            else:
-                                st.warning("Missão criada, mas não foi possível confirmar 'data_prova' no banco. Verifique o supabase.")
-                        except Exception:
-                            st.success(f"✅ Missão '{nome_concurso}' criada (não foi possível confirmar via consulta).")
-                            time.sleep(1)
-                            st.session_state.missao_ativa = nome_concurso
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao cadastrar: {e}")
-                else:
-                    st.warning("⚠️ Por favor, preencha o nome e o cargo.")
-        st.markdown('</div>', unsafe_allow_html=True)
+                st.warning("⚠️ Por favor, preencha o nome e o cargo.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-else:
+# Se existem missões mas nenhuma está ativa, selecionar a primeira automaticamente
+elif st.session_state.missao_ativa is None and ed:
+    st.session_state.missao_ativa = list(ed.keys())[0]
+    st.rerun()
+
+# Fluxo normal do app com missão ativa
+if st.session_state.missao_ativa is not None:
     missao = st.session_state.missao_ativa
     # The `df` variable is now `df_estudos` due to the alias
     # `dados` is already loaded by `carregar_dados()`
@@ -2103,20 +2096,40 @@ else:
 
     # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
-        # Header compacto com título e botão de trocar missão
-        col_titulo, col_btn = st.columns([5, 1])
+        # SELETOR DE MISSÃO no topo
+        ed = get_editais(supabase)
+        if len(ed) > 1:
+            st.markdown('<div class="modern-card" style="padding: 15px; margin-bottom: 20px;">', unsafe_allow_html=True)
+            col_select, col_btn_trocar = st.columns([4, 1])
+            
+            with col_select:
+                # Criar lista de missões disponíveis
+                missoes_disponiveis = list(ed.keys())
+                indice_atual = missoes_disponiveis.index(missao) if missao in missoes_disponiveis else 0
+                
+                nova_missao = st.selectbox(
+                    "🎯 Missão Ativa",
+                    options=missoes_disponiveis,
+                    index=indice_atual,
+                    key="seletor_missao_home",
+                    label_visibility="collapsed"
+                )
+                
+                # Se mudou a missão, atualizar
+                if nova_missao != missao:
+                    st.session_state.missao_ativa = nova_missao
+                    st.rerun()
+            
+            with col_btn_trocar:
+                if st.button("⚙️", key="btn_config_missao", help="Ir para Configurações", use_container_width=True):
+                    st.session_state.menu_force = "Configurar"
+                    st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        with col_titulo:
-            st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
-            st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:0;">{dados.get(missao, {}).get("cargo", "")}</p>', unsafe_allow_html=True)
-        
-        with col_btn:
-            st.write("")  # Espaçamento vertical
-            if st.button("🔄 Trocar", key="btn_trocar_missao", help="Voltar à Central de Comando para selecionar outra missão", use_container_width=True):
-                st.session_state.missao_ativa = None
-                st.rerun()
-        
-        st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
+        # Header compacto com título
+        st.markdown(f'<h1 style="background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:2rem; margin-bottom:0;">{missao}</h1>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:#94A3B8; font-size:1rem; margin-bottom:20px;">{dados.get("cargo", "")}</p>', unsafe_allow_html=True)
         
         if df_estudos.empty:
             st.info("Ainda não há registros. Faça seu primeiro estudo para preencher o painel.")
@@ -4093,11 +4106,15 @@ else:
         st.markdown('<h2 class="main-title">⚙️ Configurações</h2>', unsafe_allow_html=True)
         st.markdown('<p class="section-subtitle">Gerenciar missões e preferências globais</p>', unsafe_allow_html=True)
 
-        # SEÇÃO: TROCAR MISSÃO (Conforme Plano de Profissionalização)
-        with st.container():
-            st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-            st.markdown('### 📌 Seleção de Missão Foco', unsafe_allow_html=True)
+        # SEÇÃO: GERENCIAR MISSÕES
+        st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+        st.markdown('### 🎯 Gerenciar Missões', unsafe_allow_html=True)
         
+        # Tabs para organizar: Selecionar | Cadastrar | Excluir
+        tabs_missoes = st.tabs(["📌 Selecionar Missão", "➕ Cadastrar Nova", "🗑️ Excluir Missão"])
+        
+        # TAB 1: SELECIONAR MISSÃO
+        with tabs_missoes[0]:
             ed = get_editais(supabase)
             if ed:
                 nomes_missoes = list(ed.keys())
@@ -4110,20 +4127,116 @@ else:
                     "Selecione o concurso que deseja focar agora:",
                     options=nomes_missoes,
                     index=indice_atual,
-                    help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida."
+                    help="Isso alterará os dados exibidos em todo o aplicativo de acordo com a missão escolhida.",
+                    key="select_missao_config"
                 )
             
-                if nova_missao != missao:
-                    st.session_state.missao_ativa = nova_missao
-                    st.success(f"✅ Missão alterada para: {nova_missao}")
-                    time.sleep(1)
-                    st.rerun()
+                if st.button("✅ Aplicar Mudança", use_container_width=True, type="primary"):
+                    if nova_missao != missao:
+                        st.session_state.missao_ativa = nova_missao
+                        st.success(f"✅ Missão alterada para: {nova_missao}")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.info("Esta missão já está ativa.")
             else:
-                st.warning("Nenhuma missão cadastrada encontrada.")
-                if st.button("➕ Cadastrar Nova Missão"):
-                    st.session_state.missao_ativa = None
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.warning("Nenhuma missão cadastrada. Use a aba 'Cadastrar Nova' para começar.")
+        
+        # TAB 2: CADASTRAR NOVA MISSÃO
+        with tabs_missoes[1]:
+            st.markdown("Preencha os dados abaixo para criar uma nova missão:")
+            
+            with st.form("form_cadastrar_nova_missao"):
+                nome_novo_concurso = st.text_input(
+                    "Nome do Concurso", 
+                    placeholder="Ex: Receita Federal, TJ-SP, PCDF",
+                    key="input_novo_concurso"
+                )
+                cargo_novo_concurso = st.text_input(
+                    "Cargo", 
+                    placeholder="Ex: Auditor Fiscal, Escrevente, Delegado",
+                    key="input_novo_cargo"
+                )
+                
+                col_data1, col_data2 = st.columns([1, 2])
+                with col_data1:
+                    informar_data = st.checkbox("Informar data da prova", key="check_data_nova")
+                with col_data2:
+                    if informar_data:
+                        data_nova_prova = st.date_input("Data da Prova", key="input_data_nova")
+                    else:
+                        data_nova_prova = None
+                
+                btn_criar = st.form_submit_button("🚀 Criar Missão", use_container_width=True, type="primary")
+                
+                if btn_criar:
+                    if nome_novo_concurso and cargo_novo_concurso:
+                        try:
+                            # Verificar se já existe
+                            check_existente = supabase.table("editais_materias").select("*").eq("concurso", nome_novo_concurso).execute()
+                            if check_existente.data:
+                                st.error(f"❌ Já existe uma missão com o nome '{nome_novo_concurso}'!")
+                            else:
+                                payload = {
+                                    "concurso": nome_novo_concurso,
+                                    "cargo": cargo_novo_concurso,
+                                    "materia": "Geral",
+                                    "topicos": ["Introdução"]
+                                }
+                                if data_nova_prova:
+                                    payload["data_prova"] = data_nova_prova.strftime("%Y-%m-%d")
+                                
+                                supabase.table("editais_materias").insert(payload).execute()
+                                st.success(f"✅ Missão '{nome_novo_concurso}' criada com sucesso!")
+                                st.info("💡 Você pode ativá-la na aba 'Selecionar Missão' ou no HOME.")
+                                time.sleep(2)
+                                st.cache_data.clear()
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao criar missão: {e}")
+                    else:
+                        st.warning("⚠️ Por favor, preencha o nome do concurso e o cargo.")
+        
+        # TAB 3: EXCLUIR MISSÃO
+        with tabs_missoes[2]:
+            ed_exclusao = get_editais(supabase)
+            if not ed_exclusao:
+                st.info("Nenhuma missão disponível para exclusão.")
+            else:
+                st.warning("⚠️ **ATENÇÃO**: Esta ação é irreversível e excluirá TODOS os dados da missão!")
+                
+                missao_para_excluir = st.selectbox(
+                    "Selecione a missão que deseja excluir:",
+                    options=list(ed_exclusao.keys()),
+                    key="select_missao_excluir"
+                )
+                
+                confirmar_exclusao = st.checkbox(
+                    f"✅ Confirmo que quero excluir permanentemente a missão '{missao_para_excluir}'",
+                    key="confirm_exclusao_missao"
+                )
+                
+                if confirmar_exclusao:
+                    if st.button("🗑️ EXCLUIR MISSÃO PERMANENTEMENTE", type="primary", use_container_width=True):
+                        try:
+                            if excluir_concurso_completo(supabase, missao_para_excluir):
+                                st.success(f"✅ Missão '{missao_para_excluir}' excluída com sucesso!")
+                                
+                                # Se era a missão ativa, resetar
+                                if missao_para_excluir == missao:
+                                    st.session_state.missao_ativa = None
+                                
+                                time.sleep(2)
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao excluir missão.")
+                        except Exception as e:
+                            st.error(f"❌ Erro: {e}")
+                else:
+                    st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
 
@@ -4567,36 +4680,5 @@ else:
                             st.error(f"❌ Erro ao adicionar matéria: {e}")
                     else:
                         st.warning("⚠️ Por favor, informe o nome da matéria.")
-        
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Botão para excluir o concurso
-        st.divider()
-        st.markdown("### ⚠️ Zona de Perigo")
-    
-        with st.container():
-            st.markdown('<div class="modern-card" style="border: 2px solid rgba(255, 75, 75, 0.3); background: rgba(255, 75, 75, 0.05);">', unsafe_allow_html=True)
-        
-            st.warning("Esta ação é irreversível!")
-        
-            # Checkbox de confirmação ANTES do botão (para funcionar corretamente com Streamlit)
-            confirmacao_exclusao = st.checkbox(
-                "✅ Confirmo que quero excluir TODOS os dados desta missão", 
-                key="confirm_delete_mission"
-            )
-        
-            # Botão só aparece habilitado se checkbox estiver marcado
-            if confirmacao_exclusao:
-                st.error("⚠️ ATENÇÃO: Ao clicar no botão abaixo, todos os dados serão perdidos!")
-                if st.button("🗑️ EXCLUIR MISSÃO PERMANENTEMENTE", type="primary", use_container_width=True):
-                    if excluir_concurso_completo(supabase, missao):  # Função do logic.py
-                        st.success("Missão excluída! Redirecionando...")
-                        st.session_state.missao_ativa = None
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao excluir missão. Tente novamente.")
-            else:
-                st.info("👆 Marque a caixa acima para habilitar o botão de exclusão.")
         
             st.markdown('</div>', unsafe_allow_html=True)
