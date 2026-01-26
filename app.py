@@ -2287,13 +2287,14 @@ if not ed and st.session_state.missao_ativa is None:
         if btn_cadastrar:
             if nome_concurso and cargo_concurso:
                 try:
-        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
+        # MULTI-USER: user_id adicionado ✅
                     payload = {
                         "concurso": nome_concurso,
                         "cargo": cargo_concurso,
                         "materia": "Geral",
                         "topicos": ["Introdução"],
-                        "is_principal": marcar_principal
+                        "is_principal": marcar_principal,
+                        "user_id": user_id
                     }
                     if data_prova_input:
                         payload["data_prova"] = data_prova_input.strftime("%Y-%m-%d")
@@ -3581,7 +3582,7 @@ if st.session_state.missao_ativa is not None:
                             # Se não houver matéria, usar "Simulado" como matéria
                             materia_final = materia_questao if materia_questao else simulado_questao
                             
-        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
+        # MULTI-USER: user_id adicionado ✅
                             payload = {
                                 "concurso": missao,
                                 "data": data_questao_db,
@@ -3592,7 +3593,8 @@ if st.session_state.missao_ativa is not None:
                                 "meta": meta_questao,
                                 "anotacoes": anotacoes_questao,
                                 "status": "Pendente",
-                                "tags": tags_list
+                                "tags": tags_list,
+                                "user_id": user_id
                             }
                             
                             supabase.table("questoes_revisao").insert(payload).execute()
@@ -5156,13 +5158,14 @@ if st.session_state.missao_ativa is not None:
                                 if marcar_como_principal:
                                     supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).eq("user_id", user_id).execute()
                                 
-        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
+        # MULTI-USER: user_id adicionado ✅
                                 payload = {
                                     "concurso": nome_novo_concurso,
                                     "cargo": cargo_novo_concurso,
                                     "materia": "Geral",
                                     "topicos": ["Introdução"],
-                                    "is_principal": marcar_como_principal
+                                    "is_principal": marcar_como_principal,
+                                    "user_id": user_id
                                 }
                                 if data_nova_prova:
                                     payload["data_prova"] = data_nova_prova.strftime("%Y-%m-%d")
@@ -5660,12 +5663,13 @@ if st.session_state.missao_ativa is not None:
                                     assuntos_iniciais = ["Geral"]
                             
                                 # Adicionar nova matéria
-        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
+        # MULTI-USER: user_id adicionado ✅
                                 payload = {
                                     "concurso": missao,
                                     "cargo": cargo_atual,
                                     "materia": nova_materia,
-                                    "topicos": assuntos_iniciais
+                                    "topicos": assuntos_iniciais,
+                                    "user_id": user_id
                                 }
                                 # Se houver data_prova, incluir
                                 if data_prova_direta:
