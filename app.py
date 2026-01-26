@@ -1,3 +1,5 @@
+[file name]: app (5).py
+[file content begin]
 import streamlit as st
 import pandas as pd
 import datetime
@@ -314,8 +316,8 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.set_y(max(y1, y2, y3) + 12)
     pdf.set_x(10)
     
-    # Linha divisória
-    pdf.set_draw_color(139, 92, 246, 50)
+    # Linha divisória - CORREÇÃO AQUI: removido o quarto parâmetro (50)
+    pdf.set_draw_color(139, 92, 246)
     pdf.set_line_width(0.3)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(5)
@@ -5025,6 +5027,5 @@ if st.session_state.missao_ativa is not None:
                         except Exception as e:
                             st.error(f"❌ Erro ao adicionar matéria: {e}")
                     else:
-                        st.warning("⚠️ Por favor, informe o nome da matéria.")
-        
-            st.markdown('</div>', unsafe_allow_html=True)
+                        st.warning("⚠️ Por favor, preencha o nome da matéria.")
+[file content end]
