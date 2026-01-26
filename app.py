@@ -2188,8 +2188,8 @@ if st.session_state.missao_ativa is not None:
         # Menu Premium com option_menu
         menu_selecionado = option_menu(
             menu_title=None,
-            options=["HOME", "GUIA SEMANAL", "REVISÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
-            icons=["house", "calendar3", "arrow-repeat", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
+            options=["HOME", "GUIA SEMANAL", "REVISÕES", "QUESTÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
+            icons=["house", "calendar3", "arrow-repeat", "question-circle", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -2226,6 +2226,7 @@ if st.session_state.missao_ativa is not None:
             "HOME": "Home",
             "GUIA SEMANAL": "Guia Semanal",
             "REVISÕES": "Revisões",
+            "QUESTÕES": "Questões",
             "REGISTRAR": "Registrar",
             "DASHBOARD": "Dashboard",
             "SIMULADOS": "Simulados",
@@ -3045,6 +3046,453 @@ if st.session_state.missao_ativa is not None:
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ Erro: {e}")
+
+    # --- ABA: QUESTÕES (BANCO DE QUESTÕES PARA REVISÃO) ---
+    elif menu == "Questões":
+        st.markdown('<h2 class="main-title">❓ Banco de Questões para Revisão</h2>', unsafe_allow_html=True)
+        
+        # Tabs para organizar a interface
+        tab_lista, tab_adicionar, tab_stats = st.tabs(["📋 Minhas Questões", "➕ Adicionar Questão", "📊 Estatísticas"])
+        
+        # ========== TAB: LISTA DE QUESTÕES ==========
+        with tab_lista:
+            # Buscar questões do Supabase
+            try:
+                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).execute()
+                questoes = response.data if response.data else []
+            except Exception as e:
+                st.error(f"❌ Erro ao carregar questões: {e}")
+                questoes = []
+            
+            if questoes:
+                # Filtros
+                st.markdown("### 🔍 Filtros")
+                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+                
+                with col_f1:
+                    materias_disponiveis = sorted(list(set([q.get('materia', '') for q in questoes if q.get('materia')])))
+                    filtro_materia = st.selectbox("Matéria", ["Todas"] + materias_disponiveis, key="filtro_materia_q")
+                
+                with col_f2:
+                    filtro_status = st.selectbox("Status", ["Todas", "Pendente", "Em andamento", "Concluída"], key="filtro_status_q")
+                
+                with col_f3:
+                    filtro_relevancia = st.selectbox("Relevância", ["Todas", "Alta (8-10)", "Média (5-7)", "Baixa (1-4)"], key="filtro_rel_q")
+                
+                with col_f4:
+                    ordem = st.selectbox("Ordenar por", ["Data (mais recente)", "Data (mais antiga)", "Relevância (maior)", "Relevância (menor)"], key="ordem_q")
+                
+                # Aplicar filtros
+                questoes_filtradas = questoes.copy()
+                
+                if filtro_materia != "Todas":
+                    questoes_filtradas = [q for q in questoes_filtradas if q.get('materia') == filtro_materia]
+                
+                if filtro_status != "Todas":
+                    questoes_filtradas = [q for q in questoes_filtradas if q.get('status', 'Pendente') == filtro_status]
+                
+                if filtro_relevancia == "Alta (8-10)":
+                    questoes_filtradas = [q for q in questoes_filtradas if q.get('relevancia', 5) >= 8]
+                elif filtro_relevancia == "Média (5-7)":
+                    questoes_filtradas = [q for q in questoes_filtradas if 5 <= q.get('relevancia', 5) <= 7]
+                elif filtro_relevancia == "Baixa (1-4)":
+                    questoes_filtradas = [q for q in questoes_filtradas if q.get('relevancia', 5) <= 4]
+                
+                # Ordenar
+                if ordem == "Data (mais recente)":
+                    questoes_filtradas = sorted(questoes_filtradas, key=lambda x: x.get('data', ''), reverse=True)
+                elif ordem == "Data (mais antiga)":
+                    questoes_filtradas = sorted(questoes_filtradas, key=lambda x: x.get('data', ''))
+                elif ordem == "Relevância (maior)":
+                    questoes_filtradas = sorted(questoes_filtradas, key=lambda x: x.get('relevancia', 5), reverse=True)
+                elif ordem == "Relevância (menor)":
+                    questoes_filtradas = sorted(questoes_filtradas, key=lambda x: x.get('relevancia', 5))
+                
+                st.markdown("---")
+                
+                if not questoes_filtradas:
+                    st.info("Nenhuma questão encontrada com os filtros aplicados.")
+                else:
+                    # Ações em massa
+                    with st.expander("⚡ Ações em Massa"):
+                        col_a1, col_a2, col_a3 = st.columns(3)
+                        
+                        with col_a1:
+                            if st.button("✅ Marcar todas como concluídas", use_container_width=True):
+                                try:
+                                    ids_para_atualizar = [q['id'] for q in questoes_filtradas]
+                                    for qid in ids_para_atualizar:
+                                        supabase.table("questoes_revisao").update({"status": "Concluída"}).eq("id", qid).execute()
+                                    st.success(f"✅ {len(ids_para_atualizar)} questões marcadas como concluídas!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro: {e}")
+                        
+                        with col_a2:
+                            if st.button("🔄 Reiniciar revisões", use_container_width=True):
+                                try:
+                                    ids_para_atualizar = [q['id'] for q in questoes_filtradas]
+                                    for qid in ids_para_atualizar:
+                                        supabase.table("questoes_revisao").update({"status": "Pendente"}).eq("id", qid).execute()
+                                    st.success(f"✅ {len(ids_para_atualizar)} questões reiniciadas!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro: {e}")
+                        
+                        with col_a3:
+                            if st.button("🗑️ Limpar concluídas", use_container_width=True, type="primary"):
+                                try:
+                                    ids_concluidas = [q['id'] for q in questoes_filtradas if q.get('status') == 'Concluída']
+                                    for qid in ids_concluidas:
+                                        supabase.table("questoes_revisao").delete().eq("id", qid).execute()
+                                    st.success(f"✅ {len(ids_concluidas)} questões concluídas removidas!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro: {e}")
+                    
+                    st.markdown(f"### 📚 {len(questoes_filtradas)} questões encontradas")
+                    
+                    # Exibir questões em cards
+                    for idx, q in enumerate(questoes_filtradas):
+                        questao_id = q.get('id')
+                        data = q.get('data', '')
+                        materia = q.get('materia', 'Sem matéria')
+                        assunto = q.get('assunto', '')
+                        simulado = q.get('simulado', '')
+                        relevancia = q.get('relevancia', 5)
+                        meta = q.get('meta', 0)
+                        anotacoes = q.get('anotacoes', '')
+                        status = q.get('status', 'Pendente')
+                        tags = q.get('tags', [])
+                        
+                        # Cores baseadas em status
+                        if status == 'Concluída':
+                            border_color = COLORS["success"]
+                            status_icon = "✅"
+                            bg_color = "rgba(16, 185, 129, 0.05)"
+                        elif status == 'Em andamento':
+                            border_color = COLORS["warning"]
+                            status_icon = "🔄"
+                            bg_color = "rgba(245, 158, 11, 0.05)"
+                        else:
+                            border_color = COLORS["primary"]
+                            status_icon = "⏳"
+                            bg_color = "rgba(139, 92, 246, 0.05)"
+                        
+                        # Barra de relevância
+                        rel_percent = (relevancia / 10) * 100
+                        if relevancia >= 8:
+                            rel_color = COLORS["danger"]
+                        elif relevancia >= 5:
+                            rel_color = COLORS["warning"]
+                        else:
+                            rel_color = COLORS["success"]
+                        
+                        with st.expander(f"{status_icon} {materia} - {assunto or 'Sem assunto'} | Relevância: {relevancia}/10", expanded=False):
+                            st.markdown(f"""
+                                <div style="
+                                    background: {bg_color};
+                                    border-left: 4px solid {border_color};
+                                    padding: 15px;
+                                    border-radius: 8px;
+                                    margin-bottom: 10px;
+                                ">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                        <span style="color: {COLORS['text_secondary']}; font-size: 0.85rem;">📅 {data}</span>
+                                        <span style="background: {border_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{status}</span>
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown(f"**📚 Matéria:** {materia}")
+                                st.markdown(f"**📖 Assunto:** {assunto or 'Não especificado'}")
+                                st.markdown(f"**📝 Simulado:** {simulado or 'Não especificado'}")
+                            
+                            with col2:
+                                st.markdown(f"**⭐ Relevância:** {relevancia}/10")
+                                st.progress(rel_percent / 100)
+                                st.markdown(f"**🎯 Meta:** {meta}")
+                                if tags:
+                                    tags_html = " ".join([f'<span style="background: {COLORS["secondary"]}; color: white; padding: 3px 8px; border-radius: 8px; font-size: 0.7rem; margin-right: 5px;">#{tag}</span>' for tag in tags])
+                                    st.markdown(f"**🏷️ Tags:** {tags_html}", unsafe_allow_html=True)
+                            
+                            if anotacoes:
+                                st.markdown("---")
+                                st.markdown(f"**📝 Anotações:**")
+                                st.markdown(f"<div style='background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; font-size: 0.9rem;'>{anotacoes}</div>", unsafe_allow_html=True)
+                            
+                            # Ações
+                            st.markdown("---")
+                            col_a1, col_a2, col_a3, col_a4 = st.columns(4)
+                            
+                            with col_a1:
+                                novo_status = st.selectbox(
+                                    "Status",
+                                    ["Pendente", "Em andamento", "Concluída"],
+                                    index=["Pendente", "Em andamento", "Concluída"].index(status),
+                                    key=f"status_{questao_id}"
+                                )
+                                if novo_status != status:
+                                    try:
+                                        supabase.table("questoes_revisao").update({"status": novo_status}).eq("id", questao_id).execute()
+                                        st.success("✅ Status atualizado!")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro: {e}")
+                            
+                            with col_a2:
+                                if st.button("✏️ Editar", key=f"edit_{questao_id}", use_container_width=True):
+                                    st.session_state[f"editando_{questao_id}"] = True
+                                    st.rerun()
+                            
+                            with col_a3:
+                                if st.button("🗑️ Excluir", key=f"del_{questao_id}", use_container_width=True, type="primary"):
+                                    try:
+                                        supabase.table("questoes_revisao").delete().eq("id", questao_id).execute()
+                                        st.success("✅ Questão excluída!")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro: {e}")
+                            
+                            with col_a4:
+                                # Incrementar meta
+                                if st.button("➕ Meta", key=f"meta_{questao_id}", use_container_width=True):
+                                    try:
+                                        nova_meta = meta + 1
+                                        supabase.table("questoes_revisao").update({"meta": nova_meta}).eq("id", questao_id).execute()
+                                        st.success(f"✅ Meta: {nova_meta}")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro: {e}")
+                            
+                            # Modal de edição
+                            if st.session_state.get(f"editando_{questao_id}", False):
+                                st.markdown("---")
+                                st.markdown("### ✏️ Editando Questão")
+                                
+                                with st.form(f"form_edit_{questao_id}"):
+                                    col_e1, col_e2 = st.columns(2)
+                                    
+                                    with col_e1:
+                                        nova_data = st.date_input("Data", value=datetime.datetime.strptime(data, "%Y-%m-%d").date() if data else datetime.date.today(), key=f"nova_data_{questao_id}")
+                                        nova_materia = st.text_input("Matéria", value=materia, key=f"nova_materia_{questao_id}")
+                                        novo_assunto = st.text_input("Assunto", value=assunto, key=f"novo_assunto_{questao_id}")
+                                        novo_simulado = st.text_input("Simulado", value=simulado, key=f"novo_simulado_{questao_id}")
+                                    
+                                    with col_e2:
+                                        nova_relevancia = st.slider("Relevância", 1, 10, value=relevancia, key=f"nova_rel_{questao_id}")
+                                        nova_meta = st.number_input("Meta", min_value=0, value=meta, key=f"nova_meta_{questao_id}")
+                                        novas_tags = st.text_input("Tags (separadas por vírgula)", value=", ".join(tags) if tags else "", key=f"novas_tags_{questao_id}")
+                                    
+                                    novas_anotacoes = st.text_area("Anotações", value=anotacoes, height=100, key=f"novas_anot_{questao_id}")
+                                    
+                                    col_s1, col_s2 = st.columns(2)
+                                    
+                                    with col_s1:
+                                        if st.form_submit_button("💾 Salvar", use_container_width=True):
+                                            try:
+                                                tags_list = [t.strip() for t in novas_tags.split(",") if t.strip()]
+                                                
+                                                payload = {
+                                                    "data": str(nova_data),
+                                                    "materia": nova_materia,
+                                                    "assunto": novo_assunto,
+                                                    "simulado": novo_simulado,
+                                                    "relevancia": nova_relevancia,
+                                                    "meta": nova_meta,
+                                                    "anotacoes": novas_anotacoes,
+                                                    "tags": tags_list
+                                                }
+                                                
+                                                supabase.table("questoes_revisao").update(payload).eq("id", questao_id).execute()
+                                                st.success("✅ Questão atualizada!")
+                                                st.session_state[f"editando_{questao_id}"] = False
+                                                time.sleep(1)
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"❌ Erro: {e}")
+                                    
+                                    with col_s2:
+                                        if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                                            st.session_state[f"editando_{questao_id}"] = False
+                                            st.rerun()
+                
+                # Exportar para CSV
+                st.markdown("---")
+                if st.button("📥 Exportar para CSV", use_container_width=True):
+                    try:
+                        df_export = pd.DataFrame(questoes_filtradas)
+                        csv = df_export.to_csv(index=False)
+                        st.download_button(
+                            label="💾 Baixar CSV",
+                            data=csv,
+                            file_name=f"questoes_{missao}_{datetime.date.today()}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"❌ Erro ao exportar: {e}")
+            else:
+                st.info("📚 Nenhuma questão cadastrada ainda. Use a aba 'Adicionar Questão' para começar!")
+        
+        # ========== TAB: ADICIONAR QUESTÃO ==========
+        with tab_adicionar:
+            st.markdown("### ➕ Nova Questão")
+            
+            with st.form("form_nova_questao"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    data_questao = st.date_input("📅 Data", value=datetime.date.today())
+                    materia_questao = st.text_input("📚 Matéria *", placeholder="Ex: Direito Constitucional")
+                    assunto_questao = st.text_input("📖 Assunto", placeholder="Ex: Princípios fundamentais")
+                    simulado_questao = st.text_input("📝 Simulado", placeholder="Ex: Simulado CESPE 2024")
+                
+                with col2:
+                    relevancia_questao = st.slider("⭐ Relevância", 1, 10, 5, help="1 = Pouco importante, 10 = Muito importante")
+                    meta_questao = st.number_input("🎯 Meta", min_value=0, value=0, help="Número de revisões planejadas ou outro objetivo")
+                    tags_questao = st.text_input("🏷️ Tags", placeholder="Ex: difícil, importante, recorrente", help="Separadas por vírgula")
+                
+                anotacoes_questao = st.text_area(
+                    "📝 Anotações",
+                    placeholder="Cole aqui links, observações, dicas, ou qualquer informação relevante...",
+                    height=150
+                )
+                
+                if st.form_submit_button("💾 Salvar Questão", use_container_width=True, type="primary"):
+                    if not materia_questao:
+                        st.error("⚠️ A matéria é obrigatória!")
+                    else:
+                        try:
+                            # Processar tags
+                            tags_list = [t.strip() for t in tags_questao.split(",") if t.strip()] if tags_questao else []
+                            
+                            payload = {
+                                "concurso": missao,
+                                "data": str(data_questao),
+                                "materia": materia_questao,
+                                "assunto": assunto_questao,
+                                "simulado": simulado_questao,
+                                "relevancia": relevancia_questao,
+                                "meta": meta_questao,
+                                "anotacoes": anotacoes_questao,
+                                "status": "Pendente",
+                                "tags": tags_list
+                            }
+                            
+                            supabase.table("questoes_revisao").insert(payload).execute()
+                            st.success("✅ Questão adicionada com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao salvar questão: {e}")
+        
+        # ========== TAB: ESTATÍSTICAS ==========
+        with tab_stats:
+            st.markdown("### 📊 Estatísticas do Banco de Questões")
+            
+            try:
+                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).execute()
+                todas_questoes = response.data if response.data else []
+            except:
+                todas_questoes = []
+            
+            if todas_questoes:
+                # Métricas gerais
+                col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                
+                total = len(todas_questoes)
+                pendentes = len([q for q in todas_questoes if q.get('status') == 'Pendente'])
+                em_andamento = len([q for q in todas_questoes if q.get('status') == 'Em andamento'])
+                concluidas = len([q for q in todas_questoes if q.get('status') == 'Concluída'])
+                
+                with col_m1:
+                    render_circular_progress(100, "TOTAL", str(total), COLORS["primary"], COLORS["secondary"], 100, "📚")
+                
+                with col_m2:
+                    perc_pend = (pendentes / total * 100) if total > 0 else 0
+                    render_circular_progress(perc_pend, "PENDENTES", str(pendentes), COLORS["primary"], COLORS["accent"], 100, "⏳")
+                
+                with col_m3:
+                    perc_and = (em_andamento / total * 100) if total > 0 else 0
+                    render_circular_progress(perc_and, "EM ANDAMENTO", str(em_andamento), COLORS["warning"], COLORS["accent"], 100, "🔄")
+                
+                with col_m4:
+                    perc_conc = (concluidas / total * 100) if total > 0 else 0
+                    render_circular_progress(perc_conc, "CONCLUÍDAS", str(concluidas), COLORS["success"], COLORS["secondary"], 100, "✅")
+                
+                st.markdown("---")
+                
+                # Gráficos
+                col_g1, col_g2 = st.columns(2)
+                
+                with col_g1:
+                    # Gráfico por matéria
+                    st.markdown("#### 📚 Questões por Matéria")
+                    materias_count = {}
+                    for q in todas_questoes:
+                        mat = q.get('materia', 'Sem matéria')
+                        materias_count[mat] = materias_count.get(mat, 0) + 1
+                    
+                    if materias_count:
+                        df_materias = pd.DataFrame(list(materias_count.items()), columns=['Matéria', 'Quantidade'])
+                        fig_materias = px.bar(df_materias, x='Matéria', y='Quantidade', color='Quantidade',
+                                             color_continuous_scale='Viridis')
+                        fig_materias.update_layout(
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            font_color=COLORS["text_primary"],
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_materias, use_container_width=True)
+                
+                with col_g2:
+                    # Gráfico por relevância
+                    st.markdown("#### ⭐ Distribuição de Relevância")
+                    relevancia_count = {i: 0 for i in range(1, 11)}
+                    for q in todas_questoes:
+                        rel = q.get('relevancia', 5)
+                        relevancia_count[rel] = relevancia_count.get(rel, 0) + 1
+                    
+                    df_rel = pd.DataFrame(list(relevancia_count.items()), columns=['Relevância', 'Quantidade'])
+                    fig_rel = px.line(df_rel, x='Relevância', y='Quantidade', markers=True)
+                    fig_rel.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font_color=COLORS["text_primary"]
+                    )
+                    fig_rel.update_traces(line_color=COLORS["secondary"], marker_color=COLORS["primary"])
+                    st.plotly_chart(fig_rel, use_container_width=True)
+                
+                # Questões mais relevantes
+                st.markdown("---")
+                st.markdown("#### 🔥 Top 5 Questões Mais Relevantes")
+                
+                questoes_ordenadas = sorted(todas_questoes, key=lambda x: x.get('relevancia', 0), reverse=True)[:5]
+                
+                for q in questoes_ordenadas:
+                    col_t1, col_t2, col_t3 = st.columns([3, 1, 1])
+                    
+                    with col_t1:
+                        st.markdown(f"**{q.get('materia', 'Sem matéria')}** - {q.get('assunto', 'Sem assunto')}")
+                    
+                    with col_t2:
+                        st.markdown(f"⭐ **{q.get('relevancia', 0)}/10**")
+                    
+                    with col_t3:
+                        status_emoji = {"Pendente": "⏳", "Em andamento": "🔄", "Concluída": "✅"}
+                        st.markdown(f"{status_emoji.get(q.get('status', 'Pendente'), '⏳')} {q.get('status', 'Pendente')}")
+            else:
+                st.info("📊 Sem dados para exibir. Adicione questões primeiro!")
 
     # --- ABA: REGISTRAR (COM VALIDAÇÃO DE TEMPO HHMM) ---
     elif menu == "Registrar":
