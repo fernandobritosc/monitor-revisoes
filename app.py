@@ -5026,4 +5026,3 @@ if st.session_state.missao_ativa is not None:
                             st.error(f"❌ Erro ao adicionar matéria: {e}")
                     else:
                         st.warning("⚠️ Por favor, preencha o nome da matéria.")
-[file content end]
