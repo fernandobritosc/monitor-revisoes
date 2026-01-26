@@ -30,8 +30,8 @@ COLORS = {
     "border": "rgba(139, 92, 246, 0.15)",
 }
 
-# --- FUNÇÃO: Anel circular de progresso (SVG) - VERSÃO RESPONSIVA ---
-def render_circular_progress(percentage, label, value, color_start=None, color_end=None, size=120, icon=""):
+# --- FUNÇÃO: Anel circular de progresso (SVG) - VERSÃO RESPONSIVA COM TOOLTIP ---
+def render_circular_progress(percentage, label, value, color_start=None, color_end=None, size=120, icon="", tooltip=""):
     """Renderiza um anel circular de progresso com SVG - Totalmente Responsivo"""
     if color_start is None:
         color_start = COLORS["primary"]
@@ -61,8 +61,12 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
-        " onmouseover="if(window.innerWidth > 768) {{ this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.boxShadow='0 0 30px rgba(139, 92, 246, 0.2)'; }}"
-        onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.boxShadow='none';">
+            cursor: help;
+            position: relative;
+        " title="{tooltip if tooltip else label}"
+        onmouseover="if(window.innerWidth > 768) {{ this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.boxShadow='0 0 30px rgba(139, 92, 246, 0.2)'; }}"
+        onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.boxShadow='none';"
+        aria-label="{label}: {value}">
             <div style="
                 position: relative; 
                 width: min({size}px, 30vw, 90%); 
@@ -71,7 +75,7 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
                 max-height: {size}px;
                 margin: 0 auto 10px auto;
             ">
-                <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+                <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 100%; height: 100%;" aria-hidden="true">
                     <defs>
                         <linearGradient id="{gradient_id}" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" style="stop-color:{color_start};stop-opacity:1" />
@@ -91,7 +95,7 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
                     text-align: center;
                     width: 100%;
                 ">
-                    <div style="font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: 2px;">{icon}</div>
+                    <div style="font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: 2px;" aria-hidden="true">{icon}</div>
                     <div style="font-size: clamp(1.1rem, 3.5vw, 1.4rem); font-weight: 800; color: #fff; white-space: nowrap;">{value}</div>
                 </div>
             </div>
@@ -109,7 +113,7 @@ def render_circular_progress(percentage, label, value, color_start=None, color_e
     """, unsafe_allow_html=True)
 
 # ============================================================================
-# 📄 GERAÇÃO DE RELATÓRIOS PDF
+# 📄 GERAÇÃO DE RELATÓRIOS PDF - VERSÃO MELHORADA
 # ============================================================================
 
 def fix_text(text):
@@ -119,11 +123,34 @@ def fix_text(text):
     """
     if text is None:
         return ""
+    
+    # Mapeamento de caracteres problemáticos
+    char_map = {
+        'ç': 'c', 'Ç': 'C',
+        'ã': 'a', 'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a',
+        'Ã': 'A', 'Á': 'A', 'À': 'A', 'Â': 'A', 'Ä': 'A',
+        'é': 'e', 'ê': 'e', 'è': 'e', 'ë': 'e',
+        'É': 'E', 'Ê': 'E', 'È': 'E', 'Ë': 'E',
+        'í': 'i', 'î': 'i', 'ì': 'i', 'ï': 'i',
+        'Í': 'I', 'Î': 'I', 'Ì': 'I', 'Ï': 'I',
+        'ó': 'o', 'ô': 'o', 'ò': 'o', 'õ': 'o', 'ö': 'o',
+        'Ó': 'O', 'Ô': 'O', 'Ò': 'O', 'Õ': 'O', 'Ö': 'O',
+        'ú': 'u', 'û': 'u', 'ù': 'u', 'ü': 'u',
+        'Ú': 'U', 'Û': 'U', 'Ù': 'U', 'Ü': 'U',
+        'ñ': 'n', 'Ñ': 'N',
+        'º': 'o', 'ª': 'a',
+        '§': 'S', '®': '(R)', '©': '(C)', '™': '(TM)',
+        '€': 'EUR', '£': 'GBP', '¥': 'JPY', '$': 'USD'
+    }
+    
+    text = str(text)
+    for orig, repl in char_map.items():
+        text = text.replace(orig, repl)
+    
     try:
-        # Normalizar para Latin-1, substituindo erros por '?'
-        return str(text).encode('latin-1', 'replace').decode('latin-1')
+        return text.encode('latin-1', 'replace').decode('latin-1')
     except Exception:
-        return str(text)
+        return text
 
 class EstudoPDF(FPDF):
     def header(self):
@@ -157,16 +184,16 @@ def safe_pdf_output(pdf):
         # Fallback de emergência
         return str(e).encode('utf-8')
 
-# --- NOVA VERSÃO: RELATÓRIO ESTRATÉGICO MODERNO ---
+# --- NOVA VERSÃO: RELATÓRIO ESTRATÉGICO MODERNO COM SUMÁRIO ---
 def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf = EstudoPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
     # --- CABEÇALHO DO RELATÓRIO ---
-    pdf.set_font('Arial', 'B', 16)
+    pdf.set_font('Arial', 'B', 18)
     pdf.set_text_color(139, 92, 246) # Roxo Primary
-    pdf.cell(0, 10, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), 0, 1, 'C')
+    pdf.cell(0, 12, fix_text('RELATÓRIO ESTRATÉGICO DE DESEMPENHO'), 0, 1, 'C')
     
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(100, 100, 100)
@@ -177,6 +204,25 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     pdf.set_text_color(150, 150, 150)
     pdf.cell(0, 5, fix_text(f'Gerado em: {agora_br.strftime("%d/%m/%Y %H:%M")}'), 0, 1, 'C')
     pdf.ln(5)
+    
+    # --- SUMÁRIO ---
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 10, fix_text('📋 ÍNDICE DO RELATÓRIO'), 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 6, fix_text('1. DASHBOARD RESUMO - Métricas Gerais'), 0, 1, 'L')
+    pdf.cell(0, 6, fix_text('2. ANÁLISE DE PRIORIDADES - Classificação por Desempenho'), 0, 1, 'L')
+    pdf.cell(0, 6, fix_text('3. DETALHAMENTO TÁTICO - Desempenho por Matéria e Assunto'), 0, 1, 'L')
+    if proj:
+        pdf.cell(0, 6, fix_text('4. PROJEÇÃO DO EDITAL - Previsão de Conclusão'), 0, 1, 'L')
+    
+    pdf.ln(8)
+    pdf.set_draw_color(139, 92, 246)
+    pdf.set_line_width(0.5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(10)
 
     # Métricas Gerais
     t_q = df_estudos['total'].sum()
@@ -184,22 +230,24 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     precisao = (a_q / t_q * 100) if t_q > 0 else 0
     tempo_total = df_estudos['tempo'].sum() / 60
     
-    # Ritmo (min/questão)
+    # Ritmo (min/questão) - CORRIGIDO
     ritmo = (df_estudos['tempo'].sum() / t_q) if t_q > 0 else 0
 
     # --- 1. DASHBOARD RESUMO (Card Style) ---
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(139, 92, 246)
+    pdf.cell(0, 10, fix_text('1. DASHBOARD RESUMO'), 0, 1, 'L')
+    
     pdf.set_fill_color(248, 250, 252) # Cinza muito claro
     pdf.set_draw_color(226, 232, 240) # Borda sutil
     
     # Desenhar fundo do card
     start_y = pdf.get_y()
-    pdf.rect(10, start_y, 190, 25, 'FD')
-    
-    # Posicionar métricas
+    pdf.rect(10, start_y, 190, 28, 'FD')
     
     # Função auxiliar para célula de métrica
     def cell_metric(label, value, x_pos):
-        pdf.set_xy(x_pos, start_y + 5)
+        pdf.set_xy(x_pos, start_y + 8)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(148, 163, 184)
         pdf.cell(40, 5, fix_text(label), 0, 2, 'C')
@@ -212,12 +260,12 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     cell_metric("PRECISÃO GLOBAL", f"{precisao:.1f}%", 105)
     cell_metric("RITMO MÉDIO", f"{ritmo:.1f} min/q", 150)
     
-    pdf.ln(30) # Espaço após o card
+    pdf.ln(35) # Espaço após o card
     
     # --- 2. ANÁLISE DE PRIORIDADES (3 Columns Layout) ---
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(139, 92, 246)
-    pdf.cell(0, 10, fix_text('ANÁLISE DE PRIORIDADES'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('2. ANÁLISE DE PRIORIDADES'), 0, 1, 'L')
     
     df_matriz = df_estudos.groupby('materia').agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
     df_matriz['taxa'] = (df_matriz['acertos'] / df_matriz['total'] * 100).fillna(0)
@@ -242,7 +290,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
         start_y_items = pdf.get_y()
         if df_data.empty:
             pdf.set_xy(x_pos, start_y_items)
-            pdf.cell(60, 6, fix_text("-"), 0, 1)
+            pdf.cell(60, 6, fix_text("- Nenhuma"), 0, 1)
         else:
             for _, row in df_data.iterrows():
                 pdf.set_xy(x_pos, pdf.get_y())
@@ -254,7 +302,7 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
         return pdf.get_y()
 
     # Coluna 1: Prioridade (<= 75%) - Vermelho
-    y1 = render_col("[!] PRIORIDADE (<=75%)", (220, 38, 38), prioridade, 10)
+    y1 = render_col("[!] PRIORIDADE (≤75%)", (220, 38, 38), prioridade, 10)
     
     # Coluna 2: OK (76-85%) - Laranja (Âmbar)
     y2 = render_col("[~] OK (76%-85%)", (217, 119, 6), ok, 75)
@@ -263,14 +311,19 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
     y3 = render_col("[+] PONTO FORTE (>85%)", (22, 163, 74), forte, 140)
     
     # Restaurar posição Y para continuar o fluxo (o maior Y das 3 colunas)
-    pdf.set_y(max(y1, y2, y3) + 10) 
+    pdf.set_y(max(y1, y2, y3) + 12)
     pdf.set_x(10)
-    pdf.ln(2)
+    
+    # Linha divisória
+    pdf.set_draw_color(139, 92, 246, 50)
+    pdf.set_line_width(0.3)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(5)
 
     # --- 3. DETALHAMENTO TÁTICO ---
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(139, 92, 246)
-    pdf.cell(0, 10, fix_text('DETALHAMENTO TÁTICO POR MATÉRIA'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('3. DETALHAMENTO TÁTICO POR MATÉRIA'), 0, 1, 'L')
     
     df_assuntos = df_estudos.groupby(['materia', 'assunto']).agg({'acertos': 'sum', 'total': 'sum'}).reset_index()
     df_assuntos['taxa'] = (df_assuntos['acertos'] / df_assuntos['total'] * 100).fillna(0)
@@ -316,6 +369,45 @@ def gerar_pdf_estratégico(df_estudos, missao, df_bruto, proj=None):
             
         pdf.ln(3)
 
+    # --- 4. PROJEÇÃO DO EDITAL (SE DISPONÍVEL) ---
+    if proj and proj.get('total', 0) > 0:
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(139, 92, 246)
+        pdf.cell(0, 10, fix_text('4. PROJEÇÃO DO EDITAL'), 0, 1, 'L')
+        
+        # Card de Projeção
+        pdf.set_fill_color(240, 249, 255) # Azul claro
+        pdf.set_draw_color(200, 230, 255)
+        
+        proj_y = pdf.get_y()
+        pdf.rect(10, proj_y, 190, 50, 'FD')
+        
+        # Conteúdo da projeção
+        pdf.set_xy(15, proj_y + 8)
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_text_color(30, 100, 200)
+        pdf.cell(0, 6, fix_text('PREVISÃO DE CONCLUSÃO'), 0, 1)
+        
+        pdf.set_xy(15, proj_y + 18)
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(0, 6, fix_text(f"Tópicos estudados: {proj['estudados']} de {proj['total']} ({proj['progresso']:.1f}%)"), 0, 1)
+        
+        pdf.set_xy(15, proj_y + 24)
+        pdf.cell(0, 6, fix_text(f"Ritmo: {proj['ritmo']:.1f} tópicos/semana"), 0, 1)
+        
+        if proj['data_fim']:
+            pdf.set_xy(15, proj_y + 30)
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(139, 92, 246)
+            pdf.cell(0, 8, fix_text(f"Previsão de conclusão: {proj['data_fim'].strftime('%d/%m/%Y')}"), 0, 1)
+            
+            pdf.set_xy(15, proj_y + 38)
+            pdf.set_font('Arial', '', 8)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 6, fix_text(f"(Em {proj['dias_para_fim']} dias, se mantiver o ritmo atual)"), 0, 1)
+
     return safe_pdf_output(pdf)
 
 def gerar_pdf_carga_horaria(df, missao):
@@ -332,7 +424,13 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.set_font('Arial', '', 9)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 5, fix_text(f'{missao} - Gerado em: {agora_br.strftime("%d/%m/%Y")}'), 0, 1, 'C')
-    pdf.ln(10)
+    
+    # Sumário
+    pdf.ln(3)
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, fix_text('📋 ÍNDICE: 1. RESUMO GERAL | 2. RANKING DE DEDICAÇÃO'), 0, 1, 'L')
+    pdf.ln(8)
     
     # Métricas Globais
     minutos_totais = df['tempo'].sum()
@@ -352,7 +450,7 @@ def gerar_pdf_carga_horaria(df, missao):
     # --- 1. DASHBOARD DE RESUMO ---
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(0, 8, fix_text('RESUMO GERAL'), 0, 1, 'L')
+    pdf.cell(0, 8, fix_text('1. RESUMO GERAL'), 0, 1, 'L')
     
     # Layout de Cards em Grid
     pdf.set_fill_color(248, 250, 252) # Fundo cinza muito claro
@@ -369,12 +467,12 @@ def gerar_pdf_carga_horaria(df, missao):
     pdf.cell(95, 12, f"  {horas_totais:.1f}h", 0, 0, 'L', True)
     pdf.cell(0, 12, fix_text(f"  {txt_top}"), 0, 1, 'L', True)
     
-    pdf.ln(8)
+    pdf.ln(10)
     
     # --- 2. RANKING DETALHADO ---
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(139, 92, 246)
-    pdf.cell(0, 10, fix_text('RANKING DE DEDICAÇÃO POR MATÉRIA'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('2. RANKING DE DEDICAÇÃO POR MATÉRIA'), 0, 1, 'L')
     pdf.ln(2)
     
     # Agrupamento para detalhamento
@@ -437,6 +535,12 @@ def gerar_pdf_simulados(df_simulados, missao):
     pdf.set_text_color(139, 92, 246)
     pdf.cell(0, 10, fix_text(f'RELATÓRIO DE SIMULADOS - {missao}'), 0, 1, 'L')
     
+    # Sumário
+    pdf.set_font('Arial', '', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, fix_text('📋 ÍNDICE: 1. PAINEL DE RESUMO | 2. HISTÓRICO DETALHADO'), 0, 1, 'L')
+    pdf.ln(5)
+    
     if df_simulados.empty:
         pdf.set_font('Arial', '', 12)
         pdf.set_text_color(60, 60, 60)
@@ -448,22 +552,25 @@ def gerar_pdf_simulados(df_simulados, missao):
     melhor_nota = df_simulados['taxa'].max()
     total_simulados = len(df_simulados)
     
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 8, fix_text('1. PAINEL DE RESUMO'), 0, 1, 'L')
+    
     pdf.set_fill_color(248, 250, 252)
-    pdf.cell(0, 15, "", 1, 1, 'L', True) # Fundo do painel
-    pdf.set_y(pdf.get_y() - 15) # Voltar cursor
+    pdf.cell(0, 18, "", 1, 1, 'L', True) # Fundo do painel
+    pdf.set_y(pdf.get_y() - 18) # Voltar cursor
     
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(63, 15, f" Total: {total_simulados} provas", 0, 0, 'C')
-    pdf.cell(63, 15, f" Média: {media_geral:.1f}%", 0, 0, 'C')
-    pdf.cell(64, 15, f" Melhor: {melhor_nota:.1f}%", 0, 1, 'C')
-    pdf.ln(15)
-    pdf.ln(5)
+    pdf.cell(63, 18, f" Total: {total_simulados} provas", 0, 0, 'C')
+    pdf.cell(63, 18, f" Média: {media_geral:.1f}%", 0, 0, 'C')
+    pdf.cell(64, 18, f" Melhor: {melhor_nota:.1f}%", 0, 1, 'C')
+    pdf.ln(20)
     
     # Histórico Detalhado
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(139, 92, 246)
-    pdf.cell(0, 10, fix_text('HISTÓRICO DETALHADO'), 0, 1, 'L')
+    pdf.cell(0, 10, fix_text('2. HISTÓRICO DETALHADO'), 0, 1, 'L')
     
     # Cabeçalho da Tabela
     pdf.set_font('Arial', 'B', 9)
@@ -525,8 +632,11 @@ def render_metric_card_modern(label, value, icon="📊", color=None, subtitle=No
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-        " onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 40px rgba(139, 92, 246, 0.15)';"
-        onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+            cursor: help;
+        " title="{label}: {value}{' - ' + subtitle if subtitle else ''}"
+        onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 40px rgba(139, 92, 246, 0.15)';"
+        onmouseout="this.style.borderColor='{COLORS['border']}'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+        aria-label="{label}: {value}">
             <div style="
                 font-size: 2rem;
                 margin-bottom: 8px;
@@ -644,7 +754,7 @@ def render_consistency_heatmap(df):
                 else: color = COLORS_INTENS[3]
                 
                 tip = f"{d.strftime('%d/%m')}: {tempo/60:.1f}h"
-                html += f'<div title="{tip}" style="width: 12px; height: 12px; background-color: {color}; border-radius: 2px;"></div>'
+                html += f'<div title="{tip}" aria-label="{tip}" style="width: 12px; height: 12px; background-color: {color}; border-radius: 2px;"></div>'
         html += '</div>'
     
     html += '</div>'
@@ -672,6 +782,55 @@ def formatar_tempo_para_bigint(tempo_str):
             return int(tempo_str)  # Já em minutos
     except (ValueError, TypeError, AttributeError):
         return 0
+
+# --- FUNÇÃO ADICIONADA: Validação de tempo HHMM ---
+def validar_tempo_hhmm(tempo_str):
+    """
+    Valida formato HHMM para tempo.
+    Retorna (é_válido, mensagem_erro, minutos)
+    """
+    if not tempo_str:
+        return False, "Tempo não pode estar vazio", 0
+    
+    tempo_str = str(tempo_str).strip()
+    
+    # Remover espaços e caracteres especiais
+    tempo_str = re.sub(r'[^0-9]', '', tempo_str)
+    
+    # Verificar se tem apenas números
+    if not tempo_str.isdigit():
+        return False, "Use apenas números (ex: 0130 para 1h30min)", 0
+    
+    # Verificar comprimento
+    if len(tempo_str) not in [3, 4]:
+        return False, "Use 3 ou 4 dígitos (ex: 130 para 1h30 ou 0130 para 1h30)", 0
+    
+    # Converter para inteiro
+    try:
+        if len(tempo_str) == 4:
+            horas = int(tempo_str[:2])
+            minutos = int(tempo_str[2:])
+        else:  # 3 dígitos
+            horas = int(tempo_str[0])
+            minutos = int(tempo_str[1:])
+        
+        # Validar limites
+        if horas > 23:
+            return False, "Horas não podem ser maiores que 23", 0
+        if minutos > 59:
+            return False, "Minutos não podem ser maiores que 59", 0
+        if horas == 0 and minutos == 0:
+            return False, "Tempo não pode ser zero", 0
+        
+        total_minutos = horas * 60 + minutos
+        
+        # Verificar se é um tempo razoável (não mais que 12h)
+        if total_minutos > 12 * 60:
+            return False, "Tempo muito longo (máximo 12h)", total_minutos
+        
+        return True, "", total_minutos
+    except Exception as e:
+        return False, f"Erro ao processar tempo: {e}", 0
 
 # --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
 st.set_page_config(
@@ -744,22 +903,37 @@ def excluir_concurso_completo(supabase, missao):
 def apply_styles():
     st.markdown("""
         <style>
-        /* Esconde navegação padrão da sidebar */
+        /* ═══════════════════════════════════════════════════════════════════
+           🎨 CSS RESPONSIVO GLOBAL - MonitorPro (VERSÃO SIMPLIFICADA)
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        /* Reset básico */
+        * { box-sizing: border-box; }
+        html, body { overflow-x: hidden; max-width: 100vw; }
+        
+        /* Esconder navegação padrão da sidebar */
         [data-testid="stSidebarNav"] {
             display: none;
         }
         
-        /* Container principal usa toda largura disponível */
+        /* ═══ RESPONSIVIDADE AUTOMÁTICA ═══ */
+        /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
+        /* Apenas garantimos que os containers usem 100% do espaço disponível */
+        
         .main .block-container {
-            max-width: 100%;
-            padding-left: 2rem;
-            padding-right: 2rem;
+            max-width: 100% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            padding-top: 2rem !important;
+            padding-bottom: 5rem !important;
         }
         
+        /* Em telas menores, reduzir padding */
         @media (max-width: 768px) {
             .main .block-container {
-                padding-left: 1rem;
-                padding-right: 1rem;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 1rem !important;
             }
         }
         
@@ -932,6 +1106,39 @@ def apply_styles():
             }
         }
         
+        /* ═══ TOOLTIPS MELHORADOS ═══ */
+        [title] {
+            position: relative;
+        }
+        
+        [title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 15, 35, 0.95);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Melhorar contraste para acessibilidade */
+        .high-contrast {
+            filter: contrast(1.2);
+        }
+        
+        /* Foco visível para teclado */
+        :focus-visible {
+            outline: 2px solid #8B5CF6 !important;
+            outline-offset: 2px !important;
+        }
+        
         </style>
     """, unsafe_allow_html=True)
 
@@ -1027,111 +1234,6 @@ else:
     df_simulados = pd.DataFrame()
     df_estudos = pd.DataFrame()
 
-# --- FUNÇÕES PARA MÉTRICAS COMBINADAS (ESTUDOS + SIMULADOS) ---
-def calcular_metricas_combinadas(df_estudos, df_simulados):
-    """Calcula métricas combinando estudos regulares e simulados"""
-    
-    # Criar DataFrames vazios se estiverem vazios
-    if df_estudos.empty and df_simulados.empty:
-        return {
-            'tempo_total_min': 0,
-            'questoes_total': 0,
-            'acertos_total': 0,
-            'precisao_total': 0,
-            'tempo_estudos_min': 0,
-            'questoes_estudos': 0,
-            'acertos_estudos': 0,
-            'precisao_estudos': 0,
-            'tempo_simulados_min': 0,
-            'questoes_simulados': 0,
-            'acertos_simulados': 0,
-            'precisao_simulados': 0
-        }
-    
-    # Calcular métricas de estudos regulares
-    if not df_estudos.empty:
-        tempo_estudos = df_estudos['tempo'].sum()
-        questoes_estudos = df_estudos['total'].sum()
-        acertos_estudos = df_estudos['acertos'].sum()
-        precisao_estudos = (acertos_estudos / questoes_estudos * 100) if questoes_estudos > 0 else 0
-    else:
-        tempo_estudos = 0
-        questoes_estudos = 0
-        acertos_estudos = 0
-        precisao_estudos = 0
-    
-    # Calcular métricas de simulados
-    if not df_simulados.empty:
-        tempo_simulados = df_simulados['tempo'].sum()
-        questoes_simulados = df_simulados['total'].sum()
-        acertos_simulados = df_simulados['acertos'].sum()
-        precisao_simulados = (acertos_simulados / questoes_simulados * 100) if questoes_simulados > 0 else 0
-    else:
-        tempo_simulados = 0
-        questoes_simulados = 0
-        acertos_simulados = 0
-        precisao_simulados = 0
-    
-    # Totais combinados
-    tempo_total = tempo_estudos + tempo_simulados
-    questoes_total = questoes_estudos + questoes_simulados
-    acertos_total = acertos_estudos + acertos_simulados
-    precisao_total = (acertos_total / questoes_total * 100) if questoes_total > 0 else 0
-    
-    return {
-        'tempo_total_min': tempo_total,
-        'questoes_total': questoes_total,
-        'acertos_total': acertos_total,
-        'precisao_total': precisao_total,
-        'tempo_estudos_min': tempo_estudos,
-        'questoes_estudos': questoes_estudos,
-        'acertos_estudos': acertos_estudos,
-        'precisao_estudos': precisao_estudos,
-        'tempo_simulados_min': tempo_simulados,
-        'questoes_simulados': questoes_simulados,
-        'acertos_simulados': acertos_simulados,
-        'precisao_simulados': precisao_simulados
-    }
-
-def calcular_metricas_semana_combinadas(df_estudos, df_simulados):
-    """Calcula métricas semanais combinando estudos e simulados"""
-    hoje = get_br_date()
-    inicio_semana = hoje - timedelta(days=hoje.weekday())  # Segunda-feira
-    
-    # Filtrar dados da semana atual
-    if not df_estudos.empty:
-        df_estudos['data_estudo_date'] = pd.to_datetime(df_estudos['data_estudo']).dt.date
-        df_estudos_semana = df_estudos[df_estudos['data_estudo_date'] >= inicio_semana]
-    else:
-        df_estudos_semana = pd.DataFrame()
-    
-    if not df_simulados.empty:
-        df_simulados['data_estudo_date'] = pd.to_datetime(df_simulados['data_estudo']).dt.date
-        df_simulados_semana = df_simulados[df_simulados['data_estudo_date'] >= inicio_semana]
-    else:
-        df_simulados_semana = pd.DataFrame()
-    
-    # Calcular métricas
-    horas_estudos = df_estudos_semana['tempo'].sum() / 60 if not df_estudos_semana.empty else 0
-    questoes_estudos = df_estudos_semana['total'].sum() if not df_estudos_semana.empty else 0
-    
-    horas_simulados = df_simulados_semana['tempo'].sum() / 60 if not df_simulados_semana.empty else 0
-    questoes_simulados = df_simulados_semana['total'].sum() if not df_simulados_semana.empty else 0
-    
-    # Totais combinados
-    horas_total = horas_estudos + horas_simulados
-    questoes_total = questoes_estudos + questoes_simulados
-    
-    return {
-        'horas_total': horas_total,
-        'questoes_total': questoes_total,
-        'horas_estudos': horas_estudos,
-        'questoes_estudos': questoes_estudos,
-        'horas_simulados': horas_simulados,
-        'questoes_simulados': questoes_simulados,
-        'dias_semana_passados': hoje.weekday() + 1  # Segunda = 0, então +1
-    }
-
 # Alias para compatibilidade com código existente (que usa 'df')
 # ONDE O CÓDIGO USA 'df', ELE DEVE USAR 'df_estudos' AGORA PARA MÉTRICAS DE ROTINA
 df = df_estudos 
@@ -1209,21 +1311,11 @@ st.markdown("""
         background: #0E1117;
     }
     
-    /* ═══ LAYOUT RESPONSIVO DA SIDEBAR ═══ */
-    /* Container principal padrão */
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        transition: all 0.3s ease;
-        width: 100%;
-        max-width: 100% !important;
-    }
-    
+    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
     /* Quando a sidebar está EXPANDIDA */
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        margin-left: 300px !important;
-        width: calc(100% - 300px) !important;
         max-width: calc(100% - 300px) !important;
+        margin-left: 300px !important;
         padding-left: 4rem !important;
         padding-right: 4rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -1231,83 +1323,19 @@ st.markdown("""
     
     /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding-left: 4rem !important;
-        padding-right: 4rem !important;
+        max-width: 95% !important; 
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
-    /* Responsividade para telas médias */
-    @media (max-width: 1200px) {
-        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-            padding-left: 3rem !important;
-            padding-right: 3rem !important;
-        }
-        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-            padding-left: 3rem !important;
-            padding-right: 3rem !important;
-        }
-    }
-    
-    /* Responsividade para tablets */
-    @media (max-width: 992px) {
-        .main .block-container {
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-        }
-    }
-    
-    /* Responsividade para mobile */
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-            padding-left: 1.5rem !important;
-            padding-right: 1.5rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-            margin-left: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            padding-left: 1.5rem !important;
-            padding-right: 1.5rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-            padding-left: 1.5rem !important;
-            padding-right: 1.5rem !important;
-        }
-    }
-    
-    /* Responsividade para telas muito pequenas */
-    @media (max-width: 480px) {
-        .main .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-        
-        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
+    /* Container principal padrão */
+    .main .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        transition: all 0.3s ease;
     }
 
     /* Cards Glassmorphism Modernos */
@@ -1677,6 +1705,50 @@ st.markdown("""
         overflow: hidden;
     }
     
+    /* Melhorias de acessibilidade */
+    .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+    
+    /* Tooltips melhorados */
+    .tooltip-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .tooltip-wrapper:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+    }
+    
+    .tooltip-text {
+        visibility: hidden;
+        width: 200px;
+        background-color: rgba(15, 15, 35, 0.95);
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 10px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 0.85rem;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
     </style>
 """, unsafe_allow_html=True)
 
@@ -1854,9 +1926,11 @@ def calcular_estudos_semana(df):
     except (ValueError, TypeError, KeyError):
         return 0, 0
 
+# --- FUNÇÃO CORRIGIDA: calcular_projecao_conclusao (BUG FIXED) ---
 def calcular_projecao_conclusao(df, dados_edital):
     """
     Calcula o ritmo de estudo e projeta a data de conclusão do edital.
+    CORRIGIDO: Agora calcula corretamente o ritmo (tópicos únicos por dia de estudo).
     """
     if not dados_edital or 'materias' not in dados_edital:
         return None
@@ -1884,31 +1958,38 @@ def calcular_projecao_conclusao(df, dados_edital):
     restantes = total_topicos - estudados
     progresso_pct = (estudados / total_topicos * 100) if total_topicos > 0 else 0
     
-    # 3. Ritmo (Pace)
+    # 3. Ritmo (Pace) - CORREÇÃO DO BUG AQUI
     if df.empty or estudados == 0:
-        return {
-            "total": total_topicos, "estudados": estudados, "restantes": restantes,
-            "progresso": progresso_pct, "ritmo": 0, "dias_para_fim": None, "data_fim": None
-        }
-    
-    # Ritmo nos últimos 30 dias (mais realista que o histórico total)
-    hoje = get_br_date()
-    inicio_janela = hoje - timedelta(days=30)
-    df_recente = df[pd.to_datetime(df['data_estudo']).dt.date >= inicio_janela]
-    
-    if len(df_recente) < 5: # Se tiver pouco dado recente, usa histórico total
-        data_inicio = pd.to_datetime(df['data_estudo']).min().date()
-        dias_totais = max((hoje - data_inicio).days, 1)
-        ritmo_diario = estudados / dias_totais
+        ritmo_diario = 0
     else:
-        topicos_30d = df_recente['assunto'].nunique()
-        ritmo_diario = topicos_30d / 30
+        # Calcular ritmo REAL: tópicos únicos por dia de estudo
+        # Buscar datas únicas com estudo (apenas para tópicos do edital)
+        df_filtrado = df[df['assunto'].isin(todos_topicos_edital)] if not df.empty else df
+        if not df_filtrado.empty and 'data_estudo' in df_filtrado.columns:
+            try:
+                # Converter datas e pegar únicas
+                datas_estudo = pd.to_datetime(df_filtrado['data_estudo']).dt.date
+                dias_com_estudo = len(set(datas_estudo))
+                
+                if dias_com_estudo > 0:
+                    ritmo_diario = estudados / dias_com_estudo  # Tópicos únicos por dia de estudo
+                else:
+                    ritmo_diario = 0
+            except Exception:
+                ritmo_diario = 0
+        else:
+            ritmo_diario = 0
     
     # Garantir ritmo mínimo para não dividir por zero
-    ritmo_diario = max(ritmo_diario, 0.01)
+    ritmo_diario = max(ritmo_diario, 0.001)
     
-    dias_para_fim = int(restantes / ritmo_diario)
-    data_fim = hoje + timedelta(days=dias_para_fim)
+    # 4. Calcular projeção
+    if ritmo_diario > 0:
+        dias_para_fim = int(restantes / ritmo_diario)
+        data_fim = get_br_date() + timedelta(days=dias_para_fim)
+    else:
+        dias_para_fim = None
+        data_fim = None
     
     return {
         "total": total_topicos,
@@ -2246,7 +2327,7 @@ if st.session_state.missao_ativa is not None:
                 elif hora_atual >= 12:
                     st.info(f"☀️ **Boa tarde!** O dia está pela metade. Reserve um tempo para os estudos!")
                 else:
-                    st.success(f"🌅 **Bom dia!** Comece o day com foco. Registre seu primeiro estudo!")
+                    st.success(f"🌅 **Bom dia!** Comece o dia com foco. Registre seu primeiro estudo!")
 
             # --- RESUMO DIÁRIO INTELIGENTE (Com dados) ---
             if not df_hoje.empty:
@@ -2269,11 +2350,15 @@ if st.session_state.missao_ativa is not None:
                 elif taxa_hoje >= 80:
                     st.success(f"🎯 Excelente! Precisão de **{taxa_hoje:.0f}%** hoje. Continue assim!")
 
-            # --- VISÃO GERAL DO EDITAL (INCLUINDO SIMULADOS) ---
-            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL (Incluindo Simulados)</div>', unsafe_allow_html=True)
-
-            # Calcular métricas combinadas
-            metricas_combinadas = calcular_metricas_combinadas(df_estudos, df_simulados)
+            # --- VISÃO GERAL DO EDITAL ---
+            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
+            
+            # Calcular métricas
+            t_q = df_estudos['total'].sum()
+            a_q = df_estudos['acertos'].sum()
+            precisao = (a_q / t_q * 100) if t_q > 0 else 0
+            minutos_totais = int(df_estudos['tempo'].sum())
+            tempo_formatado = formatar_minutos(minutos_totais)
 
             # Dias para a prova
             dias_restantes = None
@@ -2283,56 +2368,48 @@ if st.session_state.missao_ativa is not None:
                     dias_restantes = (dt_prova - get_br_date()).days
                 except Exception:
                     dias_restantes = None
-
-            # 4 cartões de métricas com ANÉIS CIRCULARES (INCLUINDO SIMULADOS)
+            
+            # 4 cartões de métricas com ANÉIS CIRCULARES (COM TOOLTIPS)
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-
+            
             # Calcular percentuais para os anéis
-            horas_totais = metricas_combinadas['tempo_total_min'] / 60
-            meta_horas_mes = 100  # Aumentado para incluir simulados
+            horas_totais = minutos_totais / 60
+            meta_horas_mes = 80
             pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
-            pct_precisao = min(metricas_combinadas['precisao_total'], 100)
-            meta_questoes_mes = 1500  # Aumentado para incluir simulados
-            pct_questoes = min((metricas_combinadas['questoes_total'] / meta_questoes_mes) * 100, 100)
-
-            # Ritmo médio (min/questão)
-            ritmo_total = (metricas_combinadas['tempo_total_min'] / metricas_combinadas['questoes_total']) if metricas_combinadas['questoes_total'] > 0 else 0
-            pct_ritmo = min((ritmo_total / 5) * 100, 100) if ritmo_total > 0 else 0
-
+            pct_precisao = min(precisao, 100)
+            meta_questoes_mes = 1000
+            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
+            
             with c1:
                 render_circular_progress(
                     percentage=pct_tempo,
                     label="TEMPO TOTAL",
-                    value=f"{horas_totais:.1f}h",
+                    value=tempo_formatado,
                     color_start=COLORS["primary"],
                     color_end=COLORS["secondary"],
-                    icon="⏱️"
+                    icon="⏱️",
+                    tooltip=f"Horas totais de estudo: {horas_totais:.1f}h"
                 )
-                # Detalhamento em tooltip
-                st.caption(f"📚 Estudos: {metricas_combinadas['tempo_estudos_min']/60:.1f}h | 🏆 Simulados: {metricas_combinadas['tempo_simulados_min']/60:.1f}h")
-
             with c2:
                 render_circular_progress(
                     percentage=pct_precisao,
-                    label="PRECISÃO TOTAL",
-                    value=f"{metricas_combinadas['precisao_total']:.0f}%",
-                    color_start=COLORS["success"] if metricas_combinadas['precisao_total'] >= 70 else COLORS["warning"],
+                    label="PRECISÃO",
+                    value=f"{precisao:.0f}%",
+                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
                     color_end=COLORS["secondary"],
-                    icon="🎯"
+                    icon="🎯",
+                    tooltip=f"Acertos: {a_q} | Total: {t_q}"
                 )
-                st.caption(f"📚 Estudos: {metricas_combinadas['precisao_estudos']:.0f}% | 🏆 Simulados: {metricas_combinadas['precisao_simulados']:.0f}%")
-
             with c3:
                 render_circular_progress(
                     percentage=pct_questoes,
-                    label="QUESTÕES TOTAL",
-                    value=f"{metricas_combinadas['questoes_total']:,}".replace(",", "."),
+                    label="QUESTÕES",
+                    value=f"{int(t_q)}",
                     color_start=COLORS["accent"],
                     color_end=COLORS["primary"],
-                    icon="📝"
+                    icon="📝",
+                    tooltip=f"Total de questões resolvidas"
                 )
-                st.caption(f"📚 Estudos: {metricas_combinadas['questoes_estudos']:,} | 🏆 Simulados: {metricas_combinadas['questoes_simulados']:,}".replace(",", "."))
-
             with c4:
                 if dias_restantes is not None:
                     pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
@@ -2343,43 +2420,12 @@ if st.session_state.missao_ativa is not None:
                         value=f"{dias_restantes}",
                         color_start=cor,
                         color_end=COLORS["secondary"],
-                        icon="📅"
+                        icon="📅",
+                        tooltip=f"Data da prova: {dt_prova.strftime('%d/%m/%Y')}"
                     )
                 else:
-                    render_circular_progress(
-                        percentage=pct_ritmo,
-                        label="RITMO MÉDIO",
-                        value=f"{ritmo_total:.1f}m/q",
-                        color_start=COLORS["secondary"],
-                        color_end=COLORS["primary"],
-                        icon="⚡"
-                    )
-                    st.caption("Tempo médio por questão (total)")
-
-            # Mostrar breakdown detalhado em expansor
-            with st.expander("📊 Detalhamento completo"):
-                col_det1, col_det2, col_det3 = st.columns(3)
-                
-                with col_det1:
-                    st.markdown("**📚 ESTUDOS REGULARES**")
-                    st.metric("Tempo", f"{metricas_combinadas['tempo_estudos_min']/60:.1f}h")
-                    st.metric("Questões", f"{metricas_combinadas['questoes_estudos']:,}".replace(",", "."))
-                    st.metric("Precisão", f"{metricas_combinadas['precisao_estudos']:.1f}%")
-                
-                with col_det2:
-                    st.markdown("**🏆 SIMULADOS**")
-                    st.metric("Tempo", f"{metricas_combinadas['tempo_simulados_min']/60:.1f}h")
-                    st.metric("Questões", f"{metricas_combinadas['questoes_simulados']:,}".replace(",", "."))
-                    st.metric("Precisão", f"{metricas_combinadas['precisao_simulados']:.1f}%")
-                
-                with col_det3:
-                    st.markdown("**🎯 TOTAIS**")
-                    st.metric("Tempo Total", f"{horas_totais:.1f}h", 
-                             delta=f"{(metricas_combinadas['tempo_simulados_min']/60):.1f}h de simulados")
-                    st.metric("Questões Total", f"{metricas_combinadas['questoes_total']:,}".replace(",", "."),
-                             delta=f"{metricas_combinadas['questoes_simulados']:,} de simulados".replace(",", "."))
-                    st.metric("Precisão Total", f"{metricas_combinadas['precisao_total']:.1f}%")
-
+                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅", subtitle="Data não definida")
+            
             st.divider()
 
             # --- QUICK ACTIONS (AÇÕES RÁPIDAS) ---
@@ -2429,7 +2475,7 @@ if st.session_state.missao_ativa is not None:
             
             with col_s1:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.2); transition: all 0.3s ease;">
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.2); transition: all 0.3s ease; cursor: help;" title="Dias consecutivos estudando">
                         <div style="color: #8B5CF6; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">STREAK ATUAL</div>
                         <div style="font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #8B5CF6, #06B6D4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0;">{streak}</div>
                         <div style="color: #94A3B8; font-size: 0.8rem;">dias consecutivos</div>
@@ -2438,7 +2484,7 @@ if st.session_state.missao_ativa is not None:
             
             with col_s2:
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.2); transition: all 0.3s ease; cursor: help;" title="Seu recorde de dias estudando seguidos">
                         <div style="color: #10B981; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">SEU RECORDE</div>
                         <div style="font-size: 3rem; font-weight: 800; color: #10B981; margin: 10px 0;">{recorde}</div>
                         <div style="color: #94A3B8; font-size: 0.8rem;">dias seguidos</div>
@@ -2453,7 +2499,7 @@ if st.session_state.missao_ativa is not None:
                 percentual_mes = (dias_estudados_mes / dias_no_mes) * 100
                 
                 st.markdown(f'''
-                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05)); border-radius: 16px; border: 1px solid rgba(6, 182, 212, 0.2); transition: all 0.3s ease;">
+                    <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05)); border-radius: 16px; border: 1px solid rgba(6, 182, 212, 0.2); transition: all 0.3s ease; cursor: help;" title="Dias estudados no mês atual">
                         <div style="color: #06B6D4; font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">MÊS ATUAL</div>
                         <div style="font-size: 2.5rem; font-weight: 800; color: #06B6D4; margin: 10px 0;">{dias_estudados_mes}/{dias_no_mes}</div>
                         <div style="color: #94A3B8; font-size: 0.8rem;">dias estudados ({percentual_mes:.0f}%)</div>
@@ -2463,27 +2509,29 @@ if st.session_state.missao_ativa is not None:
             # Período do streak atual
             if inicio_streak and fim_streak:
                 data_formatada = f"{inicio_streak.strftime('%d/%m')} a {fim_streak.strftime('%d/%m')}"
-                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px;">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align: center; margin-top: 15px; color: #94A3B8; font-size: 0.9rem; background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 10px;" title="Período do seu streak atual">Período do streak atual: <span style="color: #8B5CF6; font-weight: 600;">{data_formatada}</span></div>', unsafe_allow_html=True)
             
 
 
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
-            # --- PREVISÃO DE META SEMANAL (INCLUINDO SIMULADOS) ---
-            st.markdown('<div class="visao-mes-title">📈 PROJEÇÃO DA SEMANA (Incluindo Simulados)</div>', unsafe_allow_html=True)
+            # --- PREVISÃO DE META SEMANAL ---
+            st.markdown('<div class="visao-mes-title">📈 PROJEÇÃO DA SEMANA</div>', unsafe_allow_html=True)
             
-            # Calcular métricas semanais combinadas
-            metricas_semana = calcular_metricas_semana_combinadas(df_estudos, df_simulados)
+            # Calcular dados da semana
+            hoje = get_br_date()
+            inicio_semana = hoje - timedelta(days=hoje.weekday())
+            df_semana = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_semana]
             
-            horas_semana = metricas_semana['horas_total']
-            questoes_semana = metricas_semana['questoes_total']
-            dias_semana_passados = metricas_semana['dias_semana_passados']
+            horas_semana = df_semana['tempo'].sum() / 60
+            questoes_semana = df_semana['total'].sum()
             
             # Meta semanal (usar do session_state ou padrão)
             meta_horas = st.session_state.get('meta_horas_semana', 20)
             meta_questoes = st.session_state.get('meta_questoes_semana', 300)
             
             # Calcular projeção
+            dias_semana_passados = hoje.weekday() + 1  # Segunda = 0, então +1
             dias_restantes = 7 - dias_semana_passados
             
             if dias_semana_passados > 0:
@@ -2512,14 +2560,10 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown(f"""
                 <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">HORAS TOTAIS (Estudos + Simulados)</div>
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">HORAS DE ESTUDO</div>
                     <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{horas_semana:.1f}h/{meta_horas}h</div>
                     <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
                     <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {projecao_horas:.1f}h</div>
-                    <div style="font-size: 0.75rem; color: #64748B; margin-top: 10px;">
-                        📚 Estudos: {metricas_semana['horas_estudos']:.1f}h<br>
-                        🏆 Simulados: {metricas_semana['horas_simulados']:.1f}h
-                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -2545,14 +2589,10 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown(f"""
                 <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">QUESTÕES TOTAIS (Estudos + Simulados)</div>
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">QUESTÕES RESOLVIDAS</div>
                     <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{int(questoes_semana)}/{meta_questoes}</div>
                     <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
                     <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {int(projecao_questoes)}</div>
-                    <div style="font-size: 0.75rem; color: #64748B; margin-top: 10px;">
-                        📚 Estudos: {int(metricas_semana['questoes_estudos'])}<br>
-                        🏆 Simulados: {int(metricas_semana['questoes_simulados'])}
-                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -2623,66 +2663,51 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # --- META DE ESTUDO SEMANAL (INCLUINDO SIMULADOS) ---
-            st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL (Incluindo Simulados)</h3>', unsafe_allow_html=True)
+            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
+            st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
             
             # Estado para controlar a edição das metas
             if 'editando_metas' not in st.session_state:
                 st.session_state.editando_metas = False
-
-            # Calcular métricas semanais combinadas
-            metricas_semana = calcular_metricas_semana_combinadas(df_estudos, df_simulados)
-            horas_semana = metricas_semana['horas_total']
-            questoes_semana = metricas_semana['questoes_total']
-            dias_semana_passados = metricas_semana['dias_semana_passados']
-
+            
+            horas_semana, questoes_semana = calcular_estudos_semana(df_estudos)
             meta_horas = st.session_state.meta_horas_semana
             meta_questoes = st.session_state.meta_questoes_semana
-
-            # Calcular projeção (incluindo simulados)
-            dias_restantes = 7 - dias_semana_passados
-
-            if dias_semana_passados > 0:
-                projecao_horas = (horas_semana / dias_semana_passados) * 7
-                projecao_questoes = (questoes_semana / dias_semana_passados) * 7
-            else:
-                projecao_horas = 0
-                projecao_questoes = 0
-
+            
             # Botão para editar metas
             col_btn1, col_btn2, col_btn3 = st.columns([4, 1, 1])
             with col_btn2:
-                if st.button("⚙️ Configurar Metas", key="btn_config_metas_combinadas", use_container_width=True):
+                if st.button("⚙️ Configurar Metas", key="btn_config_metas", use_container_width=True):
                     st.session_state.editando_metas = not st.session_state.editando_metas
                     st.rerun()
-
+            
             # Modal de edição de metas
             if st.session_state.editando_metas:
                 with st.container():
                     st.markdown('<div class="meta-modal">', unsafe_allow_html=True)
-                    st.markdown("##### 📝 Configurar Metas Semanais (Estudos + Simulados)")
+                    st.markdown("##### 📝 Configurar Metas Semanais")
                     
-                    with st.form("form_metas_semanais_combinadas"):
+                    with st.form("form_metas_semanais"):
                         col_meta1, col_meta2 = st.columns(2)
                         
                         with col_meta1:
                             nova_meta_horas = st.number_input(
-                                "Horas totais semanais (estudos + simulados)",
+                                "Horas de estudo semanais",
                                 min_value=1,
                                 max_value=100,
                                 value=meta_horas,
                                 step=1,
-                                help="Meta de horas totais por semana (inclui estudos regulares e simulados)"
+                                help="Meta de horas de estudo por semana"
                             )
                         
                         with col_meta2:
                             nova_meta_questoes = st.number_input(
-                                "Questões totais semanais (estudos + simulados)",
+                                "Questões semanais",
                                 min_value=1,
-                                max_value=2000,
+                                max_value=1000,
                                 value=meta_questoes,
                                 step=10,
-                                help="Meta de questões totais por semana (inclui estudos regulares e simulados)"
+                                help="Meta de questões resolvidas por semana"
                             )
                         
                         col_btn1, col_btn2 = st.columns(2)
@@ -2700,15 +2725,15 @@ if st.session_state.missao_ativa is not None:
                             st.rerun()
                     
                     st.markdown('</div>', unsafe_allow_html=True)
-
-            # Cartões de metas combinadas
+            
+            # Cartões de metas
             col_meta1, col_meta2 = st.columns(2)
-
+            
             with col_meta1:
                 progresso_horas = min((horas_semana / meta_horas) * 100, 100) if meta_horas > 0 else 0
                 st.markdown(f'''
-                <div class="meta-card">
-                    <div class="meta-title">Horas Totais (Estudos + Simulados)</div>
+                <div class="meta-card" title="Meta de horas de estudo semanal">
+                    <div class="meta-title">Horas de Estudo</div>
                     <div class="meta-value">{horas_semana:.1f}h/{meta_horas}h</div>
                     <div class="meta-progress">
                         <div class="modern-progress-container">
@@ -2716,19 +2741,14 @@ if st.session_state.missao_ativa is not None:
                         </div>
                     </div>
                     <div class="meta-subtitle">{progresso_horas:.0f}% da meta alcançada</div>
-                    <div style="margin-top: 10px; font-size: 0.8rem; color: #94A3B8;">
-                        📚 Estudos: {metricas_semana['horas_estudos']:.1f}h<br>
-                        🏆 Simulados: {metricas_semana['horas_simulados']:.1f}h
-                    </div>
-                    {f'<div style="margin-top: 10px; font-size: 0.75rem; color: #F59E0B;">💡 Projeção semanal: {projecao_horas:.1f}h</div>' if dias_semana_passados > 0 else ''}
                 </div>
                 ''', unsafe_allow_html=True)
-
+            
             with col_meta2:
                 progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
                 st.markdown(f'''
-                <div class="meta-card">
-                    <div class="meta-title">Questões Totais (Estudos + Simulados)</div>
+                <div class="meta-card" title="Meta de questões resolvidas semanal">
+                    <div class="meta-title">Questões Resolvidas</div>
                     <div class="meta-value">{int(questoes_semana)}/{meta_questoes}</div>
                     <div class="meta-progress">
                         <div class="modern-progress-container">
@@ -2736,49 +2756,8 @@ if st.session_state.missao_ativa is not None:
                         </div>
                     </div>
                     <div class="meta-subtitle">{progresso_questoes:.0f}% da meta alcançada</div>
-                    <div style="margin-top: 10px; font-size: 0.8rem; color: #94A3B8;">
-                        📚 Estudos: {int(metricas_semana['questoes_estudos'])}<br>
-                        🏆 Simulados: {int(metricas_semana['questoes_simulados'])}
-                    </div>
-                    {f'<div style="margin-top: 10px; font-size: 0.75rem; color: #F59E0B;">💡 Projeção semanal: {int(projecao_questoes)} questões</div>' if dias_semana_passados > 0 else ''}
                 </div>
                 ''', unsafe_allow_html=True)
-
-            # Adicionar dicas baseadas no progresso
-            if progresso_horas < 50 and dias_restantes > 0:
-                horas_necessarias = (meta_horas - horas_semana) / dias_restantes
-                st.info(f"💡 Para bater a meta de horas, você precisa estudar **{horas_necessarias:.1f}h/dia** nos próximos {dias_restantes} dias.")
-
-            if progresso_questoes < 50 and dias_restantes > 0:
-                questoes_necessarias = (meta_questoes - questoes_semana) / dias_restantes
-                st.info(f"💡 Para bater a meta de questões, você precisa resolver **{questoes_necessarias:.0f} questões/dia** nos próximos {dias_restantes} dias.")
-
-            # Mostrar análise de distribuição
-            if metricas_semana['horas_simulados'] > 0 or metricas_semana['questoes_simulados'] > 0:
-                with st.expander("📊 Análise de Distribuição Semanal"):
-                    col_dist1, col_dist2 = st.columns(2)
-                    
-                    with col_dist1:
-                        # Gráfico de pizza de horas
-                        labels_horas = ['Estudos', 'Simulados']
-                        values_horas = [metricas_semana['horas_estudos'], metricas_semana['horas_simulados']]
-                        if sum(values_horas) > 0:
-                            fig_horas = px.pie(values=values_horas, names=labels_horas, 
-                                              title="Distribuição de Horas",
-                                              color_discrete_sequence=[COLORS['primary'], COLORS['accent']])
-                            fig_horas.update_layout(showlegend=True, height=300)
-                            st.plotly_chart(fig_horas, use_container_width=True)
-                    
-                    with col_dist2:
-                        # Gráfico de pizza de questões
-                        labels_questoes = ['Estudos', 'Simulados']
-                        values_questoes = [metricas_semana['questoes_estudos'], metricas_semana['questoes_simulados']]
-                        if sum(values_questoes) > 0:
-                            fig_questoes = px.pie(values=values_questoes, names=labels_questoes,
-                                                 title="Distribuição de Questões",
-                                                 color_discrete_sequence=[COLORS['secondary'], COLORS['warning']])
-                            fig_questoes.update_layout(showlegend=True, height=300)
-                            st.plotly_chart(fig_questoes, use_container_width=True)
 
     # --- ABA: GUIA SEMANAL (PLANNER INTELIGENTE) ---
     elif menu == "Guia Semanal":
@@ -2897,6 +2876,8 @@ if st.session_state.missao_ativa is not None:
                         st.session_state.checklist_status[f"check_{i}_{m[:10]}"] = st.session_state[f"guia_check_{i}"]
                     st.session_state.missao_semanal_status = "EM EXECUÇÃO"
                     st.toast("Plano Ativado!", icon="🚀")
+                    # LIMPAR CACHE APÓS OPERAÇÃO
+                    st.cache_data.clear()
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             
@@ -2923,12 +2904,17 @@ if st.session_state.missao_ativa is not None:
         # Filtros
         c1, c2 = st.columns([2, 1])
         with c1:
-            filtro_rev = st.segmented_control("Visualizar:", ["Pendentes/Hoje", "Todas"], default="Pendentes/Hoje", key="filtro_rev_list")
+            filtro_rev = st.segmented_control("Visualizar:", ["Pendentes/Hoje", "Todas (incluindo futuras)"], default="Pendentes/Hoje", key="filtro_rev_list")
         with c2:
             filtro_dif = st.segmented_control("Dificuldade:", ["Todas", "🔴 Difícil", "🟡 Médio", "🟢 Fácil"], default="Todas", key="filtro_dif_list")
     
         # Calcular pendentes
         pend = calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif)
+        
+        # Filtrar por data se necessário
+        hoje = get_br_date()
+        if filtro_rev == "Pendentes/Hoje":
+            pend = [p for p in pend if p['data_prevista'] <= hoje]
         
         if not pend: 
             st.success("✨ Tudo em dia! Nenhuma revisão pendente para os filtros selecionados.")
@@ -3051,13 +3037,16 @@ if st.session_state.missao_ativa is not None:
                                             "taxa": (n_ac/n_to*100 if n_to > 0 else 0)
                                         }).eq("id", p['id']).execute()
                                         
+                                        # LIMPAR CACHE APÓS OPERAÇÃO
+                                        st.cache_data.clear()
+                                        
                                         st.success(f"✅ Revisão concluída! +{tempo_rev}min registrados")
                                         time.sleep(1.5)
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ Erro: {e}")
 
-    # --- ABA: REGISTRAR ---
+    # --- ABA: REGISTRAR (COM VALIDAÇÃO DE TEMPO HHMM) ---
     elif menu == "Registrar":
         st.markdown('<h2 class="main-title">📝 Novo Registro de Estudo</h2>', unsafe_allow_html=True)
         mats = list(dados.get('materias', {}).keys())
@@ -3070,7 +3059,16 @@ if st.session_state.missao_ativa is not None:
                 
                 c1, c2 = st.columns([2, 1])
                 dt_reg = c1.date_input("Data do Estudo", value=get_br_date(), format="DD/MM/YYYY")
-                tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min")
+                tm_reg = c2.text_input("Tempo (HHMM)", value="0100", help="Ex: 0130 para 1h30min, 130 para 1h30")
+                
+                # VALIDAÇÃO DE TEMPO HHMM
+                if tm_reg:
+                    valido, mensagem_erro, minutos_validados = validar_tempo_hhmm(tm_reg)
+                    if not valido:
+                        st.error(f"⏰ **Erro no tempo:** {mensagem_erro}")
+                        st.info("💡 **Exemplos válidos:** 0130 (1h30), 130 (1h30), 0230 (2h30), 230 (2h30)")
+                    else:
+                        st.success(f"✅ Tempo válido: {minutos_validados} minutos ({minutos_validados//60}h{minutos_validados%60:02d}min)")
                 
                 mat_reg = st.selectbox("Disciplina", mats)
                 assuntos_disponiveis = dados.get('materias', {}).get(mat_reg, ["Geral"])
@@ -3113,33 +3111,43 @@ if st.session_state.missao_ativa is not None:
                     btn_salvar = st.form_submit_button("💾 SALVAR REGISTRO", use_container_width=True, type="primary")
                     
                     if btn_salvar:
-                        try:
-                            t_b = formatar_tempo_para_bigint(tm_reg)
-                            taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
-                            
-                            payload = {
-                                "concurso": missao, 
-                                "materia": mat_reg, 
-                                "assunto": ass_reg, 
-                                "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
-                                "acertos": ac_reg, 
-                                "total": to_reg, 
-                                "taxa": taxa,
-                                "dificuldade": dif_reg, 
-                                "relevancia": rel_reg,  # Novo campo
-                                "comentarios": com_reg, 
-                                "tempo": t_b, 
-                                "rev_24h": not gerar_rev_reg, 
-                                "rev_07d": not gerar_rev_reg, 
-                                "rev_15d": not gerar_rev_reg, 
-                                "rev_30d": not gerar_rev_reg
-                            }
-                            supabase.table("registros_estudos").insert(payload).execute()
-                            st.success("✅ Registro salvo com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao salvar: {e}")
+                        # VALIDAÇÃO FINAL DO TEMPO
+                        valido, mensagem_erro, t_b = validar_tempo_hhmm(tm_reg)
+                        if not valido:
+                            st.error(f"❌ **Erro no tempo:** {mensagem_erro}")
+                        elif to_reg == 0:
+                            st.error("❌ O total de questões não pode ser zero!")
+                        else:
+                            try:
+                                taxa = (ac_reg/to_reg*100 if to_reg > 0 else 0)
+                                
+                                payload = {
+                                    "concurso": missao, 
+                                    "materia": mat_reg, 
+                                    "assunto": ass_reg, 
+                                    "data_estudo": dt_reg.strftime('%Y-%m-%d'), 
+                                    "acertos": ac_reg, 
+                                    "total": to_reg, 
+                                    "taxa": taxa,
+                                    "dificuldade": dif_reg, 
+                                    "relevancia": rel_reg,  # Novo campo
+                                    "comentarios": com_reg, 
+                                    "tempo": t_b, 
+                                    "rev_24h": not gerar_rev_reg, 
+                                    "rev_07d": not gerar_rev_reg, 
+                                    "rev_15d": not gerar_rev_reg, 
+                                    "rev_30d": not gerar_rev_reg
+                                }
+                                supabase.table("registros_estudos").insert(payload).execute()
+                                
+                                # LIMPAR CACHE APÓS OPERAÇÃO
+                                st.cache_data.clear()
+                                
+                                st.success("✅ Registro salvo com sucesso!")
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Erro ao salvar: {e}")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ABA: DASHBOARD ---
@@ -3210,7 +3218,7 @@ if st.session_state.missao_ativa is not None:
                 
                 with cols_edital[col_idx % 3]:
                     st.markdown(f"""
-                    <div style="margin-bottom: 15px;">
+                    <div style="margin-bottom: 15px;" title="{materia}: {count_estudados}/{count_total} tópicos estudados">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; color: #E2E8F0; margin-bottom: 5px;">
                             <span>{materia}</span>
                             <span style="color: {bar_color};">{int(porcentagem)}%</span>
@@ -3227,46 +3235,32 @@ if st.session_state.missao_ativa is not None:
 
 
 
-        # --- VISÃO GERAL DA MISSÃO (INCLUINDO SIMULADOS) ---
-        st.markdown('<div class="visao-mes-title">VISÃO GERAL DA MISSÃO (Incluindo Simulados)</div>', unsafe_allow_html=True)
+        # Métricas Gerais
+        if df_estudos.empty:
+            t_q, precisao, minutos_totais, ritmo = 0, 0, 0, 0
+        else:
+            t_q = df_estudos['total'].sum()
+            a_q = df_estudos['acertos'].sum()
+            precisao = (a_q/t_q*100 if t_q > 0 else 0)
+            minutos_totais = int(df_estudos['tempo'].sum())
+            ritmo = (minutos_totais / t_q) if t_q > 0 else 0
 
-        # Calcular métricas combinadas para o período filtrado
-        # Criar DataFrames filtrados combinados
-        if periodo == "Última Semana":
-            inicio_periodo = hoje - timedelta(days=7)
-        elif periodo == "Último Mês":
-            inicio_periodo = hoje - timedelta(days=30)
-        elif periodo == "Últimos 3 Meses":
-            inicio_periodo = hoje - timedelta(days=90)
-        else:  # Tudo
-            inicio_periodo = pd.Timestamp.min.date()
-
-        # Filtrar estudos e simulados pelo período
-        df_estudos_periodo = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_periodo] if not df_estudos.empty else pd.DataFrame()
-        df_simulados_periodo = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= inicio_periodo] if not df_simulados.empty else pd.DataFrame()
-
-        # Calcular métricas combinadas para o período
-        metricas_periodo = calcular_metricas_combinadas(df_estudos_periodo, df_simulados_periodo)
-
-        # Formatar tempo
-        tempo_formatado_total = formatar_minutos(metricas_periodo['tempo_total_min'])
-
-        # Calcular deltas (comparação com ontem) - TOTAL (estudos + simulados)
+        # Calcular deltas (comparação com ontem)
         hoje = get_br_date()
         ontem = hoje - timedelta(days=1)
+        df_ontem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
 
-        # Filtrar dados de ontem (estudos + simulados)
-        df_ontem_estudos = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
-        df_ontem_simulados = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date == ontem] if not df_simulados.empty else pd.DataFrame()
+        if not df_ontem.empty:
+            t_q_ontem = df_ontem['total'].sum()
+            a_q_ontem = df_ontem['acertos'].sum()
+            precisao_ontem = (a_q_ontem / t_q_ontem * 100) if t_q_ontem > 0 else 0
+            minutos_ontem = int(df_ontem['tempo'].sum())
 
-        if not df_ontem_estudos.empty or not df_ontem_simulados.empty:
-            metricas_ontem = calcular_metricas_combinadas(df_ontem_estudos, df_ontem_simulados)
-            
-            delta_tempo = metricas_periodo['tempo_total_min'] - metricas_ontem['tempo_total_min']
-            delta_precisao = metricas_periodo['precisao_total'] - metricas_ontem['precisao_total']
-            delta_questoes = metricas_periodo['questoes_total'] - metricas_ontem['questoes_total']
-            
-            # Formatar deltas
+            delta_tempo = minutos_totais - minutos_ontem
+            delta_precisao = precisao - precisao_ontem
+            delta_questoes = t_q - t_q_ontem
+
+            # Formatar deltas com setas e indicação clara
             def format_delta(value, unit, is_better_when_lower=False):
                 if value > 0:
                     arrow = "▲"
@@ -3277,7 +3271,7 @@ if st.session_state.missao_ativa is not None:
                 else:
                     return ""
                 return f"{arrow} {abs(value):.0f}{unit} ({label})"
-            
+
             delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
             delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
             delta_q_str = format_delta(delta_questoes, "", is_better_when_lower=False)
@@ -3286,113 +3280,75 @@ if st.session_state.missao_ativa is not None:
             delta_prec_str = ""
             delta_q_str = ""
 
-        # 4 cartões de métricas com ANÉIS CIRCULARES (INCLUINDO SIMULADOS)
+        # Formatar tempo
+        tempo_formatado = formatar_minutos(minutos_totais)
+        
+        # 1. MÉTRICAS PRINCIPAIS COM ANÉIS CIRCULARES (COM TOOLTIPS)
+        st.markdown('<div class="visao-mes-title">VISÃO GERAL DA MISSÃO</div>', unsafe_allow_html=True)
+        
         m1, m2, m3, m4 = st.columns(4)
-
-        # Calcular percentuais para os anéis (considerando período)
-        horas_totais_periodo = metricas_periodo['tempo_total_min'] / 60
-        meta_horas_periodo = {
-            "Última Semana": 20,
-            "Último Mês": 80,
-            "Últimos 3 Meses": 240,
-            "Tudo": 500
-        }.get(periodo, 100)
-
-        pct_tempo = min((horas_totais_periodo / meta_horas_periodo) * 100, 100)
-        pct_precisao = min(metricas_periodo['precisao_total'], 100)
-
-        meta_questoes_periodo = {
-            "Última Semana": 300,
-            "Último Mês": 1200,
-            "Últimos 3 Meses": 3600,
-            "Tudo": 10000
-        }.get(periodo, 2000)
-
-        pct_questoes = min((metricas_periodo['questoes_total'] / meta_questoes_periodo) * 100, 100)
-
-        # Ritmo médio (min/questão) no período
-        ritmo_periodo = (metricas_periodo['tempo_total_min'] / metricas_periodo['questoes_total']) if metricas_periodo['questoes_total'] > 0 else 0
-        pct_ritmo = min((ritmo_periodo / 5) * 100, 100) if ritmo_periodo > 0 else 0
-
+        
+        # Calcular percentuais para os anéis
+        horas_totais = minutos_totais / 60
+        meta_horas_mes = 80
+        pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
+        pct_precisao = min(precisao, 100)
+        meta_questoes_mes = 1000
+        pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
+        pct_ritmo = min((ritmo / 5) * 100, 100) if ritmo > 0 else 0
+        
         with m1:
             render_circular_progress(
                 percentage=pct_tempo,
                 label="TEMPO TOTAL",
-                value=tempo_formatado_total,
+                value=tempo_formatado,
                 color_start=COLORS["primary"],
                 color_end=COLORS["secondary"],
-                icon="⏱️"
+                icon="⏱️",
+                tooltip=f"Horas totais: {horas_totais:.1f}h | Meta: {meta_horas_mes}h"
             )
             if delta_time_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_time_str}</div>', unsafe_allow_html=True)
-            st.caption(f"📚 {metricas_periodo['tempo_estudos_min']/60:.1f}h | 🏆 {metricas_periodo['tempo_simulados_min']/60:.1f}h")
-
+        
         with m2:
             render_circular_progress(
                 percentage=pct_precisao,
-                label="PRECISÃO TOTAL",
-                value=f"{metricas_periodo['precisao_total']:.0f}%",
-                color_start=COLORS["success"] if metricas_periodo['precisao_total'] >= 70 else COLORS["warning"],
+                label="PRECISÃO",
+                value=f"{precisao:.0f}%",
+                color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
                 color_end=COLORS["secondary"],
-                icon="🎯"
+                icon="🎯",
+                tooltip=f"Acertos: {a_q} | Total: {t_q}"
             )
             if delta_prec_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_prec_str}</div>', unsafe_allow_html=True)
-            st.caption(f"📚 {metricas_periodo['precisao_estudos']:.0f}% | 🏆 {metricas_periodo['precisao_simulados']:.0f}%")
-
+        
         with m3:
             render_circular_progress(
                 percentage=pct_questoes,
-                label="QUESTÕES TOTAL",
-                value=f"{metricas_periodo['questoes_total']:,}".replace(",", "."),
+                label="QUESTÕES",
+                value=f"{int(t_q)}",
                 color_start=COLORS["accent"],
                 color_end=COLORS["primary"],
-                icon="📝"
+                icon="📝",
+                tooltip=f"Total de questões resolvidas | Meta: {meta_questoes_mes}"
             )
             if delta_q_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_q_str}</div>', unsafe_allow_html=True)
-            st.caption(f"📚 {metricas_periodo['questoes_estudos']:,} | 🏆 {metricas_periodo['questoes_simulados']:,}".replace(",", "."))
-
+        
         with m4:
             render_circular_progress(
                 percentage=pct_ritmo,
                 label="RITMO MÉDIO",
-                value=f"{ritmo_periodo:.1f}m/q",
+                value=f"{ritmo:.1f}m/q",
                 color_start=COLORS["secondary"],
                 color_end=COLORS["primary"],
-                icon="⚡"
+                icon="⚡",
+                tooltip=f"Minutos por questão | Ideal: 2-3min/q"
             )
-            st.caption("Tempo médio por questão")
-
-        # Mostrar breakdown detalhado em expansor
-        with st.expander(f"📊 Detalhamento do período: {periodo}"):
-            col_dash1, col_dash2, col_dash3 = st.columns(3)
-            
-            with col_dash1:
-                st.markdown("**📚 ESTUDOS REGULARES**")
-                st.metric("Tempo", f"{metricas_periodo['tempo_estudos_min']/60:.1f}h")
-                st.metric("Questões", f"{metricas_periodo['questoes_estudos']:,}".replace(",", "."))
-                st.metric("Precisão", f"{metricas_periodo['precisao_estudos']:.1f}%")
-                if not df_estudos_periodo.empty:
-                    st.caption(f"{len(df_estudos_periodo)} registros")
-            
-            with col_dash2:
-                st.markdown("**🏆 SIMULADOS**")
-                st.metric("Tempo", f"{metricas_periodo['tempo_simulados_min']/60:.1f}h")
-                st.metric("Questões", f"{metricas_periodo['questoes_simulados']:,}".replace(",", "."))
-                st.metric("Precisão", f"{metricas_periodo['precisao_simulados']:.1f}%")
-                if not df_simulados_periodo.empty:
-                    st.caption(f"{len(df_simulados_periodo)} simulados")
-            
-            with col_dash3:
-                st.markdown("**🎯 TOTAIS**")
-                st.metric("Tempo Total", f"{horas_totais_periodo:.1f}h")
-                st.metric("Questões Total", f"{metricas_periodo['questoes_total']:,}".replace(",", "."))
-                st.metric("Precisão Total", f"{metricas_periodo['precisao_total']:.1f}%")
-                st.caption(f"Período: {periodo}")
-
+        
         st.divider()
-
+        
         # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
         if not df_estudos.empty and 'relevancia' in df_estudos.columns:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -3422,7 +3378,7 @@ if st.session_state.missao_ativa is not None:
                     with c_rel[idx]:
                         color = "#10B981" if r_taxa >= 75 else "#F59E0B" if r_taxa >= 50 else "#EF4444"
                         st.markdown(f"""
-                            <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02);">
+                            <div style="text-align: center; border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02); cursor: help;" title="Nível {r_val}: {r_taxa:.1f}% de acerto em {int(r_total)} questões">
                                 <div style="font-size: 0.7rem; color: #94A3B8;">NÍVEL {r_val}</div>
                                 <div style="font-size: 1.2rem; font-weight: 800; color: {color};">{r_taxa:.1f}%</div>
                                 <div style="font-size: 0.65rem; color: #64748B;">{int(r_total)} questões</div>
@@ -3521,10 +3477,7 @@ if st.session_state.missao_ativa is not None:
             }).reset_index()
 
             # Calcular taxa diária
-            df_ev['taxa'] = df_ev.apply(
-                lambda x: (x['acertos'] / x['total'] * 100) if x['total'] > 0 else 0, 
-                axis=1
-            )
+            df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
 
             # Criar gráfico Plotly
             fig_evo = go.Figure()
@@ -3574,6 +3527,13 @@ if st.session_state.missao_ativa is not None:
                 data_sim = col_sd1.date_input("Data Realização")
                 tempo_sim = col_sd2.text_input("Tempo (HHMM)", value="0400", help="Ex: 0400 para 4h00min")
                 
+                # VALIDAÇÃO DE TEMPO HHMM PARA SIMULADO
+                if tempo_sim:
+                    valido, mensagem_erro, minutos_validados = validar_tempo_hhmm(tempo_sim)
+                    if not valido:
+                        st.error(f"⏰ **Erro no tempo:** {mensagem_erro}")
+                        st.info("💡 **Exemplos válidos:** 0400 (4h), 0430 (4h30), 0230 (2h30)")
+                
                 st.markdown("---")
                 st.markdown("##### 📊 Desempenho por Disciplina")
                 
@@ -3593,40 +3553,47 @@ if st.session_state.missao_ativa is not None:
 
                 if st.form_submit_button("💾 Salvar Simulado Completo", use_container_width=True, type="primary"):
                     if nome_sim and mats_edital:
-                        # Calcular totais
-                        total_acertos = sum(v['ac'] for v in notas_por_materia.values())
-                        total_questoes = sum(v['to'] for v in notas_por_materia.values())
-                        
-                        if total_questoes == 0:
-                            st.error("O total de questões não pode ser zero.")
+                        # VALIDAÇÃO FINAL DO TEMPO
+                        valido, mensagem_erro, t_b_sim = validar_tempo_hhmm(tempo_sim)
+                        if not valido:
+                            st.error(f"❌ **Erro no tempo:** {mensagem_erro}")
                         else:
-                            # Gerar string de detalhes
-                            detalhes = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in notas_por_materia.items() if v['to'] > 0])
+                            # Calcular totais
+                            total_acertos = sum(v['ac'] for v in notas_por_materia.values())
+                            total_questoes = sum(v['to'] for v in notas_por_materia.values())
                             
-                            t_b_sim = formatar_tempo_para_bigint(tempo_sim)
-                            
-                            simulado_data = {
-                                "data_estudo": data_sim.strftime("%Y-%m-%d"),
-                                "materia": "SIMULADO",
-                                "assunto": f"{nome_sim} | {banca_sim}",
-                                "tempo": t_b_sim,
-                                "acertos": total_acertos,
-                                "total": total_questoes,
-                                "taxa": (total_acertos/total_questoes*100),
-                                "concurso": st.session_state.missao_ativa,
-                                "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
-                                "dificuldade": "Simulado",
-                                "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
-                            }
-                            try:
-                                supabase.table("registros_estudos").insert(simulado_data).execute()
-                                st.success(f"🏆 Simulado registrado! Total: {total_acertos}/{total_questoes}")
-                                time.sleep(1)
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro: {e}")
+                            if total_questoes == 0:
+                                st.error("❌ O total de questões não pode ser zero.")
+                            else:
+                                # Gerar string de detalhes
+                                detalhes = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in notas_por_materia.items() if v['to'] > 0])
+                                
+                                simulado_data = {
+                                    "data_estudo": data_sim.strftime("%Y-%m-%d"),
+                                    "materia": "SIMULADO",
+                                    "assunto": f"{nome_sim} | {banca_sim}",
+                                    "tempo": t_b_sim,
+                                    "acertos": total_acertos,
+                                    "total": total_questoes,
+                                    "taxa": (total_acertos/total_questoes*100),
+                                    "concurso": st.session_state.missao_ativa,
+                                    "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
+                                    "dificuldade": "Simulado",
+                                    "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
+                                }
+                                try:
+                                    supabase.table("registros_estudos").insert(simulado_data).execute()
+                                    
+                                    # LIMPAR CACHE APÓS OPERAÇÃO
+                                    st.cache_data.clear()
+                                    
+                                    st.success(f"🏆 Simulado registrado! Total: {total_acertos}/{total_questoes}")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro: {e}")
                     elif not nome_sim:
-                        st.warning("Preencha o nome do simulado.")
+                        st.warning("⚠️ Preencha o nome do simulado.")
             st.markdown('</div>', unsafe_allow_html=True)
         
         with col_sim2:
@@ -3680,7 +3647,7 @@ if st.session_state.missao_ativa is not None:
                         bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
                         
                         st.markdown(f"""
-                        <div style="background: rgba(139, 92, 246, 0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.1);">
+                        <div style="background: rgba(139, 92, 246, 0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.1); cursor: help;" title="{m_name}: {vals['ac']}/{vals['to']} acertos ({int(perc)}%)">
                             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #E2E8F0; margin-bottom: 8px;">
                                 <span style="font-weight: 600;">{m_name}</span>
                                 <span style="font-weight: 800; color: {bar_color};">{vals['ac']}/{vals['to']} ({int(perc)}%)</span>
@@ -3716,6 +3683,12 @@ if st.session_state.missao_ativa is not None:
                         data_sim_ed = col_ed_sim1.date_input("Data Realização", value=pd.to_datetime(registro_sim_edit['data_estudo']).date())
                         tempo_sim_ed = col_ed_sim2.text_input("Tempo (HHMM)", value=f"{int(registro_sim_edit['tempo']//60):02d}{int(registro_sim_edit['tempo']%60):02d}")
                         
+                        # VALIDAÇÃO DE TEMPO HHMM PARA EDIÇÃO
+                        if tempo_sim_ed:
+                            valido, mensagem_erro, t_b_ed = validar_tempo_hhmm(tempo_sim_ed)
+                            if not valido:
+                                st.error(f"⏰ **Erro no tempo:** {mensagem_erro}")
+                        
                         st.divider()
                         st.markdown("##### 📊 Desempenho por Disciplina")
                         
@@ -3742,27 +3715,39 @@ if st.session_state.missao_ativa is not None:
                         
                         col_edit_btn1, col_edit_btn2 = st.columns(2)
                         if col_edit_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-                            tot_ac = sum(v['ac'] for v in novas_notas.values())
-                            tot_to = sum(v['to'] for v in novas_notas.values())
-                            
-                            if tot_to > 0:
-                                det_novos = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in novas_notas.items() if v['to'] > 0])
-                                t_b_ed = formatar_tempo_para_bigint(tempo_sim_ed)
+                            # VALIDAÇÃO FINAL
+                            valido, mensagem_erro, t_b_ed = validar_tempo_hhmm(tempo_sim_ed)
+                            if not valido:
+                                st.error(f"❌ **Erro no tempo:** {mensagem_erro}")
+                            else:
+                                tot_ac = sum(v['ac'] for v in novas_notas.values())
+                                tot_to = sum(v['to'] for v in novas_notas.values())
                                 
-                                supabase.table("registros_estudos").update({
-                                    "data_estudo": data_sim_ed.strftime("%Y-%m-%d"),
-                                    "assunto": f"{nome_sim_ed} | {banca_sim_ed}",
-                                    "tempo": t_b_ed,
-                                    "acertos": tot_ac,
-                                    "total": tot_to,
-                                    "taxa": (tot_ac/tot_to*100),
-                                    "comentarios": f"Banca: {banca_sim_ed} | Detalhes: {det_novos}"
-                                }).eq("id", st.session_state.edit_id_simulado).execute()
-                                
-                                st.success("✅ Simulado atualizado!")
-                                time.sleep(1)
-                                st.session_state.edit_id_simulado = None
-                                st.rerun()
+                                if tot_to > 0:
+                                    det_novos = " | ".join([f"{k}: {v['ac']}/{v['to']}" for k, v in novas_notas.items() if v['to'] > 0])
+                                    
+                                    try:
+                                        supabase.table("registros_estudos").update({
+                                            "data_estudo": data_sim_ed.strftime("%Y-%m-%d"),
+                                            "assunto": f"{nome_sim_ed} | {banca_sim_ed}",
+                                            "tempo": t_b_ed,
+                                            "acertos": tot_ac,
+                                            "total": tot_to,
+                                            "taxa": (tot_ac/tot_to*100),
+                                            "comentarios": f"Banca: {banca_sim_ed} | Detalhes: {det_novos}"
+                                        }).eq("id", st.session_state.edit_id_simulado).execute()
+                                        
+                                        # LIMPAR CACHE APÓS OPERAÇÃO
+                                        st.cache_data.clear()
+                                        
+                                        st.success("✅ Simulado atualizado!")
+                                        time.sleep(1)
+                                        st.session_state.edit_id_simulado = None
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao atualizar: {e}")
+                                else:
+                                    st.error("❌ O total de questões não pode ser zero.")
                         
                         if col_edit_btn2.form_submit_button("❌ CANCELAR", use_container_width=True):
                             st.session_state.edit_id_simulado = None
@@ -3812,7 +3797,7 @@ if st.session_state.missao_ativa is not None:
                                             bar_color = "#10B981" if perc >= 75 else "#F59E0B" if perc >= 50 else "#EF4444"
                                             
                                             st.markdown(f"""
-                                            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                                            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; cursor: help;" title="{mat}: {score.strip()} acertos ({int(perc)}%)">
                                                 <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #E2E8F0; margin-bottom: 4px;">
                                                     <span>{mat}</span>
                                                     <span style="font-weight: 700;">{score.strip()} ({int(perc)}%)</span>
@@ -3840,6 +3825,10 @@ if st.session_state.missao_ativa is not None:
                             if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
                                 try:
                                     supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                    
+                                    # LIMPAR CACHE APÓS OPERAÇÃO
+                                    st.cache_data.clear()
+                                    
                                     st.toast("✅ Simulado excluído!")
                                     st.session_state[f"confirm_del_sim_{row['id']}"] = False
                                     time.sleep(1)
@@ -3939,6 +3928,12 @@ if st.session_state.missao_ativa is not None:
                             value=f"{int(registro_edit['tempo']//60):02d}{int(registro_edit['tempo']%60):02d}", 
                             key="tm_edit"
                         )
+                        
+                        # VALIDAÇÃO DE TEMPO HHMM PARA EDIÇÃO
+                        if tm_edit:
+                            valido, mensagem_erro, t_b_edit = validar_tempo_hhmm(tm_edit)
+                            if not valido:
+                                st.error(f"⏰ **Erro no tempo:** {mensagem_erro}")
                     
                         mat_edit = st.selectbox(
                             "Disciplina", 
@@ -4001,33 +3996,42 @@ if st.session_state.missao_ativa is not None:
                         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
                     
                         if col_btn1.form_submit_button("✅ SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
-                            try:
-                                t_b = formatar_tempo_para_bigint(tm_edit)
-                                taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
-                            
-                                supabase.table("registros_estudos").update({
-                                    "data_estudo": dt_edit.strftime('%Y-%m-%d'),
-                                    "materia": mat_edit,
-                                    "assunto": ass_edit,
-                                    "acertos": ac_edit,
-                                    "total": to_edit,
-                                    "taxa": taxa,
-                                    "dificuldade": dif_edit,
-                                    "relevancia": rel_edit, # Novo campo
-                                    "comentarios": com_edit,
-                                    "tempo": t_b,
-                                    "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
-                                    "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_07d'])),
-                                    "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_15d'])),
-                                    "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d']))
-                                }).eq("id", st.session_state.edit_id).execute()
-                            
-                                st.success("✅ Registro atualizado com sucesso!")
-                                time.sleep(1)
-                                st.session_state.edit_id = None
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao atualizar: {e}")
+                            # VALIDAÇÃO FINAL
+                            valido, mensagem_erro, t_b = validar_tempo_hhmm(tm_edit)
+                            if not valido:
+                                st.error(f"❌ **Erro no tempo:** {mensagem_erro}")
+                            elif to_edit == 0:
+                                st.error("❌ O total de questões não pode ser zero!")
+                            else:
+                                try:
+                                    taxa = (ac_edit/to_edit*100 if to_edit > 0 else 0)
+                                
+                                    supabase.table("registros_estudos").update({
+                                        "data_estudo": dt_edit.strftime('%Y-%m-%d'),
+                                        "materia": mat_edit,
+                                        "assunto": ass_edit,
+                                        "acertos": ac_edit,
+                                        "total": to_edit,
+                                        "taxa": taxa,
+                                        "dificuldade": dif_edit,
+                                        "relevancia": rel_edit, # Novo campo
+                                        "comentarios": com_edit,
+                                        "tempo": t_b,
+                                        "rev_24h": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_24h'])),
+                                        "rev_07d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_07d'])),
+                                        "rev_15d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_15d'])),
+                                        "rev_30d": bool(not gerar_rev_edit if not gerar_rev_edit else (False if foi_concluido else registro_edit['rev_30d']))
+                                    }).eq("id", st.session_state.edit_id).execute()
+                                
+                                    # LIMPAR CACHE APÓS OPERAÇÃO
+                                    st.cache_data.clear()
+                                
+                                    st.success("✅ Registro atualizado com sucesso!")
+                                    time.sleep(1)
+                                    st.session_state.edit_id = None
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao atualizar: {e}")
                     
                         if col_btn2.form_submit_button("❌ CANCELAR", use_container_width=True, type="secondary"):
                             st.session_state.edit_id = None
@@ -4104,6 +4108,10 @@ if st.session_state.missao_ativa is not None:
                                         # Confirmação via dialog
                                         if st.session_state.get(f"confirm_delete_{row['id']}", False):
                                             supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                            
+                                            # LIMPAR CACHE APÓS OPERAÇÃO
+                                            st.cache_data.clear()
+                                            
                                             st.toast("✅ Registro excluído com sucesso!", icon="✅")
                                             time.sleep(0.5)
                                             st.session_state[f"confirm_delete_{row['id']}"] = False
@@ -4131,7 +4139,7 @@ if st.session_state.missao_ativa is not None:
         
         st.divider()
         
-        # Calcular Projeção
+        # Calcular Projeção (USANDO FUNÇÃO CORRIGIDA)
         proj = calcular_projecao_conclusao(df_estudos, dados)
         
         # VISUALIZAÇÃO DE PROJEÇÃO (FULL WIDTH)
@@ -4146,11 +4154,11 @@ if st.session_state.missao_ativa is not None:
                         </div>
                         <div style="flex: 1; min-width: 200px;">
                             <div style="color: #94A3B8; font-size: 0.7rem;">DATA ESTIMADA</div>
-                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y')}</div>
+                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['data_fim'].strftime('%d/%m/%Y') if proj['data_fim'] else '—'}</div>
                         </div>
                         <div style="flex: 1; min-width: 200px;">
                             <div style="color: #94A3B8; font-size: 0.7rem;">DIAS RESTANTES</div>
-                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['dias_para_fim']} dias</div>
+                            <div style="color: #fff; font-size: 1.2rem; font-weight: 700;">{proj['dias_para_fim'] if proj['dias_para_fim'] else '—'} dias</div>
                         </div>
                         <div style="flex: 1; min-width: 200px;">
                             <div style="color: #94A3B8; font-size: 0.7rem;">RITMO (Tópicos/sem)</div>
@@ -4172,6 +4180,8 @@ if st.session_state.missao_ativa is not None:
                         <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                             Análise de priorização (Esforço x Resultado), 
                             detalhamento por matéria e gargalos de assuntos.
+                            <br><br>
+                            <strong>📋 Inclui sumário completo</strong>
                         </p>
                     </div>
                 </div>
@@ -4190,7 +4200,7 @@ if st.session_state.missao_ativa is not None:
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"❌ Erro: {e}")
 
         with col_rel2:
             st.markdown(f"""
@@ -4199,6 +4209,8 @@ if st.session_state.missao_ativa is not None:
                         <h3 style="color: #fff; margin-bottom: 10px;">🕒 Diário de Horas</h3>
                         <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                             Ranking de dedicação por matéria (do maior para o menor), com destaque para seu foco principal e detalhamento de tópicos.
+                            <br><br>
+                            <strong>📋 Com índice organizado</strong>
                         </p>
                     </div>
                 </div>
@@ -4216,7 +4228,7 @@ if st.session_state.missao_ativa is not None:
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"❌ Erro: {e}")
 
         with col_rel3:
             st.markdown(f"""
@@ -4225,6 +4237,8 @@ if st.session_state.missao_ativa is not None:
                         <h3 style="color: #fff; margin-bottom: 10px;">📝 Relatório de Simulados</h3>
                         <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
                             Histórico consolidado de todas as suas provas, com evolução de notas, média geral e recordes.
+                            <br><br>
+                            <strong>📋 Com índice detalhado</strong>
                         </p>
                     </div>
                 </div>
@@ -4243,7 +4257,7 @@ if st.session_state.missao_ativa is not None:
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error(f"Erro: {e}")
+                    st.error(f"❌ Erro: {e}")
 
         st.divider()
 
@@ -4388,11 +4402,13 @@ if st.session_state.missao_ativa is not None:
                         if verificacao.data and verificacao.data[0]['concurso'] == nova_principal:
                             st.success(f"✅ '{nova_principal}' definida como missão principal!")
                             st.info(f"💡 {len(verificacao.data)} registro(s) marcado(s). Esta missão será carregada automaticamente.")
+                            
+                            # LIMPAR CACHE APÓS OPERAÇÃO
+                            st.cache_data.clear()
                         else:
                             st.warning("⚠️ Missão salva, mas verificação falhou. Tente novamente.")
                         
                         time.sleep(2)
-                        st.cache_data.clear()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Erro ao definir missão principal: {e}")
@@ -4500,8 +4516,11 @@ if st.session_state.missao_ativa is not None:
                                 msg_principal = " e definida como principal" if marcar_como_principal else ""
                                 st.success(f"✅ Missão '{nome_novo_concurso}' criada{msg_principal}!")
                                 st.info("💡 Você pode ativá-la na aba 'Selecionar Missão' ou no HOME.")
-                                time.sleep(2)
+                                
+                                # LIMPAR CACHE APÓS OPERAÇÃO
                                 st.cache_data.clear()
+                                
+                                time.sleep(2)
                                 st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erro ao criar missão: {e}")
@@ -4537,8 +4556,10 @@ if st.session_state.missao_ativa is not None:
                                 if missao_para_excluir == missao:
                                     st.session_state.missao_ativa = None
                                 
-                                time.sleep(2)
+                                # LIMPAR CACHE APÓS OPERAÇÃO
                                 st.cache_data.clear()
+                                
+                                time.sleep(2)
                                 st.rerun()
                             else:
                                 st.error("❌ Erro ao excluir missão.")
@@ -4685,8 +4706,10 @@ if st.session_state.missao_ativa is not None:
                                     if contador_registros > 0:
                                         st.info(f"🗑️ **{contador_registros} registro(s) de estudo relacionados foram removidos.**")
                                 
-                                    # Limpar cache e recarregar
+                                    # LIMPAR CACHE APÓS OPERAÇÃO
                                     st.cache_data.clear()
+                                    
+                                    # Recarregar
                                     time.sleep(2)
                                     st.rerun()
                                 
@@ -4724,8 +4747,11 @@ if st.session_state.missao_ativa is not None:
                                         # Atualizar no banco
                                         supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).execute()
                                         st.success(f"✅ Assunto '{topico}' removido!")
+                                        
+                                        # LIMPAR CACHE APÓS OPERAÇÃO
+                                        st.cache_data.clear()
+                                        
                                         time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao remover assunto: {e}")
@@ -4832,8 +4858,11 @@ if st.session_state.missao_ativa is not None:
                                         # Atualizar no banco
                                         supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
                                         st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
+                                        
+                                        # LIMPAR CACHE APÓS OPERAÇÃO
+                                        st.cache_data.clear()
+                                        
                                         time.sleep(1)
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao adicionar assuntos: {e}")
@@ -4863,7 +4892,10 @@ if st.session_state.missao_ativa is not None:
                                         st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
                                         time.sleep(1)
                                         st.session_state[f"renomear_{id_registro}"] = False
-                                        st.cache_data.clear()  # Limpar cache para atualizar a interface
+                                        
+                                        # LIMPAR CACHE APÓS OPERAÇÃO
+                                        st.cache_data.clear()
+                                        
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"❌ Erro ao renomear matéria: {e}")
@@ -4984,8 +5016,11 @@ if st.session_state.missao_ativa is not None:
                             
                                 supabase.table("editais_materias").insert(payload).execute()
                                 st.success(f"✅ Matéria '{nova_materia}' adicionada com {len(assuntos_iniciais)} assunto(s) inicial(is)!")
+                                
+                                # LIMPAR CACHE APÓS OPERAÇÃO
+                                st.cache_data.clear()
+                                
                                 time.sleep(1)
-                                st.cache_data.clear()  # Limpar cache para atualizar a interface
                                 st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erro ao adicionar matéria: {e}")
