@@ -1,5 +1,3 @@
-[file name]: app (5).py
-[file content begin]
 import streamlit as st
 import pandas as pd
 import datetime
