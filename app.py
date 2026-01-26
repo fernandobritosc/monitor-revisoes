@@ -966,6 +966,129 @@ def excluir_concurso_completo(supabase, missao, user_id):
         st.error(f"Erro ao excluir concurso: {e}")
         return False
 
+# ============================================================================
+# FUNCIONALIDADE: TEMPLATES PÚBLICOS E CLONAGEM DE EDITAIS
+# ============================================================================
+
+def listar_templates_publicos(supabase):
+    """Lista todos os templates públicos disponíveis"""
+    try:
+        response = supabase.table("editais_materias")\
+            .select("concurso, cargo, template_nome, template_descricao, template_clones")\
+            .eq("is_template", True)\
+            .execute()
+        
+        if response.data:
+            templates = {}
+            for item in response.data:
+                concurso = item['concurso']
+                if concurso not in templates:
+                    templates[concurso] = {
+                        'cargo': item['cargo'],
+                        'nome': item.get('template_nome', concurso),
+                        'descricao': item.get('template_descricao', ''),
+                        'clones': item.get('template_clones', 0)
+                    }
+            return templates
+        return {}
+    except Exception as e:
+        st.error(f"Erro ao listar templates: {e}")
+        return {}
+
+def visualizar_template(supabase, concurso_template):
+    """Mostra as matérias e tópicos de um template"""
+    try:
+        response = supabase.table("editais_materias")\
+            .select("materia, topicos")\
+            .eq("concurso", concurso_template)\
+            .eq("is_template", True)\
+            .execute()
+        
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Erro ao visualizar template: {e}")
+        return []
+
+def clonar_template(supabase, concurso_origem, novo_concurso, novo_cargo, user_id, data_prova=None):
+    """Clona um template para o usuário"""
+    try:
+        check = supabase.table("editais_materias")\
+            .select("id")\
+            .eq("concurso", novo_concurso)\
+            .eq("user_id", user_id)\
+            .limit(1)\
+            .execute()
+        
+        if check.data:
+            return {'success': False, 'message': f'Você já tem um concurso chamado "{novo_concurso}"!'}
+        
+        materias = supabase.table("editais_materias")\
+            .select("materia, topicos")\
+            .eq("concurso", concurso_origem)\
+            .eq("is_template", True)\
+            .execute()
+        
+        if not materias.data:
+            return {'success': False, 'message': 'Template não encontrado!'}
+        
+        clonados = 0
+        for materia_data in materias.data:
+            payload = {
+                "concurso": novo_concurso,
+                "cargo": novo_cargo,
+                "materia": materia_data['materia'],
+                "topicos": materia_data['topicos'],
+                "user_id": user_id,
+                "is_template": False
+            }
+            
+            if data_prova:
+                payload["data_prova"] = data_prova.strftime("%Y-%m-%d")
+            
+            supabase.table("editais_materias").insert(payload).execute()
+            clonados += 1
+        
+        supabase.table("editais_materias")\
+            .update({"template_clones": supabase.rpc('increment', {'x': 1})})\
+            .eq("concurso", concurso_origem)\
+            .eq("is_template", True)\
+            .execute()
+        
+        return {'success': True, 'message': f'✅ Template clonado! {clonados} matéria(s) adicionada(s).'}
+        
+    except Exception as e:
+        return {'success': False, 'message': f'❌ Erro ao clonar template: {str(e)}'}
+
+def transformar_em_template(supabase, concurso, user_id, nome_template, descricao):
+    """Transforma seu edital em um template público"""
+    try:
+        check = supabase.table("editais_materias")\
+            .select("id")\
+            .eq("concurso", concurso)\
+            .eq("user_id", user_id)\
+            .limit(1)\
+            .execute()
+        
+        if not check.data:
+            return {'success': False, 'message': 'Edital não encontrado!'}
+        
+        supabase.table("editais_materias")\
+            .update({
+                "is_template": True,
+                "template_criador_id": user_id,
+                "template_nome": nome_template,
+                "template_descricao": descricao,
+                "template_clones": 0
+            })\
+            .eq("concurso", concurso)\
+            .eq("user_id", user_id)\
+            .execute()
+        
+        return {'success': True, 'message': f'✅ Edital "{concurso}" agora é um template público!'}
+        
+    except Exception as e:
+        return {'success': False, 'message': f'❌ Erro: {str(e)}'}
+
 # --- INTEGRAÇÃO: ESTILOS RESPONSIVOS ---
 def apply_styles():
     st.markdown("""
@@ -2355,8 +2478,8 @@ if st.session_state.missao_ativa is not None:
         # Menu Premium com option_menu
         menu_selecionado = option_menu(
             menu_title=None,
-            options=["HOME", "GUIA SEMANAL", "REVISÕES", "QUESTÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
-            icons=["house", "calendar3", "arrow-repeat", "question-circle", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
+            options=["HOME", "TEMPLATES", "GUIA SEMANAL", "REVISÕES", "QUESTÕES", "REGISTRAR", "DASHBOARD", "SIMULADOS", "HISTÓRICO", "RELATÓRIOS", "CONFIGURAR"],
+            icons=["house", "book", "calendar3", "arrow-repeat", "question-circle", "pencil-square", "graph-up-arrow", "trophy", "clock-history", "file-earmark-pdf", "gear"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -2391,6 +2514,7 @@ if st.session_state.missao_ativa is not None:
         # Mapeamento do Menu (Opção UI -> Estado Interno)
         mapa_menu = {
             "HOME": "Home",
+            "TEMPLATES": "Templates",
             "GUIA SEMANAL": "Guia Semanal",
             "REVISÕES": "Revisões",
             "QUESTÕES": "Questões",
@@ -2926,6 +3050,152 @@ if st.session_state.missao_ativa is not None:
                     <div class="meta-subtitle">{progresso_questoes:.0f}% da meta alcançada</div>
                 </div>
                 ''', unsafe_allow_html=True)
+
+    # --- ABA: TEMPLATES (EDITAIS PÚBLICOS) ---
+    elif menu == "Templates":
+        st.title("📚 Templates de Editais")
+        
+        st.markdown("""
+        <div style='background: rgba(139, 92, 246, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+            <h4 style='margin-top: 0;'>💡 O que são Templates?</h4>
+            <p style='margin-bottom: 0.5rem;'>Templates são editais pré-configurados que você pode clonar para começar rapidamente!</p>
+            <ul style='margin-bottom: 0;'>
+                <li>✅ Clone templates públicos criados pela comunidade</li>
+                <li>✅ Transforme seu próprio edital em template para compartilhar</li>
+                <li>✅ Personalize após clonar</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🌐 Templates Públicos", "📤 Compartilhar Meu Edital"])
+        
+        # TAB 1: CLONAR TEMPLATES
+        with tab1:
+            st.markdown("### 🌐 Templates Disponíveis")
+            
+            templates = listar_templates_publicos(supabase)
+            
+            if not templates:
+                st.info("📭 Nenhum template público disponível no momento.")
+            else:
+                for concurso, info in templates.items():
+                    with st.expander(f"📚 {info['nome']} ({info['clones']} clone(s))"):
+                        st.markdown(f"**Cargo:** {info['cargo']}")
+                        if info['descricao']:
+                            st.markdown(f"**Descrição:** {info['descricao']}")
+                        
+                        materias = visualizar_template(supabase, concurso)
+                        if materias:
+                            st.markdown("**Matérias incluídas:**")
+                            for mat in materias:
+                                with st.expander(f"📖 {mat['materia']}"):
+                                    topicos = mat.get('topicos', [])
+                                    if topicos:
+                                        for topico in topicos:
+                                            st.write(f"• {topico}")
+                                    else:
+                                        st.caption("Sem tópicos definidos")
+                        
+                        st.markdown("---")
+                        
+                        with st.form(f"form_clonar_{concurso.replace(' ', '_')}"):
+                            st.markdown("#### 🎯 Clonar este template")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                novo_nome = st.text_input(
+                                    "Nome do seu concurso",
+                                    placeholder="Ex: TJ-GO 2026",
+                                    key=f"nome_{concurso}"
+                                )
+                            with col2:
+                                novo_cargo = st.text_input(
+                                    "Cargo",
+                                    value=info['cargo'],
+                                    key=f"cargo_{concurso}"
+                                )
+                            
+                            data_prova = st.date_input(
+                                "Data da prova (opcional)",
+                                value=None,
+                                key=f"data_{concurso}"
+                            )
+                            
+                            if st.form_submit_button("🎯 Clonar Template", use_container_width=True):
+                                if novo_nome and novo_cargo:
+                                    result = clonar_template(
+                                        supabase,
+                                        concurso,
+                                        novo_nome,
+                                        novo_cargo,
+                                        user_id,
+                                        data_prova
+                                    )
+                                    
+                                    if result['success']:
+                                        st.success(result['message'])
+                                        st.balloons()
+                                        time.sleep(2)
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error(result['message'])
+                                else:
+                                    st.warning("Preencha nome e cargo!")
+        
+        # TAB 2: COMPARTILHAR SEU EDITAL
+        with tab2:
+            st.markdown("### 📤 Transformar Meu Edital em Template")
+            
+            meus_editais = get_editais(supabase, user_id)
+            
+            if not meus_editais:
+                st.info("📭 Você ainda não tem editais cadastrados.")
+            else:
+                st.markdown("""
+                <div style='background: rgba(6, 182, 212, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                    💡 <strong>Dica:</strong> Ao transformar seu edital em template, outros usuários 
+                    poderão cloná-lo, mas <strong>não conseguirão ver ou modificar seus dados pessoais</strong>!
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.form("form_criar_template"):
+                    concurso_selecionado = st.selectbox(
+                        "Selecione o edital para compartilhar",
+                        options=list(meus_editais.keys())
+                    )
+                    
+                    nome_template = st.text_input(
+                        "Nome do template",
+                        placeholder="Ex: TJ-GO - Analista Judiciário 2024"
+                    )
+                    
+                    descricao = st.text_area(
+                        "Descrição do template",
+                        placeholder="Descreva o que este template contém...",
+                        height=100
+                    )
+                    
+                    if st.form_submit_button("📤 Compartilhar como Template", use_container_width=True):
+                        if nome_template:
+                            result = transformar_em_template(
+                                supabase,
+                                concurso_selecionado,
+                                user_id,
+                                nome_template,
+                                descricao
+                            )
+                            
+                            if result['success']:
+                                st.success(result['message'])
+                                st.info("💡 Seu edital agora aparece nos templates públicos!")
+                                time.sleep(2)
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error(result['message'])
+                        else:
+                            st.warning("Preencha o nome do template!")
 
     # --- ABA: GUIA SEMANAL (PLANNER INTELIGENTE) ---
     elif menu == "Guia Semanal":
