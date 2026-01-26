@@ -2579,7 +2579,7 @@ if st.session_state.missao_ativa is not None:
                 
                 df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
                 df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos)
-                                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
+                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
                 df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
                 
                 # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
