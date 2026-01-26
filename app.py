@@ -920,12 +920,28 @@ def apply_styles():
         /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
         /* Apenas garantimos que os containers usem 100% do espaço disponível */
         
+        /* FORÇAR LARGURA 100% EM TODOS OS CONTAINERS */
+        .main, .main > div, .block-container, .block-container > div {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
         .main .block-container {
             max-width: 100% !important;
             padding-left: 2rem !important;
             padding-right: 2rem !important;
             padding-top: 2rem !important;
             padding-bottom: 5rem !important;
+        }
+        
+        /* Garantir que elementos não ultrapassem o container */
+        * {
+            box-sizing: border-box !important;
+        }
+        
+        .element-container, .stMarkdown, .stButton, .stForm {
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         /* Em telas menores, reduzir padding */
@@ -1096,6 +1112,62 @@ def apply_styles():
         /* ═══ SCROLL SUAVE ═══ */
         
         html { scroll-behavior: smooth; }
+        
+        /* ═══ EXPANDERS E TABS RESPONSIVOS ═══ */
+        
+        [data-testid="stExpander"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+        
+        [data-testid="stExpander"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        .streamlit-expanderHeader {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        [data-testid="stVerticalBlock"] {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        [data-testid="stHorizontalBlock"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex-wrap: wrap !important;
+        }
+        
+        .stTabs {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.5rem !important;
+            flex-wrap: wrap !important;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            white-space: normal !important;
+            min-width: auto !important;
+        }
+        
+        @media (max-width: 768px) {
+            [data-testid="stExpander"] {
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .stTabs [data-baseweb="tab"] {
+                font-size: 0.85rem !important;
+                padding: 0.5rem 0.75rem !important;
+            }
+        }
         
         /* ═══ ACESSIBILIDADE ═══ */
         
@@ -1279,6 +1351,11 @@ if 'renomear_materia' not in st.session_state:
 # Aplicar estilos base
 apply_styles()
 
+# Configuração da página para responsividade
+st.markdown("""
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+""", unsafe_allow_html=True)
+
 # CSS Customizado para Layout Moderno - TEMA ROXO/CIANO
 st.markdown("""
     <style>
@@ -1337,6 +1414,25 @@ st.markdown("""
         padding-bottom: 3rem;
         transition: all 0.3s ease;
     }
+    
+    /* RESPONSIVIDADE MOBILE - FORÇAR LARGURA 100% */
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container,
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container,
+        .main .block-container {
+            max-width: 100% !important;
+            width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        [data-testid="stSidebar"] {
+            min-width: 100% !important;
+            width: 100% !important;
+        }
+    }
 
     /* Cards Glassmorphism Modernos */
     .modern-card {
@@ -1349,6 +1445,8 @@ st.markdown("""
         margin-bottom: 20px;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        width: 100% !important;
+        max-width: 100% !important;
     }
     .modern-card:hover {
         border-color: rgba(0, 255, 255, 0.3);
