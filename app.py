@@ -10,6 +10,10 @@ import time
 from streamlit_option_menu import option_menu
 from fpdf import FPDF
 import io
+import os  # MULTI-USER: Adicionado
+
+# MULTI-USER: Import do módulo de autenticação
+from auth import AuthManager
 
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
@@ -844,31 +848,94 @@ st.set_page_config(
     }
 )
 
-# --- INTEGRAÇÃO: SUPABASE (MODO SEGURO PARA DEPLOY) ---
+# --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
 from supabase import create_client, Client
 
 def init_supabase():
-    # Agora o código busca as chaves no painel "Secrets" que você configurou
+    """Inicializa Supabase com suporte multi-usuário"""
     try:
+        # Tentar st.secrets primeiro (produção)
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
         return create_client(url, key)
-    except Exception as e:
-        # Se não encontrar nos secrets, ele tenta as variáveis locais (opcional)
-        st.error("Não foi possível carregar as credenciais do Supabase via Secrets.")
-        return None
+    except Exception:
+        try:
+            # Tentar variáveis de ambiente (desenvolvimento)
+            url = os.getenv("SUPABASE_URL")
+            key = os.getenv("SUPABASE_KEY")
+            if url and key:
+                return create_client(url, key)
+            else:
+                st.error("❌ Credenciais Supabase não configuradas!")
+                st.info("Configure SUPABASE_URL e SUPABASE_KEY em .streamlit/secrets.toml ou variáveis de ambiente")
+                return None
+        except Exception as e:
+            st.error(f"❌ Erro ao conectar com Supabase: {e}")
+            return None
 
-# Inicializa o cliente
+# Inicializar Supabase
 try:
     supabase: Client = init_supabase()
 except Exception:
     supabase = None
 
+# =============================================================================
+# MULTI-USER: AUTENTICAÇÃO
+# =============================================================================
+
+if supabase:
+    # Inicializar gerenciador de autenticação
+    auth = AuthManager(supabase)
+    
+    # Verificar se está autenticado
+    if not auth.is_authenticated():
+        # Usuário NÃO autenticado -> Mostrar tela de login
+        auth.render_login_page()
+        st.stop()
+    
+    # Usuário AUTENTICADO -> Obter user_id para usar nas queries
+    user_id = auth.get_user_id()
+    
+    # =============================================================================
+    # MULTI-USER: WIDGET DE USUÁRIO NA SIDEBAR
+    # =============================================================================
+    
+    with st.sidebar:
+        # Card do usuário
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, #8B5CF6 0%, #06B6D4 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">👤</div>
+            <div style="font-weight: 700; color: white; font-size: 1.1rem; margin-bottom: 0.25rem;">
+                {auth.get_user_name()}
+            </div>
+            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); word-break: break-all;">
+                {auth.get_user_email()}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚪 Sair", use_container_width=True, type="secondary", key="logout_btn_main"):
+            result = auth.logout()
+            if result['success']:
+                st.rerun()
+        
+        st.markdown("---")
+else:
+    st.error("❌ Erro ao conectar com Supabase. Verifique as configurações.")
+    st.stop()
+
 # --- INTEGRAÇÃO: LÓGICA ---
-def get_editais(supabase):
+def get_editais(supabase, user_id):
     if not supabase: return {}
     try:
-        response = supabase.table("editais_materias").select("*").execute()
+        response = supabase.table("editais_materias").select("*").eq("user_id", user_id).execute()
         data = response.data
         editais = {}
         if data:
@@ -889,11 +956,11 @@ def get_editais(supabase):
     except Exception:
         return {}
 
-def excluir_concurso_completo(supabase, missao):
+def excluir_concurso_completo(supabase, missao, user_id):
     if not supabase or not missao: return False
     try:
-        supabase.table("registros_estudos").delete().eq("concurso", missao).execute()
-        supabase.table("editais_materias").delete().eq("concurso", missao).execute()
+        supabase.table("registros_estudos").delete().eq("concurso", missao).eq("user_id", user_id).execute()
+        supabase.table("editais_materias").delete().eq("concurso", missao).eq("user_id", user_id).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao excluir concurso: {e}")
@@ -1220,11 +1287,11 @@ if 'missao_ativa' not in st.session_state:
     missao_carregada = None
     
     try:
-        ed = get_editais(supabase)
+        ed = get_editais(supabase, user_id)
         if ed:
             # PASSO 1: Tentar buscar missão principal do banco
             try:
-                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).execute()
+                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).eq("user_id", user_id).execute()
                 if res_principal.data and len(res_principal.data) > 0:
                     missao_principal = res_principal.data[0]['concurso']
                     # Verificar se ainda existe
@@ -1252,18 +1319,18 @@ def get_estudos_cached(missao):
     if not supabase:
         return []
     try:
-        response = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).execute()
+        response = supabase.table("registros_estudos").select("*").eq("concurso", missao).order("data_estudo", desc=True).eq("user_id", user_id).execute()
         return response.data
     except Exception:
         return []
 
 @st.cache_data(ttl=600)  # Cache de 10 minutos (dados menos voláteis)
-def get_editais_cached():
+def get_editais_cached(user_id):
     """Busca editais com cache"""
     if not supabase:
         return {}
     try:
-        return get_editais(supabase)
+        return get_editais(supabase, user_id)
     except Exception:
         return {}
 
@@ -1272,7 +1339,7 @@ def carregar_dados():
         return {}, pd.DataFrame()
     try:
         # Load editais com cache
-        editais_data = get_editais_cached()
+        editais_data = get_editais_cached(user_id)
         
         # Load all study records for the active mission com cache
         if st.session_state.missao_ativa:
@@ -1314,7 +1381,7 @@ df = df_estudos
 if not dados.get('missoes'):
     if 'missao_ativa' not in st.session_state:
         try:
-            ed = get_editais(supabase)
+            ed = get_editais(supabase, user_id)
             if ed:
                 st.session_state.missao_ativa = list(ed.keys())[0]
             else:
@@ -2186,7 +2253,7 @@ def calcular_revisoes_pendentes(df_estudos, filtro_rev, filtro_dif):
 
 # --- 3. LÓGICA DE NAVEGAÇÃO ---
 # Verificar se existe pelo menos uma missão cadastrada
-ed = get_editais(supabase)
+ed = get_editais(supabase, user_id)
 
 if not ed and st.session_state.missao_ativa is None:
     # Primeira vez no app - mostrar tela de boas-vindas
@@ -2220,6 +2287,7 @@ if not ed and st.session_state.missao_ativa is None:
         if btn_cadastrar:
             if nome_concurso and cargo_concurso:
                 try:
+        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
                     payload = {
                         "concurso": nome_concurso,
                         "cargo": cargo_concurso,
@@ -2343,7 +2411,7 @@ if st.session_state.missao_ativa is not None:
     # --- ABA: HOME (PAINEL GERAL) ---
     if menu == "Home":
         # SELETOR DE MISSÃO no topo
-        ed = get_editais(supabase)
+        ed = get_editais(supabase, user_id)
         if len(ed) > 1:
             st.markdown('<div class="modern-card" style="padding: 15px; margin-bottom: 20px;">', unsafe_allow_html=True)
             col_select, col_btn_trocar = st.columns([4, 1])
@@ -3121,7 +3189,7 @@ if st.session_state.missao_ativa is not None:
                                 st.error("⚠️ Informe o total de questões!")
                             else:
                                 try:
-                                    res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).execute()
+                                    res_db = supabase.table("registros_estudos").select("acertos, total, tempo").eq("id", p['id']).eq("user_id", user_id).execute()
                                     if res_db.data:
                                         n_ac = res_db.data[0]['acertos'] + acertos
                                         n_to = res_db.data[0]['total'] + total
@@ -3156,7 +3224,7 @@ if st.session_state.missao_ativa is not None:
         with tab_lista:
             # Buscar questões do Supabase
             try:
-                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).execute()
+                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).eq("user_id", user_id).execute()
                 questoes = response.data if response.data else []
             except Exception as e:
                 st.error(f"❌ Erro ao carregar questões: {e}")
@@ -3220,7 +3288,7 @@ if st.session_state.missao_ativa is not None:
                                 try:
                                     ids_para_atualizar = [q['id'] for q in questoes_filtradas]
                                     for qid in ids_para_atualizar:
-                                        supabase.table("questoes_revisao").update({"status": "Concluída"}).eq("id", qid).execute()
+                                        supabase.table("questoes_revisao").update({"status": "Concluída"}).eq("id", qid).eq("user_id", user_id).execute()
                                     st.success(f"✅ {len(ids_para_atualizar)} questões marcadas como concluídas!")
                                     time.sleep(1)
                                     st.rerun()
@@ -3232,7 +3300,7 @@ if st.session_state.missao_ativa is not None:
                                 try:
                                     ids_para_atualizar = [q['id'] for q in questoes_filtradas]
                                     for qid in ids_para_atualizar:
-                                        supabase.table("questoes_revisao").update({"status": "Pendente"}).eq("id", qid).execute()
+                                        supabase.table("questoes_revisao").update({"status": "Pendente"}).eq("id", qid).eq("user_id", user_id).execute()
                                     st.success(f"✅ {len(ids_para_atualizar)} questões reiniciadas!")
                                     time.sleep(1)
                                     st.rerun()
@@ -3244,7 +3312,7 @@ if st.session_state.missao_ativa is not None:
                                 try:
                                     ids_concluidas = [q['id'] for q in questoes_filtradas if q.get('status') == 'Concluída']
                                     for qid in ids_concluidas:
-                                        supabase.table("questoes_revisao").delete().eq("id", qid).execute()
+                                        supabase.table("questoes_revisao").delete().eq("id", qid).eq("user_id", user_id).execute()
                                     st.success(f"✅ {len(ids_concluidas)} questões concluídas removidas!")
                                     time.sleep(1)
                                     st.rerun()
@@ -3348,7 +3416,7 @@ if st.session_state.missao_ativa is not None:
                                 )
                                 if novo_status != status:
                                     try:
-                                        supabase.table("questoes_revisao").update({"status": novo_status}).eq("id", questao_id).execute()
+                                        supabase.table("questoes_revisao").update({"status": novo_status}).eq("id", questao_id).eq("user_id", user_id).execute()
                                         st.success("✅ Status atualizado!")
                                         time.sleep(0.5)
                                         st.rerun()
@@ -3363,7 +3431,7 @@ if st.session_state.missao_ativa is not None:
                             with col_a3:
                                 if st.button("🗑️ Excluir", key=f"del_{questao_id}", use_container_width=True, type="primary"):
                                     try:
-                                        supabase.table("questoes_revisao").delete().eq("id", questao_id).execute()
+                                        supabase.table("questoes_revisao").delete().eq("id", questao_id).eq("user_id", user_id).execute()
                                         st.success("✅ Questão excluída!")
                                         time.sleep(0.5)
                                         st.rerun()
@@ -3375,7 +3443,7 @@ if st.session_state.missao_ativa is not None:
                                 if st.button("➕ Meta", key=f"meta_{questao_id}", use_container_width=True):
                                     try:
                                         nova_meta = meta + 1
-                                        supabase.table("questoes_revisao").update({"meta": nova_meta}).eq("id", questao_id).execute()
+                                        supabase.table("questoes_revisao").update({"meta": nova_meta}).eq("id", questao_id).eq("user_id", user_id).execute()
                                         st.success(f"✅ Meta: {nova_meta}")
                                         time.sleep(0.5)
                                         st.rerun()
@@ -3421,7 +3489,7 @@ if st.session_state.missao_ativa is not None:
                                                     "tags": tags_list
                                                 }
                                                 
-                                                supabase.table("questoes_revisao").update(payload).eq("id", questao_id).execute()
+                                                supabase.table("questoes_revisao").update(payload).eq("id", questao_id).eq("user_id", user_id).execute()
                                                 st.success("✅ Questão atualizada!")
                                                 st.session_state[f"editando_{questao_id}"] = False
                                                 time.sleep(1)
@@ -3513,6 +3581,7 @@ if st.session_state.missao_ativa is not None:
                             # Se não houver matéria, usar "Simulado" como matéria
                             materia_final = materia_questao if materia_questao else simulado_questao
                             
+        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
                             payload = {
                                 "concurso": missao,
                                 "data": data_questao_db,
@@ -3539,7 +3608,7 @@ if st.session_state.missao_ativa is not None:
             st.markdown("### 📊 Estatísticas do Banco de Questões")
             
             try:
-                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).execute()
+                response = supabase.table("questoes_revisao").select("*").eq("concurso", missao).eq("user_id", user_id).execute()
                 todas_questoes = response.data if response.data else []
             except:
                 todas_questoes = []
@@ -4410,7 +4479,7 @@ if st.session_state.missao_ativa is not None:
                         if col_act2.button("🗑️", key=f"del_sim_{row['id']}", help="Excluir simulado", use_container_width=True):
                             if st.session_state.get(f"confirm_del_sim_{row['id']}", False):
                                 try:
-                                    supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                    supabase.table("registros_estudos").delete().eq("id", row['id']).eq("user_id", user_id).execute()
                                     
                                     # LIMPAR CACHE APÓS OPERAÇÃO
                                     st.cache_data.clear()
@@ -4693,7 +4762,7 @@ if st.session_state.missao_ativa is not None:
                                     try:
                                         # Confirmação via dialog
                                         if st.session_state.get(f"confirm_delete_{row['id']}", False):
-                                            supabase.table("registros_estudos").delete().eq("id", row['id']).execute()
+                                            supabase.table("registros_estudos").delete().eq("id", row['id']).eq("user_id", user_id).execute()
                                             
                                             # LIMPAR CACHE APÓS OPERAÇÃO
                                             st.cache_data.clear()
@@ -4942,11 +5011,11 @@ if st.session_state.missao_ativa is not None:
         st.markdown('### ⭐ Missão Principal', unsafe_allow_html=True)
         st.markdown('<p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 15px;">A missão marcada como principal será carregada automaticamente quando você abrir o app.</p>', unsafe_allow_html=True)
         
-        ed = get_editais(supabase)
+        ed = get_editais(supabase, user_id)
         if ed:
             # Buscar qual é a missão principal atual (com verificação mais robusta)
             try:
-                res_principal = supabase.table("editais_materias").select("concurso, is_principal").eq("is_principal", True).execute()
+                res_principal = supabase.table("editais_materias").select("concurso, is_principal").eq("is_principal", True).eq("user_id", user_id).execute()
                 if res_principal.data and len(res_principal.data) > 0:
                     missao_principal_atual = res_principal.data[0]['concurso']
                     # Debug: mostrar quantas linhas têm is_principal = True
@@ -4977,13 +5046,13 @@ if st.session_state.missao_ativa is not None:
                 if st.button("⭐ Definir", use_container_width=True, type="primary", key="btn_definir_principal"):
                     try:
                         # PASSO 1: Remover is_principal de TODAS as linhas
-                        update_all = supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).execute()
+                        update_all = supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).eq("user_id", user_id).execute()
                         
                         # PASSO 2: Marcar TODAS as linhas da missão escolhida como principal
-                        update_principal = supabase.table("editais_materias").update({"is_principal": True}).eq("concurso", nova_principal).execute()
+                        update_principal = supabase.table("editais_materias").update({"is_principal": True}).eq("concurso", nova_principal).eq("user_id", user_id).execute()
                         
                         # Verificar se funcionou
-                        verificacao = supabase.table("editais_materias").select("concurso").eq("is_principal", True).execute()
+                        verificacao = supabase.table("editais_materias").select("concurso").eq("is_principal", True).eq("user_id", user_id).execute()
                         
                         if verificacao.data and verificacao.data[0]['concurso'] == nova_principal:
                             st.success(f"✅ '{nova_principal}' definida como missão principal!")
@@ -5019,7 +5088,7 @@ if st.session_state.missao_ativa is not None:
         
         # TAB 1: SELECIONAR MISSÃO
         with tabs_missoes[0]:
-            ed = get_editais(supabase)
+            ed = get_editais(supabase, user_id)
             if ed:
                 nomes_missoes = list(ed.keys())
                 try:
@@ -5079,14 +5148,15 @@ if st.session_state.missao_ativa is not None:
                     if nome_novo_concurso and cargo_novo_concurso:
                         try:
                             # Verificar se já existe
-                            check_existente = supabase.table("editais_materias").select("*").eq("concurso", nome_novo_concurso).execute()
+                            check_existente = supabase.table("editais_materias").select("*").eq("concurso", nome_novo_concurso).eq("user_id", user_id).execute()
                             if check_existente.data:
                                 st.error(f"❌ Já existe uma missão com o nome '{nome_novo_concurso}'!")
                             else:
                                 # Se marcar como principal, desmarcar todas as outras primeiro
                                 if marcar_como_principal:
-                                    supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).execute()
+                                    supabase.table("editais_materias").update({"is_principal": False}).neq("id", 0).eq("user_id", user_id).execute()
                                 
+        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
                                 payload = {
                                     "concurso": nome_novo_concurso,
                                     "cargo": cargo_novo_concurso,
@@ -5115,7 +5185,7 @@ if st.session_state.missao_ativa is not None:
         
         # TAB 3: EXCLUIR MISSÃO
         with tabs_missoes[2]:
-            ed_exclusao = get_editais(supabase)
+            ed_exclusao = get_editais(supabase, user_id)
             if not ed_exclusao:
                 st.info("Nenhuma missão disponível para exclusão.")
             else:
@@ -5190,7 +5260,7 @@ if st.session_state.missao_ativa is not None:
                     valor_final = None if remover else nova_data_escolhida.strftime("%Y-%m-%d")
                 
                     # 1. SALVA NO BANCO - Atualiza a tabela CORRETA: editais_materias
-                    res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).execute()
+                    res = supabase.table("editais_materias").update({"data_prova": valor_final}).eq("concurso", missao).eq("user_id", user_id).execute()
                 
                     if res.data:
                         # 2. LIMPA A MEMÓRIA DO APP
@@ -5214,7 +5284,7 @@ if st.session_state.missao_ativa is not None:
         
             # Buscar matérias do banco de dados
             try:
-                res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).execute()
+                res_materias = supabase.table("editais_materias").select("id, materia, topicos").eq("concurso", missao).eq("user_id", user_id).execute()
                 registros_materias = res_materias.data
             except Exception as e:
                 st.error(f"Erro ao buscar matérias: {e}")
@@ -5283,7 +5353,7 @@ if st.session_state.missao_ativa is not None:
                                     
                                         # Excluir a matéria da tabela editais_materias
                                         try:
-                                            supabase.table("editais_materias").delete().eq("id", mat['id']).execute()
+                                            supabase.table("editais_materias").delete().eq("id", mat['id']).eq("user_id", user_id).execute()
                                             contador_exclusoes += 1
                                         except Exception as e:
                                             st.error(f"Erro ao excluir matéria '{mat['materia']}': {e}")
@@ -5331,7 +5401,7 @@ if st.session_state.missao_ativa is not None:
                                         # Remover o tópico da lista
                                         novos_topicos = [t for t in topicos if t != topico]
                                         # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).execute()
+                                        supabase.table("editais_materias").update({"topicos": novos_topicos}).eq("id", id_registro).eq("user_id", user_id).execute()
                                         st.success(f"✅ Assunto '{topico}' removido!")
                                         
                                         # LIMPAR CACHE APÓS OPERAÇÃO
@@ -5442,7 +5512,7 @@ if st.session_state.missao_ativa is not None:
                                                 st.warning(f"Assunto '{assunto}' já existe e foi ignorado.")
                                     
                                         # Atualizar no banco
-                                        supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).execute()
+                                        supabase.table("editais_materias").update({"topicos": topicos}).eq("id", id_registro).eq("user_id", user_id).execute()
                                         st.success(f"✅ {len(assuntos_para_adicionar)} assunto(s) adicionado(s) com sucesso!")
                                         
                                         # LIMPAR CACHE APÓS OPERAÇÃO
@@ -5470,10 +5540,10 @@ if st.session_state.missao_ativa is not None:
                                 if novo_nome and novo_nome != materia:
                                     try:
                                         # Atualizar o nome da matéria
-                                        supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).execute()
+                                        supabase.table("editais_materias").update({"materia": novo_nome}).eq("id", id_registro).eq("user_id", user_id).execute()
                                     
                                         # Atualizar também nos registros de estudo
-                                        supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).execute()
+                                        supabase.table("registros_estudos").update({"materia": novo_nome}).eq("concurso", missao).eq("materia", materia).eq("user_id", user_id).execute()
                                     
                                         st.success(f"✅ Matéria renomeada para '{novo_nome}'!")
                                         time.sleep(1)
@@ -5579,7 +5649,7 @@ if st.session_state.missao_ativa is not None:
                     if nova_materia:
                         try:
                             # Verificar se já existe
-                            res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).execute()
+                            res_existente = supabase.table("editais_materias").select("*").eq("concurso", missao).eq("materia", nova_materia).eq("user_id", user_id).execute()
                             if res_existente.data:
                                 st.error(f"❌ A matéria '{nova_materia}' já existe!")
                             else:
@@ -5590,6 +5660,7 @@ if st.session_state.missao_ativa is not None:
                                     assuntos_iniciais = ["Geral"]
                             
                                 # Adicionar nova matéria
+        # MULTI-USER: ADICIONAR "user_id": user_id no payload abaixo
                                 payload = {
                                     "concurso": missao,
                                     "cargo": cargo_atual,
