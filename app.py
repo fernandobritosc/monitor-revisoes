@@ -3358,11 +3358,28 @@ if st.session_state.missao_ativa is not None:
         with tab_adicionar:
             st.markdown("### ➕ Nova Questão")
             
-            with st.form("form_nova_questao"):
+            # Inicializar estado para limpar formulário
+            if 'limpar_form_questao' not in st.session_state:
+                st.session_state.limpar_form_questao = False
+            
+            # Se acabou de salvar, resetar flag
+            if st.session_state.limpar_form_questao:
+                st.session_state.limpar_form_questao = False
+            
+            with st.form("form_nova_questao", clear_on_submit=True):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    data_questao = st.date_input("📅 Data", value=datetime.date.today())
+                    # Usar text_input para data com formato DD/MM/AAAA
+                    hoje = datetime.date.today()
+                    data_default = hoje.strftime("%d/%m/%Y")
+                    data_questao_str = st.text_input(
+                        "📅 Data (DD/MM/AAAA)", 
+                        value=data_default,
+                        placeholder="DD/MM/AAAA",
+                        help="Digite no formato DD/MM/AAAA"
+                    )
+                    
                     materia_questao = st.text_input("📚 Matéria", placeholder="Ex: Direito Constitucional", help="Obrigatório se 'Simulado' não estiver preenchido")
                     assunto_questao = st.text_input("📖 Assunto", placeholder="Ex: Princípios fundamentais")
                     simulado_questao = st.text_input("📝 Simulado", placeholder="Ex: Simulado CESPE 2024", help="Se preenchido, 'Matéria' se torna opcional")
@@ -3383,6 +3400,14 @@ if st.session_state.missao_ativa is not None:
                     if not materia_questao and not simulado_questao:
                         st.error("⚠️ Preencha pelo menos 'Matéria' OU 'Simulado'!")
                     else:
+                        # Validar e converter data DD/MM/AAAA para YYYY-MM-DD
+                        try:
+                            data_obj = datetime.datetime.strptime(data_questao_str, "%d/%m/%Y")
+                            data_questao_db = data_obj.strftime("%Y-%m-%d")
+                        except ValueError:
+                            st.error("⚠️ Data inválida! Use o formato DD/MM/AAAA (ex: 26/01/2026)")
+                            st.stop()
+                        
                         try:
                             # Processar tags
                             tags_list = [t.strip() for t in tags_questao.split(",") if t.strip()] if tags_questao else []
@@ -3392,7 +3417,7 @@ if st.session_state.missao_ativa is not None:
                             
                             payload = {
                                 "concurso": missao,
-                                "data": str(data_questao),
+                                "data": data_questao_db,
                                 "materia": materia_final,
                                 "assunto": assunto_questao,
                                 "simulado": simulado_questao,
@@ -3404,8 +3429,9 @@ if st.session_state.missao_ativa is not None:
                             }
                             
                             supabase.table("questoes_revisao").insert(payload).execute()
-                            st.success("✅ Questão adicionada com sucesso!")
-                            time.sleep(1)
+                            st.success("✅ Questão adicionada com sucesso! Formulário limpo para nova entrada.")
+                            st.session_state.limpar_form_questao = True
+                            time.sleep(1.5)
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erro ao salvar questão: {e}")
