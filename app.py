@@ -744,37 +744,22 @@ def excluir_concurso_completo(supabase, missao):
 def apply_styles():
     st.markdown("""
         <style>
-        /* ═══════════════════════════════════════════════════════════════════
-           🎨 CSS RESPONSIVO GLOBAL - MonitorPro (VERSÃO SIMPLIFICADA)
-           ═══════════════════════════════════════════════════════════════════ */
-        
-        /* Reset básico */
-        * { box-sizing: border-box; }
-        html, body { overflow-x: hidden; max-width: 100vw; }
-        
-        /* Esconder navegação padrão da sidebar */
+        /* Esconde navegação padrão da sidebar */
         [data-testid="stSidebarNav"] {
             display: none;
         }
         
-        /* ═══ RESPONSIVIDADE AUTOMÁTICA ═══ */
-        /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
-        /* Apenas garantimos que os containers usem 100% do espaço disponível */
-        
+        /* Container principal usa toda largura disponível */
         .main .block-container {
-            max-width: 100% !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            padding-top: 2rem !important;
-            padding-bottom: 5rem !important;
+            max-width: 100%;
+            padding-left: 2rem;
+            padding-right: 2rem;
         }
         
-        /* Em telas menores, reduzir padding */
         @media (max-width: 768px) {
             .main .block-container {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-top: 1rem !important;
+                padding-left: 1rem;
+                padding-right: 1rem;
             }
         }
         
@@ -1042,6 +1027,111 @@ else:
     df_simulados = pd.DataFrame()
     df_estudos = pd.DataFrame()
 
+# --- FUNÇÕES PARA MÉTRICAS COMBINADAS (ESTUDOS + SIMULADOS) ---
+def calcular_metricas_combinadas(df_estudos, df_simulados):
+    """Calcula métricas combinando estudos regulares e simulados"""
+    
+    # Criar DataFrames vazios se estiverem vazios
+    if df_estudos.empty and df_simulados.empty:
+        return {
+            'tempo_total_min': 0,
+            'questoes_total': 0,
+            'acertos_total': 0,
+            'precisao_total': 0,
+            'tempo_estudos_min': 0,
+            'questoes_estudos': 0,
+            'acertos_estudos': 0,
+            'precisao_estudos': 0,
+            'tempo_simulados_min': 0,
+            'questoes_simulados': 0,
+            'acertos_simulados': 0,
+            'precisao_simulados': 0
+        }
+    
+    # Calcular métricas de estudos regulares
+    if not df_estudos.empty:
+        tempo_estudos = df_estudos['tempo'].sum()
+        questoes_estudos = df_estudos['total'].sum()
+        acertos_estudos = df_estudos['acertos'].sum()
+        precisao_estudos = (acertos_estudos / questoes_estudos * 100) if questoes_estudos > 0 else 0
+    else:
+        tempo_estudos = 0
+        questoes_estudos = 0
+        acertos_estudos = 0
+        precisao_estudos = 0
+    
+    # Calcular métricas de simulados
+    if not df_simulados.empty:
+        tempo_simulados = df_simulados['tempo'].sum()
+        questoes_simulados = df_simulados['total'].sum()
+        acertos_simulados = df_simulados['acertos'].sum()
+        precisao_simulados = (acertos_simulados / questoes_simulados * 100) if questoes_simulados > 0 else 0
+    else:
+        tempo_simulados = 0
+        questoes_simulados = 0
+        acertos_simulados = 0
+        precisao_simulados = 0
+    
+    # Totais combinados
+    tempo_total = tempo_estudos + tempo_simulados
+    questoes_total = questoes_estudos + questoes_simulados
+    acertos_total = acertos_estudos + acertos_simulados
+    precisao_total = (acertos_total / questoes_total * 100) if questoes_total > 0 else 0
+    
+    return {
+        'tempo_total_min': tempo_total,
+        'questoes_total': questoes_total,
+        'acertos_total': acertos_total,
+        'precisao_total': precisao_total,
+        'tempo_estudos_min': tempo_estudos,
+        'questoes_estudos': questoes_estudos,
+        'acertos_estudos': acertos_estudos,
+        'precisao_estudos': precisao_estudos,
+        'tempo_simulados_min': tempo_simulados,
+        'questoes_simulados': questoes_simulados,
+        'acertos_simulados': acertos_simulados,
+        'precisao_simulados': precisao_simulados
+    }
+
+def calcular_metricas_semana_combinadas(df_estudos, df_simulados):
+    """Calcula métricas semanais combinando estudos e simulados"""
+    hoje = get_br_date()
+    inicio_semana = hoje - timedelta(days=hoje.weekday())  # Segunda-feira
+    
+    # Filtrar dados da semana atual
+    if not df_estudos.empty:
+        df_estudos['data_estudo_date'] = pd.to_datetime(df_estudos['data_estudo']).dt.date
+        df_estudos_semana = df_estudos[df_estudos['data_estudo_date'] >= inicio_semana]
+    else:
+        df_estudos_semana = pd.DataFrame()
+    
+    if not df_simulados.empty:
+        df_simulados['data_estudo_date'] = pd.to_datetime(df_simulados['data_estudo']).dt.date
+        df_simulados_semana = df_simulados[df_simulados['data_estudo_date'] >= inicio_semana]
+    else:
+        df_simulados_semana = pd.DataFrame()
+    
+    # Calcular métricas
+    horas_estudos = df_estudos_semana['tempo'].sum() / 60 if not df_estudos_semana.empty else 0
+    questoes_estudos = df_estudos_semana['total'].sum() if not df_estudos_semana.empty else 0
+    
+    horas_simulados = df_simulados_semana['tempo'].sum() / 60 if not df_simulados_semana.empty else 0
+    questoes_simulados = df_simulados_semana['total'].sum() if not df_simulados_semana.empty else 0
+    
+    # Totais combinados
+    horas_total = horas_estudos + horas_simulados
+    questoes_total = questoes_estudos + questoes_simulados
+    
+    return {
+        'horas_total': horas_total,
+        'questoes_total': questoes_total,
+        'horas_estudos': horas_estudos,
+        'questoes_estudos': questoes_estudos,
+        'horas_simulados': horas_simulados,
+        'questoes_simulados': questoes_simulados,
+        'dias_semana_passados': hoje.weekday() + 1  # Segunda = 0, então +1
+    }
+
 # Alias para compatibilidade com código existente (que usa 'df')
 # ONDE O CÓDIGO USA 'df', ELE DEVE USAR 'df_estudos' AGORA PARA MÉTRICAS DE ROTINA
 df = df_estudos 
@@ -1119,11 +1209,21 @@ st.markdown("""
         background: #0E1117;
     }
     
-    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
+    /* ═══ LAYOUT RESPONSIVO DA SIDEBAR ═══ */
+    /* Container principal padrão */
+    .main .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        transition: all 0.3s ease;
+        width: 100%;
+        max-width: 100% !important;
+    }
+    
     /* Quando a sidebar está EXPANDIDA */
     [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        max-width: calc(100% - 300px) !important;
         margin-left: 300px !important;
+        width: calc(100% - 300px) !important;
+        max-width: calc(100% - 300px) !important;
         padding-left: 4rem !important;
         padding-right: 4rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -1131,19 +1231,83 @@ st.markdown("""
     
     /* Quando a sidebar está RECOLHIDA (Minimizada) */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 95% !important; 
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 4rem !important;
+        padding-right: 4rem !important;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     
-    /* Container principal padrão */
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        transition: all 0.3s ease;
+    /* Responsividade para telas médias */
+    @media (max-width: 1200px) {
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 3rem !important;
+            padding-right: 3rem !important;
+        }
+    }
+    
+    /* Responsividade para tablets */
+    @media (max-width: 992px) {
+        .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+    }
+    
+    /* Responsividade para mobile */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+    }
+    
+    /* Responsividade para telas muito pequenas */
+    @media (max-width: 480px) {
+        .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
     }
 
     /* Cards Glassmorphism Modernos */
@@ -2082,7 +2246,7 @@ if st.session_state.missao_ativa is not None:
                 elif hora_atual >= 12:
                     st.info(f"☀️ **Boa tarde!** O dia está pela metade. Reserve um tempo para os estudos!")
                 else:
-                    st.success(f"🌅 **Bom dia!** Comece o dia com foco. Registre seu primeiro estudo!")
+                    st.success(f"🌅 **Bom dia!** Comece o day com foco. Registre seu primeiro estudo!")
 
             # --- RESUMO DIÁRIO INTELIGENTE (Com dados) ---
             if not df_hoje.empty:
@@ -2105,15 +2269,11 @@ if st.session_state.missao_ativa is not None:
                 elif taxa_hoje >= 80:
                     st.success(f"🎯 Excelente! Precisão de **{taxa_hoje:.0f}%** hoje. Continue assim!")
 
-            # --- VISÃO GERAL DO EDITAL ---
-            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL</div>', unsafe_allow_html=True)
-            
-            # Calcular métricas
-            t_q = df_estudos['total'].sum()
-            a_q = df_estudos['acertos'].sum()
-            precisao = (a_q / t_q * 100) if t_q > 0 else 0
-            minutos_totais = int(df_estudos['tempo'].sum())
-            tempo_formatado = formatar_minutos(minutos_totais)
+            # --- VISÃO GERAL DO EDITAL (INCLUINDO SIMULADOS) ---
+            st.markdown('<div class="visao-mes-title">VISÃO GERAL DO EDITAL (Incluindo Simulados)</div>', unsafe_allow_html=True)
+
+            # Calcular métricas combinadas
+            metricas_combinadas = calcular_metricas_combinadas(df_estudos, df_simulados)
 
             # Dias para a prova
             dias_restantes = None
@@ -2123,45 +2283,56 @@ if st.session_state.missao_ativa is not None:
                     dias_restantes = (dt_prova - get_br_date()).days
                 except Exception:
                     dias_restantes = None
-            
-            # 4 cartões de métricas com ANÉIS CIRCULARES (SEM DELTA)
+
+            # 4 cartões de métricas com ANÉIS CIRCULARES (INCLUINDO SIMULADOS)
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-            
+
             # Calcular percentuais para os anéis
-            horas_totais = minutos_totais / 60
-            meta_horas_mes = 80
+            horas_totais = metricas_combinadas['tempo_total_min'] / 60
+            meta_horas_mes = 100  # Aumentado para incluir simulados
             pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
-            pct_precisao = min(precisao, 100)
-            meta_questoes_mes = 1000
-            pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
-            
+            pct_precisao = min(metricas_combinadas['precisao_total'], 100)
+            meta_questoes_mes = 1500  # Aumentado para incluir simulados
+            pct_questoes = min((metricas_combinadas['questoes_total'] / meta_questoes_mes) * 100, 100)
+
+            # Ritmo médio (min/questão)
+            ritmo_total = (metricas_combinadas['tempo_total_min'] / metricas_combinadas['questoes_total']) if metricas_combinadas['questoes_total'] > 0 else 0
+            pct_ritmo = min((ritmo_total / 5) * 100, 100) if ritmo_total > 0 else 0
+
             with c1:
                 render_circular_progress(
                     percentage=pct_tempo,
                     label="TEMPO TOTAL",
-                    value=tempo_formatado,
+                    value=f"{horas_totais:.1f}h",
                     color_start=COLORS["primary"],
                     color_end=COLORS["secondary"],
                     icon="⏱️"
                 )
+                # Detalhamento em tooltip
+                st.caption(f"📚 Estudos: {metricas_combinadas['tempo_estudos_min']/60:.1f}h | 🏆 Simulados: {metricas_combinadas['tempo_simulados_min']/60:.1f}h")
+
             with c2:
                 render_circular_progress(
                     percentage=pct_precisao,
-                    label="PRECISÃO",
-                    value=f"{precisao:.0f}%",
-                    color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                    label="PRECISÃO TOTAL",
+                    value=f"{metricas_combinadas['precisao_total']:.0f}%",
+                    color_start=COLORS["success"] if metricas_combinadas['precisao_total'] >= 70 else COLORS["warning"],
                     color_end=COLORS["secondary"],
                     icon="🎯"
                 )
+                st.caption(f"📚 Estudos: {metricas_combinadas['precisao_estudos']:.0f}% | 🏆 Simulados: {metricas_combinadas['precisao_simulados']:.0f}%")
+
             with c3:
                 render_circular_progress(
                     percentage=pct_questoes,
-                    label="QUESTÕES",
-                    value=f"{int(t_q)}",
+                    label="QUESTÕES TOTAL",
+                    value=f"{metricas_combinadas['questoes_total']:,}".replace(",", "."),
                     color_start=COLORS["accent"],
                     color_end=COLORS["primary"],
                     icon="📝"
                 )
+                st.caption(f"📚 Estudos: {metricas_combinadas['questoes_estudos']:,} | 🏆 Simulados: {metricas_combinadas['questoes_simulados']:,}".replace(",", "."))
+
             with c4:
                 if dias_restantes is not None:
                     pct_dias = max(0, min(100, (1 - dias_restantes/90) * 100)) if dias_restantes > 0 else 100
@@ -2175,8 +2346,40 @@ if st.session_state.missao_ativa is not None:
                         icon="📅"
                     )
                 else:
-                    render_metric_card_modern("DIAS PARA PROVA", "—", icon="📅")
-            
+                    render_circular_progress(
+                        percentage=pct_ritmo,
+                        label="RITMO MÉDIO",
+                        value=f"{ritmo_total:.1f}m/q",
+                        color_start=COLORS["secondary"],
+                        color_end=COLORS["primary"],
+                        icon="⚡"
+                    )
+                    st.caption("Tempo médio por questão (total)")
+
+            # Mostrar breakdown detalhado em expansor
+            with st.expander("📊 Detalhamento completo"):
+                col_det1, col_det2, col_det3 = st.columns(3)
+                
+                with col_det1:
+                    st.markdown("**📚 ESTUDOS REGULARES**")
+                    st.metric("Tempo", f"{metricas_combinadas['tempo_estudos_min']/60:.1f}h")
+                    st.metric("Questões", f"{metricas_combinadas['questoes_estudos']:,}".replace(",", "."))
+                    st.metric("Precisão", f"{metricas_combinadas['precisao_estudos']:.1f}%")
+                
+                with col_det2:
+                    st.markdown("**🏆 SIMULADOS**")
+                    st.metric("Tempo", f"{metricas_combinadas['tempo_simulados_min']/60:.1f}h")
+                    st.metric("Questões", f"{metricas_combinadas['questoes_simulados']:,}".replace(",", "."))
+                    st.metric("Precisão", f"{metricas_combinadas['precisao_simulados']:.1f}%")
+                
+                with col_det3:
+                    st.markdown("**🎯 TOTAIS**")
+                    st.metric("Tempo Total", f"{horas_totais:.1f}h", 
+                             delta=f"{(metricas_combinadas['tempo_simulados_min']/60):.1f}h de simulados")
+                    st.metric("Questões Total", f"{metricas_combinadas['questoes_total']:,}".replace(",", "."),
+                             delta=f"{metricas_combinadas['questoes_simulados']:,} de simulados".replace(",", "."))
+                    st.metric("Precisão Total", f"{metricas_combinadas['precisao_total']:.1f}%")
+
             st.divider()
 
             # --- QUICK ACTIONS (AÇÕES RÁPIDAS) ---
@@ -2266,23 +2469,21 @@ if st.session_state.missao_ativa is not None:
 
             st.markdown('</div>', unsafe_allow_html=True)  # Fecha constancia-section
 
-            # --- PREVISÃO DE META SEMANAL ---
-            st.markdown('<div class="visao-mes-title">📈 PROJEÇÃO DA SEMANA</div>', unsafe_allow_html=True)
+            # --- PREVISÃO DE META SEMANAL (INCLUINDO SIMULADOS) ---
+            st.markdown('<div class="visao-mes-title">📈 PROJEÇÃO DA SEMANA (Incluindo Simulados)</div>', unsafe_allow_html=True)
             
-            # Calcular dados da semana
-            hoje = get_br_date()
-            inicio_semana = hoje - timedelta(days=hoje.weekday())
-            df_semana = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_semana]
+            # Calcular métricas semanais combinadas
+            metricas_semana = calcular_metricas_semana_combinadas(df_estudos, df_simulados)
             
-            horas_semana = df_semana['tempo'].sum() / 60
-            questoes_semana = df_semana['total'].sum()
+            horas_semana = metricas_semana['horas_total']
+            questoes_semana = metricas_semana['questoes_total']
+            dias_semana_passados = metricas_semana['dias_semana_passados']
             
             # Meta semanal (usar do session_state ou padrão)
             meta_horas = st.session_state.get('meta_horas_semana', 20)
             meta_questoes = st.session_state.get('meta_questoes_semana', 300)
             
             # Calcular projeção
-            dias_semana_passados = hoje.weekday() + 1  # Segunda = 0, então +1
             dias_restantes = 7 - dias_semana_passados
             
             if dias_semana_passados > 0:
@@ -2311,10 +2512,14 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown(f"""
                 <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">HORAS DE ESTUDO</div>
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">HORAS TOTAIS (Estudos + Simulados)</div>
                     <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{horas_semana:.1f}h/{meta_horas}h</div>
                     <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
                     <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {projecao_horas:.1f}h</div>
+                    <div style="font-size: 0.75rem; color: #64748B; margin-top: 10px;">
+                        📚 Estudos: {metricas_semana['horas_estudos']:.1f}h<br>
+                        🏆 Simulados: {metricas_semana['horas_simulados']:.1f}h
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -2340,10 +2545,14 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown(f"""
                 <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">QUESTÕES RESOLVIDAS</div>
+                    <div style="font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;">QUESTÕES TOTAIS (Estudos + Simulados)</div>
                     <div style="font-size: 2.5rem; font-weight: 800; color: {status_color}; margin: 10px 0;">{int(questoes_semana)}/{meta_questoes}</div>
                     <div style="color: #E2E8F0; font-size: 0.9rem; margin-bottom: 5px;">{status_icon} {status_text}</div>
                     <div style="color: #94A3B8; font-size: 0.8rem;">Projeção: {int(projecao_questoes)}</div>
+                    <div style="font-size: 0.75rem; color: #64748B; margin-top: 10px;">
+                        📚 Estudos: {int(metricas_semana['questoes_estudos'])}<br>
+                        🏆 Simulados: {int(metricas_semana['questoes_simulados'])}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -2370,7 +2579,7 @@ if st.session_state.missao_ativa is not None:
                 
                 df_disciplinas['erros'] = df_disciplinas['total'] - df_disciplinas['acertos']
                 df_disciplinas['tempo_formatado'] = df_disciplinas['tempo'].apply(formatar_horas_minutos)
-                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
+                                df_disciplinas['taxa_formatada'] = df_disciplinas['taxa'].round(0).astype(int)
                 df_disciplinas = df_disciplinas.sort_values('tempo', ascending=False)
                 
                 # Criar tabela HTML CORRIGIDA - SIMPLIFICADA
@@ -2414,51 +2623,66 @@ if st.session_state.missao_ativa is not None:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # --- SEÇÃO 4: METAS DE ESTUDO SEMANAL ---
-            st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL</h3>', unsafe_allow_html=True)
+            # --- META DE ESTUDO SEMANAL (INCLUINDO SIMULADOS) ---
+            st.markdown('<h3 style="margin-top:2rem; color:#fff;">🎯 METAS DE ESTUDO SEMANAL (Incluindo Simulados)</h3>', unsafe_allow_html=True)
             
             # Estado para controlar a edição das metas
             if 'editando_metas' not in st.session_state:
                 st.session_state.editando_metas = False
-            
-            horas_semana, questoes_semana = calcular_estudos_semana(df_estudos)
+
+            # Calcular métricas semanais combinadas
+            metricas_semana = calcular_metricas_semana_combinadas(df_estudos, df_simulados)
+            horas_semana = metricas_semana['horas_total']
+            questoes_semana = metricas_semana['questoes_total']
+            dias_semana_passados = metricas_semana['dias_semana_passados']
+
             meta_horas = st.session_state.meta_horas_semana
             meta_questoes = st.session_state.meta_questoes_semana
-            
+
+            # Calcular projeção (incluindo simulados)
+            dias_restantes = 7 - dias_semana_passados
+
+            if dias_semana_passados > 0:
+                projecao_horas = (horas_semana / dias_semana_passados) * 7
+                projecao_questoes = (questoes_semana / dias_semana_passados) * 7
+            else:
+                projecao_horas = 0
+                projecao_questoes = 0
+
             # Botão para editar metas
             col_btn1, col_btn2, col_btn3 = st.columns([4, 1, 1])
             with col_btn2:
-                if st.button("⚙️ Configurar Metas", key="btn_config_metas", use_container_width=True):
+                if st.button("⚙️ Configurar Metas", key="btn_config_metas_combinadas", use_container_width=True):
                     st.session_state.editando_metas = not st.session_state.editando_metas
                     st.rerun()
-            
+
             # Modal de edição de metas
             if st.session_state.editando_metas:
                 with st.container():
                     st.markdown('<div class="meta-modal">', unsafe_allow_html=True)
-                    st.markdown("##### 📝 Configurar Metas Semanais")
+                    st.markdown("##### 📝 Configurar Metas Semanais (Estudos + Simulados)")
                     
-                    with st.form("form_metas_semanais"):
+                    with st.form("form_metas_semanais_combinadas"):
                         col_meta1, col_meta2 = st.columns(2)
                         
                         with col_meta1:
                             nova_meta_horas = st.number_input(
-                                "Horas de estudo semanais",
+                                "Horas totais semanais (estudos + simulados)",
                                 min_value=1,
                                 max_value=100,
                                 value=meta_horas,
                                 step=1,
-                                help="Meta de horas de estudo por semana"
+                                help="Meta de horas totais por semana (inclui estudos regulares e simulados)"
                             )
                         
                         with col_meta2:
                             nova_meta_questoes = st.number_input(
-                                "Questões semanais",
+                                "Questões totais semanais (estudos + simulados)",
                                 min_value=1,
-                                max_value=1000,
+                                max_value=2000,
                                 value=meta_questoes,
                                 step=10,
-                                help="Meta de questões resolvidas por semana"
+                                help="Meta de questões totais por semana (inclui estudos regulares e simulados)"
                             )
                         
                         col_btn1, col_btn2 = st.columns(2)
@@ -2476,15 +2700,15 @@ if st.session_state.missao_ativa is not None:
                             st.rerun()
                     
                     st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Cartões de metas
+
+            # Cartões de metas combinadas
             col_meta1, col_meta2 = st.columns(2)
-            
+
             with col_meta1:
                 progresso_horas = min((horas_semana / meta_horas) * 100, 100) if meta_horas > 0 else 0
                 st.markdown(f'''
                 <div class="meta-card">
-                    <div class="meta-title">Horas de Estudo</div>
+                    <div class="meta-title">Horas Totais (Estudos + Simulados)</div>
                     <div class="meta-value">{horas_semana:.1f}h/{meta_horas}h</div>
                     <div class="meta-progress">
                         <div class="modern-progress-container">
@@ -2492,14 +2716,19 @@ if st.session_state.missao_ativa is not None:
                         </div>
                     </div>
                     <div class="meta-subtitle">{progresso_horas:.0f}% da meta alcançada</div>
+                    <div style="margin-top: 10px; font-size: 0.8rem; color: #94A3B8;">
+                        📚 Estudos: {metricas_semana['horas_estudos']:.1f}h<br>
+                        🏆 Simulados: {metricas_semana['horas_simulados']:.1f}h
+                    </div>
+                    {f'<div style="margin-top: 10px; font-size: 0.75rem; color: #F59E0B;">💡 Projeção semanal: {projecao_horas:.1f}h</div>' if dias_semana_passados > 0 else ''}
                 </div>
                 ''', unsafe_allow_html=True)
-            
+
             with col_meta2:
                 progresso_questoes = min((questoes_semana / meta_questoes) * 100, 100) if meta_questoes > 0 else 0
                 st.markdown(f'''
                 <div class="meta-card">
-                    <div class="meta-title">Questões Resolvidas</div>
+                    <div class="meta-title">Questões Totais (Estudos + Simulados)</div>
                     <div class="meta-value">{int(questoes_semana)}/{meta_questoes}</div>
                     <div class="meta-progress">
                         <div class="modern-progress-container">
@@ -2507,8 +2736,49 @@ if st.session_state.missao_ativa is not None:
                         </div>
                     </div>
                     <div class="meta-subtitle">{progresso_questoes:.0f}% da meta alcançada</div>
+                    <div style="margin-top: 10px; font-size: 0.8rem; color: #94A3B8;">
+                        📚 Estudos: {int(metricas_semana['questoes_estudos'])}<br>
+                        🏆 Simulados: {int(metricas_semana['questoes_simulados'])}
+                    </div>
+                    {f'<div style="margin-top: 10px; font-size: 0.75rem; color: #F59E0B;">💡 Projeção semanal: {int(projecao_questoes)} questões</div>' if dias_semana_passados > 0 else ''}
                 </div>
                 ''', unsafe_allow_html=True)
+
+            # Adicionar dicas baseadas no progresso
+            if progresso_horas < 50 and dias_restantes > 0:
+                horas_necessarias = (meta_horas - horas_semana) / dias_restantes
+                st.info(f"💡 Para bater a meta de horas, você precisa estudar **{horas_necessarias:.1f}h/dia** nos próximos {dias_restantes} dias.")
+
+            if progresso_questoes < 50 and dias_restantes > 0:
+                questoes_necessarias = (meta_questoes - questoes_semana) / dias_restantes
+                st.info(f"💡 Para bater a meta de questões, você precisa resolver **{questoes_necessarias:.0f} questões/dia** nos próximos {dias_restantes} dias.")
+
+            # Mostrar análise de distribuição
+            if metricas_semana['horas_simulados'] > 0 or metricas_semana['questoes_simulados'] > 0:
+                with st.expander("📊 Análise de Distribuição Semanal"):
+                    col_dist1, col_dist2 = st.columns(2)
+                    
+                    with col_dist1:
+                        # Gráfico de pizza de horas
+                        labels_horas = ['Estudos', 'Simulados']
+                        values_horas = [metricas_semana['horas_estudos'], metricas_semana['horas_simulados']]
+                        if sum(values_horas) > 0:
+                            fig_horas = px.pie(values=values_horas, names=labels_horas, 
+                                              title="Distribuição de Horas",
+                                              color_discrete_sequence=[COLORS['primary'], COLORS['accent']])
+                            fig_horas.update_layout(showlegend=True, height=300)
+                            st.plotly_chart(fig_horas, use_container_width=True)
+                    
+                    with col_dist2:
+                        # Gráfico de pizza de questões
+                        labels_questoes = ['Estudos', 'Simulados']
+                        values_questoes = [metricas_semana['questoes_estudos'], metricas_semana['questoes_simulados']]
+                        if sum(values_questoes) > 0:
+                            fig_questoes = px.pie(values=values_questoes, names=labels_questoes,
+                                                 title="Distribuição de Questões",
+                                                 color_discrete_sequence=[COLORS['secondary'], COLORS['warning']])
+                            fig_questoes.update_layout(showlegend=True, height=300)
+                            st.plotly_chart(fig_questoes, use_container_width=True)
 
     # --- ABA: GUIA SEMANAL (PLANNER INTELIGENTE) ---
     elif menu == "Guia Semanal":
@@ -2957,32 +3227,46 @@ if st.session_state.missao_ativa is not None:
 
 
 
-        # Métricas Gerais
-        if df_estudos.empty:
-            t_q, precisao, minutos_totais, ritmo = 0, 0, 0, 0
-        else:
-            t_q = df_estudos['total'].sum()
-            a_q = df_estudos['acertos'].sum()
-            precisao = (a_q/t_q*100 if t_q > 0 else 0)
-            minutos_totais = int(df_estudos['tempo'].sum())
-            ritmo = (minutos_totais / t_q) if t_q > 0 else 0
+        # --- VISÃO GERAL DA MISSÃO (INCLUINDO SIMULADOS) ---
+        st.markdown('<div class="visao-mes-title">VISÃO GERAL DA MISSÃO (Incluindo Simulados)</div>', unsafe_allow_html=True)
 
-        # Calcular deltas (comparação com ontem)
+        # Calcular métricas combinadas para o período filtrado
+        # Criar DataFrames filtrados combinados
+        if periodo == "Última Semana":
+            inicio_periodo = hoje - timedelta(days=7)
+        elif periodo == "Último Mês":
+            inicio_periodo = hoje - timedelta(days=30)
+        elif periodo == "Últimos 3 Meses":
+            inicio_periodo = hoje - timedelta(days=90)
+        else:  # Tudo
+            inicio_periodo = pd.Timestamp.min.date()
+
+        # Filtrar estudos e simulados pelo período
+        df_estudos_periodo = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date >= inicio_periodo] if not df_estudos.empty else pd.DataFrame()
+        df_simulados_periodo = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date >= inicio_periodo] if not df_simulados.empty else pd.DataFrame()
+
+        # Calcular métricas combinadas para o período
+        metricas_periodo = calcular_metricas_combinadas(df_estudos_periodo, df_simulados_periodo)
+
+        # Formatar tempo
+        tempo_formatado_total = formatar_minutos(metricas_periodo['tempo_total_min'])
+
+        # Calcular deltas (comparação com ontem) - TOTAL (estudos + simulados)
         hoje = get_br_date()
         ontem = hoje - timedelta(days=1)
-        df_ontem = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
 
-        if not df_ontem.empty:
-            t_q_ontem = df_ontem['total'].sum()
-            a_q_ontem = df_ontem['acertos'].sum()
-            precisao_ontem = (a_q_ontem / t_q_ontem * 100) if t_q_ontem > 0 else 0
-            minutos_ontem = int(df_ontem['tempo'].sum())
+        # Filtrar dados de ontem (estudos + simulados)
+        df_ontem_estudos = df_estudos[pd.to_datetime(df_estudos['data_estudo']).dt.date == ontem] if not df_estudos.empty else pd.DataFrame()
+        df_ontem_simulados = df_simulados[pd.to_datetime(df_simulados['data_estudo']).dt.date == ontem] if not df_simulados.empty else pd.DataFrame()
 
-            delta_tempo = minutos_totais - minutos_ontem
-            delta_precisao = precisao - precisao_ontem
-            delta_questoes = t_q - t_q_ontem
-
-            # Formatar deltas com setas e indicação clara
+        if not df_ontem_estudos.empty or not df_ontem_simulados.empty:
+            metricas_ontem = calcular_metricas_combinadas(df_ontem_estudos, df_ontem_simulados)
+            
+            delta_tempo = metricas_periodo['tempo_total_min'] - metricas_ontem['tempo_total_min']
+            delta_precisao = metricas_periodo['precisao_total'] - metricas_ontem['precisao_total']
+            delta_questoes = metricas_periodo['questoes_total'] - metricas_ontem['questoes_total']
+            
+            # Formatar deltas
             def format_delta(value, unit, is_better_when_lower=False):
                 if value > 0:
                     arrow = "▲"
@@ -2993,7 +3277,7 @@ if st.session_state.missao_ativa is not None:
                 else:
                     return ""
                 return f"{arrow} {abs(value):.0f}{unit} ({label})"
-
+            
             delta_time_str = format_delta(delta_tempo, "m", is_better_when_lower=True)
             delta_prec_str = format_delta(delta_precisao, "%", is_better_when_lower=False)
             delta_q_str = format_delta(delta_questoes, "", is_better_when_lower=False)
@@ -3002,71 +3286,113 @@ if st.session_state.missao_ativa is not None:
             delta_prec_str = ""
             delta_q_str = ""
 
-        # Formatar tempo
-        tempo_formatado = formatar_minutos(minutos_totais)
-        
-        # 1. MÉTRICAS PRINCIPAIS COM ANÉIS CIRCULARES
-        st.markdown('<div class="visao-mes-title">VISÃO GERAL DA MISSÃO</div>', unsafe_allow_html=True)
-        
+        # 4 cartões de métricas com ANÉIS CIRCULARES (INCLUINDO SIMULADOS)
         m1, m2, m3, m4 = st.columns(4)
-        
-        # Calcular percentuais para os anéis
-        horas_totais = minutos_totais / 60
-        meta_horas_mes = 80
-        pct_tempo = min((horas_totais / meta_horas_mes) * 100, 100)
-        pct_precisao = min(precisao, 100)
-        meta_questoes_mes = 1000
-        pct_questoes = min((t_q / meta_questoes_mes) * 100, 100)
-        pct_ritmo = min((ritmo / 5) * 100, 100) if ritmo > 0 else 0
-        
+
+        # Calcular percentuais para os anéis (considerando período)
+        horas_totais_periodo = metricas_periodo['tempo_total_min'] / 60
+        meta_horas_periodo = {
+            "Última Semana": 20,
+            "Último Mês": 80,
+            "Últimos 3 Meses": 240,
+            "Tudo": 500
+        }.get(periodo, 100)
+
+        pct_tempo = min((horas_totais_periodo / meta_horas_periodo) * 100, 100)
+        pct_precisao = min(metricas_periodo['precisao_total'], 100)
+
+        meta_questoes_periodo = {
+            "Última Semana": 300,
+            "Último Mês": 1200,
+            "Últimos 3 Meses": 3600,
+            "Tudo": 10000
+        }.get(periodo, 2000)
+
+        pct_questoes = min((metricas_periodo['questoes_total'] / meta_questoes_periodo) * 100, 100)
+
+        # Ritmo médio (min/questão) no período
+        ritmo_periodo = (metricas_periodo['tempo_total_min'] / metricas_periodo['questoes_total']) if metricas_periodo['questoes_total'] > 0 else 0
+        pct_ritmo = min((ritmo_periodo / 5) * 100, 100) if ritmo_periodo > 0 else 0
+
         with m1:
             render_circular_progress(
                 percentage=pct_tempo,
                 label="TEMPO TOTAL",
-                value=tempo_formatado,
+                value=tempo_formatado_total,
                 color_start=COLORS["primary"],
                 color_end=COLORS["secondary"],
                 icon="⏱️"
             )
             if delta_time_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_time_str}</div>', unsafe_allow_html=True)
-        
+            st.caption(f"📚 {metricas_periodo['tempo_estudos_min']/60:.1f}h | 🏆 {metricas_periodo['tempo_simulados_min']/60:.1f}h")
+
         with m2:
             render_circular_progress(
                 percentage=pct_precisao,
-                label="PRECISÃO",
-                value=f"{precisao:.0f}%",
-                color_start=COLORS["success"] if precisao >= 70 else COLORS["warning"],
+                label="PRECISÃO TOTAL",
+                value=f"{metricas_periodo['precisao_total']:.0f}%",
+                color_start=COLORS["success"] if metricas_periodo['precisao_total'] >= 70 else COLORS["warning"],
                 color_end=COLORS["secondary"],
                 icon="🎯"
             )
             if delta_prec_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_prec_str}</div>', unsafe_allow_html=True)
-        
+            st.caption(f"📚 {metricas_periodo['precisao_estudos']:.0f}% | 🏆 {metricas_periodo['precisao_simulados']:.0f}%")
+
         with m3:
             render_circular_progress(
                 percentage=pct_questoes,
-                label="QUESTÕES",
-                value=f"{int(t_q)}",
+                label="QUESTÕES TOTAL",
+                value=f"{metricas_periodo['questoes_total']:,}".replace(",", "."),
                 color_start=COLORS["accent"],
                 color_end=COLORS["primary"],
                 icon="📝"
             )
             if delta_q_str:
                 st.markdown(f'<div style="text-align: center; color: #94A3B8; font-size: 0.75rem; margin-top: -10px;">{delta_q_str}</div>', unsafe_allow_html=True)
-        
+            st.caption(f"📚 {metricas_periodo['questoes_estudos']:,} | 🏆 {metricas_periodo['questoes_simulados']:,}".replace(",", "."))
+
         with m4:
             render_circular_progress(
                 percentage=pct_ritmo,
                 label="RITMO MÉDIO",
-                value=f"{ritmo:.1f}m/q",
+                value=f"{ritmo_periodo:.1f}m/q",
                 color_start=COLORS["secondary"],
                 color_end=COLORS["primary"],
                 icon="⚡"
             )
-        
+            st.caption("Tempo médio por questão")
+
+        # Mostrar breakdown detalhado em expansor
+        with st.expander(f"📊 Detalhamento do período: {periodo}"):
+            col_dash1, col_dash2, col_dash3 = st.columns(3)
+            
+            with col_dash1:
+                st.markdown("**📚 ESTUDOS REGULARES**")
+                st.metric("Tempo", f"{metricas_periodo['tempo_estudos_min']/60:.1f}h")
+                st.metric("Questões", f"{metricas_periodo['questoes_estudos']:,}".replace(",", "."))
+                st.metric("Precisão", f"{metricas_periodo['precisao_estudos']:.1f}%")
+                if not df_estudos_periodo.empty:
+                    st.caption(f"{len(df_estudos_periodo)} registros")
+            
+            with col_dash2:
+                st.markdown("**🏆 SIMULADOS**")
+                st.metric("Tempo", f"{metricas_periodo['tempo_simulados_min']/60:.1f}h")
+                st.metric("Questões", f"{metricas_periodo['questoes_simulados']:,}".replace(",", "."))
+                st.metric("Precisão", f"{metricas_periodo['precisao_simulados']:.1f}%")
+                if not df_simulados_periodo.empty:
+                    st.caption(f"{len(df_simulados_periodo)} simulados")
+            
+            with col_dash3:
+                st.markdown("**🎯 TOTAIS**")
+                st.metric("Tempo Total", f"{horas_totais_periodo:.1f}h")
+                st.metric("Questões Total", f"{metricas_periodo['questoes_total']:,}".replace(",", "."))
+                st.metric("Precisão Total", f"{metricas_periodo['precisao_total']:.1f}%")
+                st.caption(f"Período: {periodo}")
+
         st.divider()
-        
+
         # --- NOVO: DESEMPENHO POR RELEVÂNCIA ---
         if not df_estudos.empty and 'relevancia' in df_estudos.columns:
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
@@ -3195,7 +3521,10 @@ if st.session_state.missao_ativa is not None:
             }).reset_index()
 
             # Calcular taxa diária
-            df_ev['taxa'] = (df_ev['acertos'] / df_ev['total'] * 100).fillna(0)
+            df_ev['taxa'] = df_ev.apply(
+                lambda x: (x['acertos'] / x['total'] * 100) if x['total'] > 0 else 0, 
+                axis=1
+            )
 
             # Criar gráfico Plotly
             fig_evo = go.Figure()
@@ -3516,7 +3845,7 @@ if st.session_state.missao_ativa is not None:
                                     time.sleep(1)
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erro ao excluir: {e}")
+                                    st.error(f"❌ Erro ao excluir: {e}")
                             else:
                                 st.session_state[f"confirm_del_sim_{row['id']}"] = True
                                 st.rerun()
