@@ -1,3 +1,4 @@
+"""
 auth.py - Módulo de Autenticação do MonitorPro
 ================================================
 
