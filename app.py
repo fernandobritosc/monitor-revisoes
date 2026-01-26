@@ -3159,6 +3159,16 @@ if st.session_state.missao_ativa is not None:
                     for idx, q in enumerate(questoes_filtradas):
                         questao_id = q.get('id')
                         data = q.get('data', '')
+                        # Formatar data para DD/MM/AAAA
+                        if data:
+                            try:
+                                data_obj = datetime.datetime.strptime(data, "%Y-%m-%d")
+                                data_formatada = data_obj.strftime("%d/%m/%Y")
+                            except:
+                                data_formatada = data
+                        else:
+                            data_formatada = ''
+                        
                         materia = q.get('materia', 'Sem matéria')
                         assunto = q.get('assunto', '')
                         simulado = q.get('simulado', '')
@@ -3201,7 +3211,7 @@ if st.session_state.missao_ativa is not None:
                                     margin-bottom: 10px;
                                 ">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                        <span style="color: {COLORS['text_secondary']}; font-size: 0.85rem;">📅 {data}</span>
+                                        <span style="color: {COLORS['text_secondary']}; font-size: 0.85rem;">📅 {data_formatada}</span>
                                         <span style="background: {border_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{status}</span>
                                     </div>
                                 </div>
@@ -3353,9 +3363,9 @@ if st.session_state.missao_ativa is not None:
                 
                 with col1:
                     data_questao = st.date_input("📅 Data", value=datetime.date.today())
-                    materia_questao = st.text_input("📚 Matéria *", placeholder="Ex: Direito Constitucional")
+                    materia_questao = st.text_input("📚 Matéria", placeholder="Ex: Direito Constitucional", help="Obrigatório se 'Simulado' não estiver preenchido")
                     assunto_questao = st.text_input("📖 Assunto", placeholder="Ex: Princípios fundamentais")
-                    simulado_questao = st.text_input("📝 Simulado", placeholder="Ex: Simulado CESPE 2024")
+                    simulado_questao = st.text_input("📝 Simulado", placeholder="Ex: Simulado CESPE 2024", help="Se preenchido, 'Matéria' se torna opcional")
                 
                 with col2:
                     relevancia_questao = st.slider("⭐ Relevância", 1, 10, 5, help="1 = Pouco importante, 10 = Muito importante")
@@ -3369,17 +3379,21 @@ if st.session_state.missao_ativa is not None:
                 )
                 
                 if st.form_submit_button("💾 Salvar Questão", use_container_width=True, type="primary"):
-                    if not materia_questao:
-                        st.error("⚠️ A matéria é obrigatória!")
+                    # Validação condicional: matéria é obrigatória SOMENTE se simulado não estiver preenchido
+                    if not materia_questao and not simulado_questao:
+                        st.error("⚠️ Preencha pelo menos 'Matéria' OU 'Simulado'!")
                     else:
                         try:
                             # Processar tags
                             tags_list = [t.strip() for t in tags_questao.split(",") if t.strip()] if tags_questao else []
                             
+                            # Se não houver matéria, usar "Simulado" como matéria
+                            materia_final = materia_questao if materia_questao else simulado_questao
+                            
                             payload = {
                                 "concurso": missao,
                                 "data": str(data_questao),
-                                "materia": materia_questao,
+                                "materia": materia_final,
                                 "assunto": assunto_questao,
                                 "simulado": simulado_questao,
                                 "relevancia": relevancia_questao,
