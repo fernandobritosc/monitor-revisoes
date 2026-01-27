@@ -1470,6 +1470,28 @@ def get_editais_cached(user_id):
     except Exception:
         return {}
 
+# =============================================================================
+# INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO ESSENCIAIS
+# =============================================================================
+
+# Inicializar missao_ativa ANTES de usar em carregar_dados()
+if 'missao_ativa' not in st.session_state:
+    try:
+        ed = get_editais(supabase, user_id)
+        if ed:
+            st.session_state.missao_ativa = list(ed.keys())[0]
+        else:
+            st.session_state.missao_ativa = None
+    except Exception:
+        st.session_state.missao_ativa = None
+
+if 'edit_id' not in st.session_state:
+    st.session_state.edit_id = None
+
+# =============================================================================
+# CARREGAMENTO DE DADOS
+# =============================================================================
+
 def carregar_dados():
     if not supabase:
         return {}, pd.DataFrame()
@@ -1511,22 +1533,7 @@ else:
 
 # Alias para compatibilidade com código existente (que usa 'df')
 # ONDE O CÓDIGO USA 'df', ELE DEVE USAR 'df_estudos' AGORA PARA MÉTRICAS DE ROTINA
-df = df_estudos 
-
-# Definir Missão Ativa
-if not dados.get('missoes'):
-    if 'missao_ativa' not in st.session_state:
-        try:
-            ed = get_editais(supabase, user_id)
-            if ed:
-                st.session_state.missao_ativa = list(ed.keys())[0]
-            else:
-                st.session_state.missao_ativa = None
-        except Exception:
-            st.session_state.missao_ativa = None
-
-if 'edit_id' not in st.session_state:
-    st.session_state.edit_id = None
+df = df_estudos
 
 if 'edit_id_simulado' not in st.session_state:
     st.session_state.edit_id_simulado = None
