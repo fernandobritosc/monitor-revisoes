@@ -3,6 +3,8 @@ CSS COMPLETO COM LAYOUT FIXO PARA MONITORPRO
 Cole esta função no seu app.py e chame após st.set_page_config()
 """
 
+import streamlit as st
+
 def aplicar_css_completo_layout_fixo(COLORS):
     """
     CSS completo com layout fixo e todos os estilos do MonitorPro
@@ -69,11 +71,20 @@ def aplicar_css_completo_layout_fixo(COLORS):
         /* ===============================================
            CONTEÚDO - LARGURA MÁXIMA FIXA
            =============================================== */
+        
+        /* Container principal que envolve tudo */
+        .appview-container {{
+            display: flex !important;
+            flex-direction: row !important;
+        }}
+        
+        /* Área de conteúdo */
         .main {{
             background: transparent;
             max-width: var(--content-max-width) !important;
             margin: 0 auto !important;
             padding: 2rem 1.5rem !important;
+            flex: 1 !important;
         }}
         
         .block-container {{
@@ -90,19 +101,36 @@ def aplicar_css_completo_layout_fixo(COLORS):
             background: linear-gradient(180deg, 
                 rgba(15, 15, 35, 0.95) 0%, 
                 rgba(26, 26, 62, 0.95) 100%
-            );
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-right: 1px solid rgba(139, 92, 246, 0.15);
-            box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+            ) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(139, 92, 246, 0.15) !important;
+            box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3) !important;
             width: var(--sidebar-width) !important;
             min-width: var(--sidebar-width) !important;
             max-width: var(--sidebar-width) !important;
             flex-shrink: 0 !important;
+            position: relative !important;
         }}
         
         [data-testid="stSidebar"] > div:first-child {{
             width: var(--sidebar-width) !important;
+            min-width: var(--sidebar-width) !important;
+            max-width: var(--sidebar-width) !important;
+        }}
+        
+        /* Garantir que o container interno também seja fixo */
+        [data-testid="stSidebar"] .css-1d391kg,
+        [data-testid="stSidebar"] [data-testid="stSidebarNav"] {{
+            width: var(--sidebar-width) !important;
+            min-width: var(--sidebar-width) !important;
+            max-width: var(--sidebar-width) !important;
+        }}
+        
+        /* Desabilitar transições de width */
+        [data-testid="stSidebar"],
+        [data-testid="stSidebar"] * {{
+            transition: none !important;
         }}
         
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {{
