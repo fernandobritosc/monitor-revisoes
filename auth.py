@@ -1,6 +1,6 @@
 """
 auth.py - Módulo de Autenticação
-Versão RENOVADA com persistência de sessão
+Versão CORRIGIDA - Centralizado + Senha visível + Persistência real
 """
 
 import streamlit as st
@@ -18,23 +18,26 @@ class AuthManager:
         self._init_session()
     
     def _init_session(self):
-        """Inicializa e restaura sessão - CORRIGIDO PARA PERSISTIR NO F5"""
+        """Inicializa e restaura sessão - CORRIGIDO para persistir no F5"""
         
-        # SEMPRE tentar restaurar sessão do Supabase primeiro
+        # CRÍTICO: Sempre verificar Supabase ANTES de inicializar valores padrão
         try:
             session = self.supabase.auth.get_session()
-            if session and session.user:
-                # Atualizar session_state com dados do Supabase
+            
+            # Se existe sessão válida no Supabase
+            if session and hasattr(session, 'user') and session.user:
+                # Forçar atualização do session_state
                 st.session_state['authenticated'] = True
                 st.session_state['user_id'] = session.user.id
                 st.session_state['user_email'] = session.user.email
                 st.session_state['user_name'] = session.user.email.split('@')[0]
-                return  # Sessão restaurada com sucesso
+                st.session_state['login_attempts'] = 0
+                return  # Sair da função - sessão restaurada!
         except Exception as e:
-            # Se falhar, continua para valores padrão
+            # Se der erro, continuar para valores padrão
             pass
         
-        # Se não conseguiu restaurar, inicializar valores padrão
+        # Só inicializar valores padrão se NÃO tem sessão no Supabase
         defaults = {
             'authenticated': False,
             'user_id': None,
@@ -48,22 +51,23 @@ class AuthManager:
                 st.session_state[key] = value
     
     def is_authenticated(self) -> bool:
-        """Verifica se usuário está autenticado"""
-        # Verificar tanto session_state quanto Supabase
+        """Verifica se usuário está autenticado - COM VERIFICAÇÃO DUPLA"""
+        
+        # Primeiro: verificar session_state
         if st.session_state.get('authenticated', False):
             return True
         
-        # Double-check com Supabase
+        # Segundo: verificar direto no Supabase (caso F5)
         try:
             session = self.supabase.auth.get_session()
-            if session and session.user:
+            if session and hasattr(session, 'user') and session.user:
                 # Restaurar session_state
                 st.session_state['authenticated'] = True
                 st.session_state['user_id'] = session.user.id
                 st.session_state['user_email'] = session.user.email
                 st.session_state['user_name'] = session.user.email.split('@')[0]
                 return True
-        except:
+        except Exception:
             pass
         
         return False
@@ -177,32 +181,37 @@ class AuthManager:
         }
     
     def render_login_page(self):
-        """Renderiza página de login RENOVADA - Design Moderno"""
+        """Renderiza página de login - VERSÃO CORRIGIDA"""
         
-        # CSS Moderno
+        # CSS CORRIGIDO - Centralizado e campo de senha ESCURO
         st.markdown("""
         <style>
-        /* Reset e Base */
+        /* IMPORTANTE: Esconder elementos padrão do Streamlit */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stDeployButton {display: none;}
+        
+        /* Background gradiente */
         .stApp {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         }
         
-        /* Container Principal */
-        .login-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
+        /* CORREÇÃO 1: Centralização vertical e horizontal */
+        .block-container {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            max-width: 100% !important;
         }
         
-        .login-container {
-            background: rgba(255, 255, 255, 0.95);
+        /* Container de login centralizado */
+        .login-box {
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(10px);
-            border-radius: 24px;
-            padding: 48px;
-            max-width: 440px;
-            width: 100%;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 420px;
+            margin: 10vh auto;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             animation: slideUp 0.5s ease-out;
         }
@@ -221,38 +230,26 @@ class AuthManager:
         /* Header */
         .login-header {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 30px;
         }
         
         .login-logo {
-            font-size: 64px;
-            margin-bottom: 16px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.05);
-            }
+            font-size: 56px;
+            margin-bottom: 12px;
         }
         
         .login-title {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 800;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin: 0;
-            letter-spacing: -0.5px;
+            margin: 0 0 8px 0;
         }
         
         .login-subtitle {
             color: #64748b;
-            font-size: 15px;
-            margin-top: 8px;
+            font-size: 14px;
             font-weight: 500;
         }
         
@@ -262,14 +259,14 @@ class AuthManager:
             background-color: #f1f5f9;
             border-radius: 12px;
             padding: 4px;
+            margin-bottom: 24px;
         }
         
         .stTabs [data-baseweb="tab"] {
             border-radius: 8px;
-            padding: 12px 24px;
+            padding: 10px 20px;
             font-weight: 600;
             color: #64748b;
-            transition: all 0.3s ease;
         }
         
         .stTabs [aria-selected="true"] {
@@ -277,137 +274,132 @@ class AuthManager:
             color: white !important;
         }
         
-        /* Inputs */
-        .stTextInput input {
-            border-radius: 12px;
-            border: 2px solid #e2e8f0;
-            padding: 14px 16px;
-            font-size: 15px;
+        /* CORREÇÃO 2: Inputs com texto ESCURO e visível */
+        .stTextInput > div > div > input {
+            border-radius: 10px !important;
+            border: 2px solid #e2e8f0 !important;
+            padding: 12px 14px !important;
+            font-size: 15px !important;
+            background: white !important;
+            color: #1e293b !important; /* TEXTO ESCURO */
             transition: all 0.3s ease;
-            background: white;
         }
         
-        .stTextInput input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        .stTextInput > div > div > input::placeholder {
+            color: #94a3b8 !important; /* Placeholder cinza claro */
+        }
+        
+        .stTextInput > div > div > input:focus {
+            border-color: #667eea !important;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+            background: white !important;
+            color: #1e293b !important; /* TEXTO ESCURO no foco também */
+        }
+        
+        /* Labels dos inputs */
+        .stTextInput > label {
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            color: #334155 !important;
+            margin-bottom: 6px !important;
         }
         
         /* Botões */
-        .stButton button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 24px;
-            font-size: 16px;
-            font-weight: 600;
+        .stButton > button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 10px !important;
+            padding: 12px 24px !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
             transition: all 0.3s ease;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            width: 100%;
         }
         
-        .stButton button:hover {
+        .stButton > button:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
         
-        .stButton button:active {
-            transform: translateY(0);
-        }
-        
         /* Checkbox */
         .stCheckbox {
-            margin-top: 12px;
+            margin: 12px 0;
+        }
+        
+        .stCheckbox > label {
+            font-size: 13px !important;
+            color: #475569 !important;
         }
         
         /* Mensagens */
         .stAlert {
-            border-radius: 12px;
-            border: none;
-            padding: 12px 16px;
-            font-size: 14px;
+            border-radius: 10px !important;
+            border: none !important;
+            padding: 12px 16px !important;
+            font-size: 14px !important;
+            margin-top: 12px !important;
         }
         
         /* Footer */
         .login-footer {
             text-align: center;
-            margin-top: 32px;
-            padding-top: 24px;
+            margin-top: 30px;
+            padding-top: 20px;
             border-top: 1px solid #e2e8f0;
             color: #94a3b8;
-            font-size: 13px;
-        }
-        
-        .login-footer a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
+            font-size: 12px;
         }
         
         /* Responsivo */
         @media (max-width: 640px) {
-            .login-container {
-                padding: 32px 24px;
+            .login-box {
+                margin: 5vh 20px;
+                padding: 30px 20px;
             }
             
             .login-title {
-                font-size: 28px;
+                font-size: 24px;
             }
         }
-        
-        /* Esconder elementos do Streamlit */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
         </style>
         """, unsafe_allow_html=True)
         
-        # HTML da página
+        # Container de login
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        
+        # Header
         st.markdown("""
-        <div class="login-wrapper">
-            <div class="login-container">
-                <div class="login-header">
-                    <div class="login-logo">📚</div>
-                    <h1 class="login-title">MonitorPro</h1>
-                    <p class="login-subtitle">Sistema Inteligente de Estudos</p>
-                </div>
-            </div>
+        <div class="login-header">
+            <div class="login-logo">📚</div>
+            <h1 class="login-title">MonitorPro</h1>
+            <p class="login-subtitle">Sistema Inteligente de Estudos</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Tabs com formulários
-        tab1, tab2 = st.tabs(["🔐 Login", "✨ Criar Conta"])
+        # Tabs
+        tab1, tab2 = st.tabs(["🔐 Entrar", "✨ Cadastrar"])
         
         # ============== TAB LOGIN ==============
         with tab1:
-            st.markdown("<br>", unsafe_allow_html=True)
-            
             with st.form("login_form", clear_on_submit=False):
                 email = st.text_input(
-                    "📧 Email",
+                    "Email",
                     placeholder="seu@email.com",
                     key="login_email"
                 )
                 
                 password = st.text_input(
-                    "🔒 Senha",
+                    "Senha",
                     type="password",
-                    placeholder="••••••••",
+                    placeholder="Digite sua senha",
                     key="login_password"
                 )
                 
-                st.markdown("<br>", unsafe_allow_html=True)
-                
                 col1, col2 = st.columns([1, 1])
-                
                 with col1:
                     remember = st.checkbox("Lembrar-me", value=True)
-                
-                with col2:
-                    st.markdown(
-                        '<p style="text-align: right; font-size: 13px;">'
-                        '<a href="#" style="color: #667eea;">Esqueceu a senha?</a></p>',
-                        unsafe_allow_html=True
-                    )
                 
                 submit = st.form_submit_button("🚀 Entrar", use_container_width=True)
                 
@@ -427,68 +419,55 @@ class AuthManager:
         
         # ============== TAB CADASTRO ==============
         with tab2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            
             with st.form("signup_form", clear_on_submit=True):
                 email = st.text_input(
-                    "📧 Email",
+                    "Email",
                     placeholder="seu@email.com",
                     key="signup_email"
                 )
                 
                 password = st.text_input(
-                    "🔒 Senha",
+                    "Senha",
                     type="password",
                     placeholder="Mínimo 6 caracteres",
-                    key="signup_password",
-                    help="Use uma senha forte com letras e números"
+                    key="signup_password"
                 )
                 
                 password2 = st.text_input(
-                    "🔒 Confirmar Senha",
+                    "Confirmar Senha",
                     type="password",
-                    placeholder="Digite a senha novamente",
+                    placeholder="Digite novamente",
                     key="signup_password2"
                 )
                 
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                terms = st.checkbox(
-                    "Li e aceito os termos de uso e política de privacidade",
-                    key="terms"
-                )
-                
-                st.markdown("<br>", unsafe_allow_html=True)
+                terms = st.checkbox("Aceito os termos de uso")
                 
                 submit = st.form_submit_button("✨ Criar Conta", use_container_width=True)
                 
                 if submit:
                     if not terms:
-                        st.warning("⚠️ Você deve aceitar os termos de uso")
+                        st.warning("⚠️ Aceite os termos de uso")
                     elif not email or not password:
                         st.warning("⚠️ Preencha todos os campos")
                     elif password != password2:
                         st.error("❌ As senhas não coincidem")
                     elif len(password) < 6:
-                        st.error("❌ A senha deve ter no mínimo 6 caracteres")
+                        st.error("❌ Senha deve ter no mínimo 6 caracteres")
                     else:
-                        with st.spinner("Criando sua conta..."):
+                        with st.spinner("Criando conta..."):
                             result = self.signup(email, password)
                             
                             if result['success']:
                                 st.success("✅ " + result['message'])
-                                st.info("💡 Agora você pode fazer login na aba ao lado!")
+                                st.info("💡 Faça login na aba ao lado!")
                             else:
                                 st.error("❌ " + result['message'])
         
         # Footer
         st.markdown("""
         <div class="login-footer">
-            <p>© 2026 MonitorPro • Desenvolvido com ❤️</p>
-            <p style="margin-top: 8px;">
-                <a href="#">Suporte</a> • 
-                <a href="#">Privacidade</a> • 
-                <a href="#">Termos</a>
-            </p>
+            © 2026 MonitorPro • Desenvolvido com ❤️
         </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
