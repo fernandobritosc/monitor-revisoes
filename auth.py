@@ -1,21 +1,9 @@
-auth.py - Módulo de Autenticação do MonitorPro
-================================================
-
-Este módulo gerencia toda a lógica de autenticação do aplicativo,
-incluindo login, logout, cadastro e verificação de sessão.
-
-Autor: MonitorPro Team
-Data: 2026-01-26
-"""
-
 """
 auth.py - Módulo de Autenticação do MonitorPro
 ================================================
 
 Este módulo gerencia toda a lógica de autenticação do aplicativo,
 incluindo login, logout, cadastro e verificação de sessão.
-
-ATUALIZADO: Agora com persistência de sessão (não desloga ao recarregar!)
 
 Autor: MonitorPro Team
 Data: 2026-01-26
@@ -25,8 +13,6 @@ import streamlit as st
 from supabase import Client
 from typing import Dict, Optional
 import re
-import time
-
 
 
 class AuthManager:
@@ -55,30 +41,22 @@ class AuthManager:
         # Tentar recuperar sessão do Supabase
         if not st.session_state.get('authenticated', False):
             try:
-                # Verificar se há sessão ativa no Supabase
                 session = self.supabase.auth.get_session()
-                
                 if session and session.user:
-                    # Sessão encontrada! Restaurar
                     st.session_state['authenticated'] = True
                     st.session_state['user_id'] = session.user.id
                     st.session_state['user_email'] = session.user.email
                     st.session_state['user_name'] = session.user.email.split('@')[0]
-                    st.session_state['access_token'] = session.access_token
-                    st.session_state['refresh_token'] = session.refresh_token
                     return
             except Exception:
                 pass
         
-        # Defaults se não houver sessão
         defaults = {
             'authenticated': False,
             'user_id': None,
             'user_email': None,
             'user_name': None,
-            'login_attempts': 0,
-            'access_token': None,
-            'refresh_token': None
+            'login_attempts': 0
         }
         
         for key, value in defaults.items():
