@@ -849,28 +849,28 @@ st.set_page_config(
 )
 
 # --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
+import os
+import streamlit as st
 from supabase import create_client, Client
 
 def init_supabase():
     """
     Inicializa Supabase com persistência de sessão
     
-    IMPORTANTE: As opções auto_refresh_token e persist_session
-    são ESSENCIAIS para manter o usuário logado após F5
+    IMPORTANTE: Formato atualizado para versão recente do supabase-py
     """
-    
-    # Configurações de persistência
-    options = {
-        'auto_refresh_token': True,  # Renova token automaticamente
-        'persist_session': True,      # Mantém sessão no navegador
-    }
     
     try:
         # Produção: usar st.secrets (Streamlit Cloud)
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
         
-        client = create_client(url, key, options=options)
+        # Criação do cliente SEM o parâmetro options
+        client = create_client(url, key)
+        
+        # Para persistência, podemos configurar manualmente se necessário
+        # O cliente moderno já gerencia sessões automaticamente
+        
         return client
         
     except Exception:
@@ -880,7 +880,7 @@ def init_supabase():
             key = os.getenv("SUPABASE_KEY")
             
             if url and key:
-                client = create_client(url, key, options=options)
+                client = create_client(url, key)
                 return client
             else:
                 st.error("❌ Credenciais Supabase não configuradas!")
@@ -888,7 +888,8 @@ def init_supabase():
                 return None
                 
         except Exception as e:
-            st.error(f"❌ Erro ao inicializar Supabase: {e}")
+            st.error(f"❌ Erro ao inicializar Supabase: {str(e)}")
+            st.info("📌 Dica: Execute 'pip install --upgrade supabase'")
             return None
 
 # Inicializar Supabase
