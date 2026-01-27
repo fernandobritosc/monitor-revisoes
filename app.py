@@ -15,6 +15,9 @@ import os  # MULTI-USER: Adicionado
 # MULTI-USER: Import do módulo de autenticação
 from auth import AuthManager
 
+# LAYOUT FIXO: Import do CSS
+from css_completo_layout_fixo import aplicar_css_completo_layout_fixo  # ← ADICIONE ESTA LINHA
+
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
 # ============================================================================
@@ -840,7 +843,7 @@ def validar_tempo_hhmm(tempo_str):
 st.set_page_config(
     page_title="Monitor de Revisões Pro", 
     layout="wide", 
-    initial_sidebar_state="collapsed",  # COLLAPSED por padrão para melhor UX
+    initial_sidebar_state="collapsed",
     menu_items={
         'Get Help': None,
         'Report a bug': None,
