@@ -1157,349 +1157,299 @@ def apply_styles():
     st.markdown("""
         <style>
         /* ═══════════════════════════════════════════════════════════════════
-           🎨 CSS RESPONSIVO GLOBAL - MonitorPro (VERSÃO SIMPLIFICADA)
-           ═══════════════════════════════════════════════════════════════════ */
-        
-        /* Reset básico */
-        * { box-sizing: border-box; }
-        html, body { overflow-x: hidden; max-width: 100vw; }
-        
-        /* Esconder navegação padrão da sidebar */
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
-        
-        /* ═══ RESPONSIVIDADE AUTOMÁTICA ═══ */
-        /* O Streamlit já gerencia a expansão do conteúdo quando a sidebar está collapsed */
-        /* Apenas garantimos que os containers usem 100% do espaço disponível */
-        
-        /* FORÇAR LARGURA 100% EM TODOS OS CONTAINERS */
-        .main, .main > div, .block-container, .block-container > div {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        .main .block-container {
-            max-width: 100% !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            padding-top: 2rem !important;
-            padding-bottom: 5rem !important;
-        }
-        
-        /* Garantir que elementos não ultrapassem o container */
-        * {
-            box-sizing: border-box !important;
-        }
-        
-        .element-container, .stMarkdown, .stButton, .stForm {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        /* Em telas menores, reduzir padding */
-        @media (max-width: 768px) {
-            .main .block-container {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-top: 1rem !important;
-            }
-        }
-        
-        /* ═══ CARDS RESPONSIVOS ═══ */
-        
-        .modern-card {
-            width: 100%;
-            max-width: 100%;
-            padding: clamp(1rem, 3vw, 1.5rem);
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-            border-radius: 12px;
-        }
-        
-        .modern-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
-        }
-        
-        @media (max-width: 768px) {
-            .modern-card {
-                padding: 0.875rem;
-                margin-bottom: 0.75rem;
-                border-radius: 10px;
-            }
-            .modern-card:hover {
-                transform: none;
-            }
-        }
-        
-        /* ═══ TIPOGRAFIA FLUIDA ═══ */
-        
-        h1 { font-size: clamp(1.5rem, 5vw, 2.5rem) !important; line-height: 1.2 !important; }
-        h2 { font-size: clamp(1.25rem, 4vw, 2rem) !important; line-height: 1.3 !important; }
-        h3 { font-size: clamp(1.1rem, 3vw, 1.5rem) !important; line-height: 1.4 !important; }
-        h4 { font-size: clamp(1rem, 2.5vw, 1.25rem) !important; }
-        p, div, span { font-size: clamp(0.875rem, 2vw, 1rem) !important; line-height: 1.6 !important; }
-        
-        /* ═══ BOTÕES RESPONSIVOS ═══ */
-        
-        button {
-            min-height: 44px !important;
-            padding: 0.75rem 1.5rem !important;
-            font-size: clamp(0.875rem, 2vw, 1rem) !important;
-            border-radius: 8px !important;
-            transition: all 0.2s ease !important;
-        }
-        
-        @media (max-width: 768px) {
-            button {
-                width: 100% !important;
-                margin-bottom: 0.5rem !important;
-                font-size: 0.9rem !important;
-                padding: 0.875rem 1rem !important;
-            }
-        }
-        
-        /* ═══ INPUTS RESPONSIVOS ═══ */
-        
-        input, textarea, select {
-            font-size: clamp(0.875rem, 2vw, 1rem) !important;
-            padding: 0.75rem !important;
-            border-radius: 6px !important;
-        }
-        
-        @media (max-width: 768px) {
-            input, textarea, select {
-                font-size: 16px !important; /* Evita zoom no iOS */
-                padding: 0.875rem !important;
-            }
-        }
-        
-        /* ═══ BADGES ═══ */
-        
-        .badge {
-            padding: 0.25rem 0.625rem;
-            border-radius: 6px;
-            font-size: clamp(0.65rem, 1.5vw, 0.75rem);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
-        }
-        
-        .badge-green { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .badge-red { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .badge-gray { background-color: rgba(148, 163, 184, 0.2); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3); }
-        .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
-        
-        /* ═══ PROGRESS BARS ═══ */
-        
-        .modern-progress-container {
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            height: 6px;
-            overflow: hidden;
-            margin: 0.5rem 0;
-        }
-        
-        .modern-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #8B5CF6, #06B6D4);
-            border-radius: 10px;
-            transition: width 0.5s ease;
-        }
-        
-        @media (max-width: 768px) {
-            .modern-progress-container { height: 8px; }
-        }
-        
-        /* ═══ COLUNAS RESPONSIVAS ═══ */
-        
-        [data-testid="column"] {
-            padding: 0 0.5rem;
-        }
-        
-        @media (max-width: 768px) {
-            [data-testid="column"] {
-                padding: 0 0.25rem;
-                margin-bottom: 0.75rem;
-            }
-        }
-        
-        /* ═══ TABELAS RESPONSIVAS ═══ */
-        
-        [data-testid="stDataFrame"] {
-            width: 100% !important;
-            overflow-x: auto !important;
-        }
-        
-        @media (max-width: 768px) {
-            [data-testid="stDataFrame"] {
-                font-size: 0.8rem !important;
-            }
-            table {
-                display: block !important;
-                overflow-x: auto !important;
-            }
-        }
-        
-        /* ═══ GRÁFICOS RESPONSIVOS ═══ */
-        
-        .js-plotly-plot {
-            width: 100% !important;
-        }
-        
-        /* ═══ CLASSES UTILITÁRIAS ═══ */
-        
-        @media (max-width: 768px) {
-            .desktop-only { display: none !important; }
-        }
-        
-        .mobile-only { display: none !important; }
-        
-        @media (max-width: 768px) {
-            .mobile-only { display: block !important; }
-        }
-        
-        /* ═══ SCROLL SUAVE ═══ */
-        
-        html { scroll-behavior: smooth; }
-        
-        /* ═══ EXPANDERS E TABS RESPONSIVOS ═══ */
-        
-        [data-testid="stExpander"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            overflow-x: hidden !important;
-        }
-        
-        [data-testid="stExpander"] > div {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        .streamlit-expanderHeader {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        [data-testid="stVerticalBlock"] {
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-        
-        [data-testid="stHorizontalBlock"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            flex-wrap: wrap !important;
-        }
-        
-        .stTabs {
-            width: 100% !important;
-            max-width: 100% !important;
-            overflow-x: auto !important;
-        }
-        
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0.5rem !important;
-            flex-wrap: wrap !important;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            white-space: normal !important;
-            min-width: auto !important;
-        }
-        
-        @media (max-width: 768px) {
-            [data-testid="stExpander"] {
-                margin-bottom: 0.5rem !important;
-            }
-            
-            .stTabs [data-baseweb="tab"] {
-                font-size: 0.85rem !important;
-                padding: 0.5rem 0.75rem !important;
-            }
-        }
-        
-        /* ═══ ACESSIBILIDADE ═══ */
-        
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-        
-        /* ═══ TOOLTIPS MELHORADOS ═══ */
-        [title] {
-            position: relative;
-        }
-        
-        [title]:hover::after {
-            content: attr(title);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(15, 15, 35, 0.95);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            white-space: nowrap;
-            z-index: 1000;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        
-        /* Melhorar contraste para acessibilidade */
-        .high-contrast {
-            filter: contrast(1.2);
-        }
-        
-        /* Foco visível para teclado */
-        :focus-visible {
-            outline: 2px solid #8B5CF6 !important;
-            outline-offset: 2px !important;
-        }
-        
+   🎨 CSS RESPONSIVO CORRETO - EXPANDE QUANDO SIDEBAR FECHA
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Reset básico */
+* { 
+    box-sizing: border-box; 
+}
+
+html, body { 
+    overflow-x: hidden; 
+    max-width: 100vw; 
+}
+
+/* Esconder navegação padrão da sidebar */
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+
+/* ═══ EXPANSÃO AUTOMÁTICA QUANDO SIDEBAR FECHA ═══ */
+
+/* Quando sidebar está ABERTA (padrão) */
+.main .block-container {
+    max-width: 100% !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    padding-top: 2rem !important;
+    padding-bottom: 5rem !important;
+    transition: all 0.3s ease !important;
+}
+
+/* Quando sidebar está FECHADA - Expandir para largura total */
+[data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container,
+[data-testid="collapsedControl"] ~ .main .block-container,
+.main:has([data-testid="collapsedControl"]) .block-container {
+    max-width: 100% !important;
+    padding-left: 3rem !important;
+    padding-right: 3rem !important;
+    margin-left: 0 !important;
+    transition: all 0.3s ease !important;
+}
+
+/* FORÇAR largura 100% */
+.main, 
+.main > div, 
+.block-container, 
+.block-container > div {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Garantir que elementos não ultrapassem o container */
+.element-container, 
+.stMarkdown, 
+.stButton, 
+.stForm,
+.row-widget,
+.stTabs {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Em telas menores, reduzir padding */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-top: 1rem !important;
+    }
+}
+
+/* ═══ CARDS RESPONSIVOS ═══ */
+
+.modern-card {
+    width: 100%;
+    max-width: 100%;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+    border-radius: 12px;
+}
+
+.modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+}
+
+@media (max-width: 768px) {
+    .modern-card {
+        padding: 0.875rem;
+        margin-bottom: 0.75rem;
+        border-radius: 10px;
+    }
+    .modern-card:hover {
+        transform: none;
+    }
+}
+
+/* ═══ TIPOGRAFIA FLUIDA ═══ */
+
+h1 { font-size: clamp(1.5rem, 5vw, 2.5rem) !important; line-height: 1.2 !important; }
+h2 { font-size: clamp(1.25rem, 4vw, 2rem) !important; line-height: 1.3 !important; }
+h3 { font-size: clamp(1.1rem, 3vw, 1.5rem) !important; line-height: 1.4 !important; }
+h4 { font-size: clamp(1rem, 2.5vw, 1.25rem) !important; }
+p, div, span { font-size: clamp(0.875rem, 2vw, 1rem) !important; line-height: 1.6 !important; }
+
+/* ═══ BOTÕES RESPONSIVOS ═══ */
+
+button {
+    min-height: 44px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-size: clamp(0.875rem, 2vw, 1rem) !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+}
+
+@media (max-width: 768px) {
+    button {
+        padding: 0.625rem 1rem !important;
+        font-size: 0.875rem !important;
+    }
+}
+
+/* ═══ COLUNAS RESPONSIVAS ═══ */
+
+[data-testid="column"] {
+    padding: 0.5rem !important;
+}
+
+@media (max-width: 768px) {
+    [data-testid="column"] {
+        min-width: 100% !important;
+        padding: 0.25rem !important;
+    }
+}
+
+/* ═══ TABELAS RESPONSIVAS ═══ */
+
+.dataframe {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    display: block !important;
+}
+
+@media (max-width: 768px) {
+    .dataframe {
+        font-size: 0.75rem !important;
+    }
+    .dataframe th,
+    .dataframe td {
+        padding: 0.25rem !important;
+    }
+}
+
+/* ═══ INPUTS E FORMS RESPONSIVOS ═══ */
+
+input, textarea, select {
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: clamp(0.875rem, 2vw, 1rem) !important;
+}
+
+@media (max-width: 768px) {
+    input, textarea, select {
+        min-height: 44px !important;
+    }
+}
+
+/* ═══ MÉTRICAS RESPONSIVAS ═══ */
+
+[data-testid="metric-container"] {
+    padding: clamp(0.5rem, 2vw, 1rem) !important;
+}
+
+[data-testid="stMetricValue"] {
+    font-size: clamp(1.25rem, 4vw, 2rem) !important;
+}
+
+[data-testid="stMetricLabel"] {
+    font-size: clamp(0.75rem, 2vw, 0.875rem) !important;
+}
+
+/* ═══ EXPANDERS RESPONSIVOS ═══ */
+
+.streamlit-expanderHeader {
+    font-size: clamp(0.875rem, 2vw, 1rem) !important;
+    padding: clamp(0.5rem, 2vw, 0.75rem) !important;
+}
+
+/* ═══ TABS RESPONSIVAS ═══ */
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem !important;
+    overflow-x: auto !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-size: clamp(0.75rem, 2vw, 0.875rem) !important;
+    padding: clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 3vw, 1rem) !important;
+    white-space: nowrap !important;
+}
+
+@media (max-width: 768px) {
+    .stTabs [data-baseweb="tab"] {
+        min-width: auto !important;
+    }
+}
+
+/* ═══ SIDEBAR RESPONSIVA ═══ */
+
+[data-testid="stSidebar"] {
+    transition: all 0.3s ease !important;
+}
+
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] {
+        width: 100% !important;
+    }
+}
+
+/* ═══ GRÁFICOS RESPONSIVOS ═══ */
+
+.js-plotly-plot,
+.plotly {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* ═══ CORREÇÃO DE OVERFLOW ═══ */
+
+.stMarkdown,
+.element-container {
+    overflow-x: hidden !important;
+    word-wrap: break-word !important;
+}
+
+/* ═══ SPINNER RESPONSIVO ═══ */
+
+.stSpinner {
+    text-align: center !important;
+}
+
+/* ═══ ALERTAS RESPONSIVOS ═══ */
+
+.stAlert {
+    font-size: clamp(0.875rem, 2vw, 1rem) !important;
+    padding: clamp(0.75rem, 2vw, 1rem) !important;
+}
+
+/* ═══ PROGRESS BAR RESPONSIVO ═══ */
+
+.stProgress > div > div {
+    height: clamp(0.5rem, 1vw, 0.75rem) !important;
+}
+
+/* ═══ FILE UPLOADER RESPONSIVO ═══ */
+
+[data-testid="stFileUploader"] {
+    width: 100% !important;
+}
+
+/* ═══ CORRIGIR SCROLLBAR ═══ */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.5);
+}
+
+/* ═══ MODO ESCURO/CLARO AUTOMÁTICO ═══ */
+
+@media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+}
+
         </style>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO OBRIGATÓRIA (ÚNICA) ---
-if 'missao_ativa' not in st.session_state:
-    # Tentar carregar a missão principal primeiro
-    missao_carregada = None
-    
-    try:
-        ed = get_editais(supabase, user_id)
-        if ed:
-            # PASSO 1: Tentar buscar missão principal do banco
-            try:
-                res_principal = supabase.table("editais_materias").select("concurso").eq("is_principal", True).limit(1).eq("user_id", user_id).execute()
-                if res_principal.data and len(res_principal.data) > 0:
-                    missao_principal = res_principal.data[0]['concurso']
-                    # Verificar se ainda existe
-                    if missao_principal in ed:
-                        missao_carregada = missao_principal
-            except:
-                pass
-            
-            # PASSO 2: Se não encontrou missão principal, pega a primeira
-            if not missao_carregada:
-                missao_carregada = list(ed.keys())[0]
-        
-        st.session_state.missao_ativa = missao_carregada
-    except Exception:
-        st.session_state.missao_ativa = None
 
-if 'nota_corte_alvo' not in st.session_state:
-    st.session_state.nota_corte_alvo = 80
-
-# Helper function to load all data
-# --- CACHE DE QUERIES SUPABASE (Performance Boost) ---
-@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_estudos_cached(missao):
     """Busca registros de estudos com cache para melhor performance"""
     if not supabase:
@@ -1519,6 +1469,28 @@ def get_editais_cached(user_id):
         return get_editais(supabase, user_id)
     except Exception:
         return {}
+
+# =============================================================================
+# INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO ESSENCIAIS
+# =============================================================================
+
+# Inicializar missao_ativa ANTES de usar em carregar_dados()
+if 'missao_ativa' not in st.session_state:
+    try:
+        ed = get_editais(supabase, user_id)
+        if ed:
+            st.session_state.missao_ativa = list(ed.keys())[0]
+        else:
+            st.session_state.missao_ativa = None
+    except Exception:
+        st.session_state.missao_ativa = None
+
+if 'edit_id' not in st.session_state:
+    st.session_state.edit_id = None
+
+# =============================================================================
+# CARREGAMENTO DE DADOS
+# =============================================================================
 
 def carregar_dados():
     if not supabase:
@@ -1561,22 +1533,7 @@ else:
 
 # Alias para compatibilidade com código existente (que usa 'df')
 # ONDE O CÓDIGO USA 'df', ELE DEVE USAR 'df_estudos' AGORA PARA MÉTRICAS DE ROTINA
-df = df_estudos 
-
-# Definir Missão Ativa
-if not dados.get('missoes'):
-    if 'missao_ativa' not in st.session_state:
-        try:
-            ed = get_editais(supabase, user_id)
-            if ed:
-                st.session_state.missao_ativa = list(ed.keys())[0]
-            else:
-                st.session_state.missao_ativa = None
-        except Exception:
-            st.session_state.missao_ativa = None
-
-if 'edit_id' not in st.session_state:
-    st.session_state.edit_id = None
+df = df_estudos
 
 if 'edit_id_simulado' not in st.session_state:
     st.session_state.edit_id_simulado = None
