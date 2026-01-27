@@ -1645,7 +1645,7 @@ st.markdown('''
 """
 
 # --- NOVA FUNÇÃO: Processar assuntos em massa ---
-    }
+    
     
     /* Botões Modernos */
     .stButton>button {
