@@ -15,9 +15,6 @@ import os  # MULTI-USER: Adicionado
 # MULTI-USER: Import do módulo de autenticação
 from auth import AuthManager
 
-# LAYOUT FIXO: Import do CSS
-from css_completo_layout_fixo import aplicar_css_completo_layout_fixo  # ← ADICIONE ESTA LINHA
-
 # ============================================================================
 # 🎨 DESIGN SYSTEM - TEMA MODERNO ROXO/CIANO
 # ============================================================================
@@ -843,7 +840,7 @@ def validar_tempo_hhmm(tempo_str):
 st.set_page_config(
     page_title="Monitor de Revisões Pro", 
     layout="wide", 
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed",  # COLLAPSED por padrão para melhor UX
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -851,9 +848,13 @@ st.set_page_config(
     }
 )
 
+# ============================================================================
+# 🎨 APLICAR CSS COM LAYOUT FIXO
+# ============================================================================
+from css_completo_layout_fixo import aplicar_css_completo_layout_fixo
+aplicar_css_completo_layout_fixo(COLORS)
+
 # --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
-import os
-import streamlit as st
 from supabase import create_client, Client
 
 def init_supabase():
@@ -1624,7 +1625,8 @@ if 'renomear_materia' not in st.session_state:
     st.session_state.renomear_materia = {}
 
 # Aplicar estilos base
-apply_styles()
+# DESABILITADO: apply_styles() - Substituído por css_completo_layout_fixo
+# apply_styles()
 
 # Configuração da página para responsividade
 st.markdown("""
@@ -1632,170 +1634,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # CSS Customizado para Layout Moderno - TEMA ROXO/CIANO
-st.markdown("""
+# DESABILITADO: Todo CSS inline substituído por css_completo_layout_fixo
+"""
+st.markdown('''
     <style>
-    /* Importar Fontes: Inter e Montserrat */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Montserrat:wght@400;500;600;700;800&display=swap');
-    
-    /* Variáveis de cores - TEMA FUTURISTA PREMIUM */
-    :root {
-        --primary: #8B5CF6;
-        --secondary: #00FFFF; /* Ciano Neon */
-        --accent: #EC4899;
-        --success: #10B981;
-        --warning: #F59E0B;
-        --danger: #EF4444;
-        --bg-dark: #0E1117; /* Cinza Oceano Profundo */
-        --bg-card: rgba(15, 15, 35, 0.7);
-        --text-primary: #FFFFFF;
-        --text-secondary: #94A3B8;
-        --border-glow: rgba(0, 255, 255, 0.1);
-        --sidebar-bg: #0E1117; 
-        --sidebar-border: 1px solid rgba(0, 255, 255, 0.1);
-    }
-    
-    html, body, [class*="css"] {
-        font-family: 'Montserrat', 'Inter', sans-serif;
-    }
-    
-    /* Fundo principal */
-    .stApp {
-        background: #0E1117;
-    }
-    
-    /* CORREÇÃO DO LAYOUT EXPANSÍVEL */
-    /* Quando a sidebar está EXPANDIDA */
-    [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container {
-        max-width: calc(100% - 300px) !important;
-        margin-left: 300px !important;
-        padding-left: 4rem !important;
-        padding-right: 4rem !important;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-    
-    /* Quando a sidebar está RECOLHIDA (Minimizada) */
-    [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
-        max-width: 95% !important; 
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-    
-    /* Container principal padrão */
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        transition: all 0.3s ease;
-    }
-    
-    /* RESPONSIVIDADE MOBILE - FORÇAR LARGURA 100% */
-    @media (max-width: 768px) {
-        [data-testid="stSidebar"][aria-expanded="true"] ~ .main .block-container,
-        [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container,
-        .main .block-container {
-            max-width: 100% !important;
-            width: 100% !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-        
-        [data-testid="stSidebar"] {
-            min-width: 100% !important;
-            width: 100% !important;
-        }
-    }
+    # ESTE CSS FOI DESABILITADO PARA EVITAR CONFLITO COM O LAYOUT FIXO
+    # Todo o styling agora vem de css_completo_layout_fixo.py
+    </style>
+''', unsafe_allow_html=True)
+"""
 
-    /* Cards Glassmorphism Modernos */
-    .modern-card {
-        background: rgba(14, 17, 23, 0.7);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(139, 92, 246, 0.1);
-        border-radius: 16px;
-        padding: 30px;
-        margin-bottom: 20px;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-    .modern-card:hover {
-        border-color: rgba(0, 255, 255, 0.3);
-        transform: translateY(-4px);
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-
-    /* Títulos Uppercase e Letter Spacing */
-    .main-title {
-        font-family: 'Montserrat', sans-serif;
-        font-size: 2.5rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        background: linear-gradient(135deg, #FFFFFF 0%, #00FFFF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 1.5rem;
-    }
-    
-    .section-subtitle {
-        color: #94A3B8;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        font-weight: 600;
-        margin-bottom: 2rem;
-    }
-
-    /* Sidebar Futurista */
-    [data-testid="stSidebar"] {
-        background-color: var(--sidebar-bg) !important;
-        background-image: none !important;
-        border-right: var(--sidebar-border) !important;
-        min-width: 300px !important;
-        width: 300px !important;
-    }
-    
-    /* Remover elementos padrão da sidebar */
-    .stSidebarUserContent {
-        padding-top: 2rem;
-    }
-
-    /* Estilização das TABS (Abas) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: rgba(15, 15, 35, 0.5);
-        padding: 8px;
-        border-radius: 14px;
-        border: 1px solid rgba(139, 92, 246, 0.1);
-        margin-bottom: 20px;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        white-space: pre-wrap;
-        background-color: transparent;
-        border-radius: 10px;
-        color: #94A3B8;
-        font-weight: 600;
-        border: none !important;
-        transition: all 0.3s ease;
-        padding: 0 20px;
-    }
-
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #FFFFFF;
-        background-color: rgba(139, 92, 246, 0.1);
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #8B5CF6, #06B6D4) !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+# --- NOVA FUNÇÃO: Processar assuntos em massa ---
     }
     
     /* Botões Modernos */
