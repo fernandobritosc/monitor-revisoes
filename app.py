@@ -1089,6 +1089,69 @@ def transformar_em_template(supabase, concurso, user_id, nome_template, descrica
     except Exception as e:
         return {'success': False, 'message': f'❌ Erro: {str(e)}'}
 
+def remover_de_templates(supabase, concurso, user_id):
+    """Remove um edital dos templates públicos (volta a ser privado)"""
+    try:
+        # Verificar se o edital pertence ao usuário e é um template
+        check = supabase.table("editais_materias")\
+            .select("id, is_template, template_criador_id")\
+            .eq("concurso", concurso)\
+            .eq("user_id", user_id)\
+            .eq("is_template", True)\
+            .limit(1)\
+            .execute()
+        
+        if not check.data:
+            return {'success': False, 'message': 'Template não encontrado ou você não é o criador!'}
+        
+        # Verificar se é o criador
+        if check.data[0].get('template_criador_id') != user_id:
+            return {'success': False, 'message': 'Você não pode remover templates criados por outros usuários!'}
+        
+        # Remover do templates (volta a ser privado)
+        supabase.table("editais_materias")\
+            .update({
+                "is_template": False,
+                "template_criador_id": None,
+                "template_nome": None,
+                "template_descricao": None,
+                "template_clones": 0
+            })\
+            .eq("concurso", concurso)\
+            .eq("user_id", user_id)\
+            .execute()
+        
+        return {'success': True, 'message': f'✅ Edital "{concurso}" removido dos templates públicos!'}
+        
+    except Exception as e:
+        return {'success': False, 'message': f'❌ Erro: {str(e)}'}
+
+def listar_meus_templates(supabase, user_id):
+    """Lista os templates públicos criados pelo usuário"""
+    try:
+        response = supabase.table("editais_materias")\
+            .select("concurso, cargo, template_nome, template_descricao, template_clones")\
+            .eq("is_template", True)\
+            .eq("template_criador_id", user_id)\
+            .execute()
+        
+        if response.data:
+            templates = {}
+            for item in response.data:
+                concurso = item['concurso']
+                if concurso not in templates:
+                    templates[concurso] = {
+                        'cargo': item['cargo'],
+                        'nome': item.get('template_nome', concurso),
+                        'descricao': item.get('template_descricao', ''),
+                        'clones': item.get('template_clones', 0)
+                    }
+            return templates
+        return {}
+    except Exception as e:
+        st.error(f"Erro ao listar seus templates: {e}")
+        return {}
+
 # --- INTEGRAÇÃO: ESTILOS RESPONSIVOS ---
 def apply_styles():
     st.markdown("""
@@ -3067,7 +3130,7 @@ if st.session_state.missao_ativa is not None:
         </div>
         """, unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["🌐 Templates Públicos", "📤 Compartilhar Meu Edital"])
+        tab1, tab2, tab3 = st.tabs(["🌐 Templates Públicos", "📤 Compartilhar Meu Edital", "🗂️ Meus Templates"])
         
         # TAB 1: CLONAR TEMPLATES
         with tab1:
@@ -3196,6 +3259,83 @@ if st.session_state.missao_ativa is not None:
                                 st.error(result['message'])
                         else:
                             st.warning("Preencha o nome do template!")
+        
+        # TAB 3: GERENCIAR MEUS TEMPLATES
+        with tab3:
+            st.markdown("### 🗂️ Meus Templates Públicos")
+            
+            meus_templates = listar_meus_templates(supabase, user_id)
+            
+            if not meus_templates:
+                st.info("📭 Você ainda não compartilhou nenhum edital como template.")
+                st.markdown("💡 Vá para a aba **'Compartilhar Meu Edital'** para criar seu primeiro template!")
+            else:
+                st.markdown(f"""
+                <div style='background: rgba(16, 185, 129, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                    ✨ Você tem <strong>{len(meus_templates)}</strong> template(s) público(s)!
+                </div>
+                """, unsafe_allow_html=True)
+                
+                for concurso, info in meus_templates.items():
+                    with st.expander(f"📚 {info['nome']} ({info['clones']} clone(s))"):
+                        st.markdown(f"**Concurso:** {concurso}")
+                        st.markdown(f"**Cargo:** {info['cargo']}")
+                        if info['descricao']:
+                            st.markdown(f"**Descrição:** {info['descricao']}")
+                        
+                        st.markdown(f"**📊 Estatísticas:**")
+                        st.metric("Clones realizados", info['clones'])
+                        
+                        # Mostrar matérias do template
+                        materias = visualizar_template(supabase, concurso)
+                        if materias:
+                            st.markdown("**Matérias incluídas:**")
+                            materias_nomes = [mat['materia'] for mat in materias]
+                            st.write(", ".join(materias_nomes))
+                        
+                        st.markdown("---")
+                        
+                        # Opções de gerenciamento
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**🔧 Gerenciar Template**")
+                            st.caption("Remover dos templates públicos (volta a ser privado)")
+                        
+                        with col2:
+                            if st.button(
+                                "🔒 Tornar Privado",
+                                key=f"remover_{concurso.replace(' ', '_')}",
+                                help="Remove este edital dos templates públicos. Seus dados continuarão privados.",
+                                use_container_width=True,
+                                type="secondary"
+                            ):
+                                # Confirmar ação
+                                if st.session_state.get(f'confirmar_remover_{concurso}', False):
+                                    result = remover_de_templates(supabase, concurso, user_id)
+                                    
+                                    if result['success']:
+                                        st.success(result['message'])
+                                        st.info("💡 Seu edital agora é privado novamente!")
+                                        time.sleep(2)
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error(result['message'])
+                                    
+                                    st.session_state[f'confirmar_remover_{concurso}'] = False
+                                else:
+                                    st.session_state[f'confirmar_remover_{concurso}'] = True
+                                    st.rerun()
+                        
+                        # Mensagem de confirmação
+                        if st.session_state.get(f'confirmar_remover_{concurso}', False):
+                            st.warning("⚠️ Tem certeza? Clique novamente para confirmar.")
+                        
+                        # Informações adicionais
+                        st.markdown("---")
+                        st.caption(f"💡 **Dica:** Mesmo como template público, apenas VOCÊ pode editar este edital. "
+                                 f"Outros usuários só podem clonar a estrutura (matérias/tópicos).")
 
     # --- ABA: GUIA SEMANAL (PLANNER INTELIGENTE) ---
     elif menu == "Guia Semanal":
