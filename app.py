@@ -852,25 +852,43 @@ st.set_page_config(
 from supabase import create_client, Client
 
 def init_supabase():
-    """Inicializa Supabase com suporte multi-usuário"""
+    """
+    Inicializa Supabase com persistência de sessão
+    
+    IMPORTANTE: As opções auto_refresh_token e persist_session
+    são ESSENCIAIS para manter o usuário logado após F5
+    """
+    
+    # Configurações de persistência
+    options = {
+        'auto_refresh_token': True,  # Renova token automaticamente
+        'persist_session': True,      # Mantém sessão no navegador
+    }
+    
     try:
-        # Tentar st.secrets primeiro (produção)
+        # Produção: usar st.secrets (Streamlit Cloud)
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
+        
+        client = create_client(url, key, options=options)
+        return client
+        
     except Exception:
         try:
-            # Tentar variáveis de ambiente (desenvolvimento)
+            # Desenvolvimento: usar variáveis de ambiente
             url = os.getenv("SUPABASE_URL")
             key = os.getenv("SUPABASE_KEY")
+            
             if url and key:
-                return create_client(url, key)
+                client = create_client(url, key, options=options)
+                return client
             else:
                 st.error("❌ Credenciais Supabase não configuradas!")
-                st.info("Configure SUPABASE_URL e SUPABASE_KEY em .streamlit/secrets.toml ou variáveis de ambiente")
+                st.info("Configure SUPABASE_URL e SUPABASE_KEY em .env ou secrets.toml")
                 return None
+                
         except Exception as e:
-            st.error(f"❌ Erro ao conectar com Supabase: {e}")
+            st.error(f"❌ Erro ao inicializar Supabase: {e}")
             return None
 
 # Inicializar Supabase
