@@ -868,8 +868,6 @@ def init_supabase():
     }
     
     from supabase import create_client, Client
-import os
-import streamlit as st
 
 def init_supabase():
     try:
@@ -3175,7 +3173,7 @@ if st.session_state.missao_ativa is not None:
                                     topicos = mat.get('topicos', [])
                                     if topicos:
                                         for topico in topicos:
-                                            st.write(f"• {topico}")
+                                            (f"• {topico}")
                                     else:
                                         st.caption("Sem tópicos definidos")
                         
@@ -3311,7 +3309,7 @@ if st.session_state.missao_ativa is not None:
                         if materias:
                             st.markdown("**Matérias incluídas:**")
                             materias_nomes = [mat['materia'] for mat in materias]
-                            st.write(", ".join(materias_nomes))
+                            (", ".join(materias_nomes))
                         
                         st.markdown("---")
                         
@@ -3533,7 +3531,7 @@ if st.session_state.missao_ativa is not None:
             # Ordenar por score de prioridade (maior primeiro)
             pend = sorted(pend, key=lambda x: x['priority_score'], reverse=True)
             
-            st.write(f"**{len(pend)} revisões encontradas** (ordenadas por prioridade)")
+            (f"**{len(pend)} revisões encontradas** (ordenadas por prioridade)")
             st.markdown("---")
             
             # Lista de Cards com Expander (Suspensa/Minimizada) - VERSÃO MELHORADA
@@ -3613,8 +3611,8 @@ if st.session_state.missao_ativa is not None:
                         tempo_rev = ci3.number_input("⏱️ Tempo (min)", min_value=0, value=0, step=5, key=f"tm_{p['id']}_{p['col']}_{idx}")
                     
                     with col_btn:
-                        st.write("")  # Espaço
-                        st.write("")  # Espaço
+                        ("")  # Espaço
+                        ("")  # Espaço
                         if st.button("✅ Concluir", key=f"btn_{p['id']}_{p['col']}_{idx}", use_container_width=True, type="primary"):
                             if total == 0:
                                 st.error("⚠️ Informe o total de questões!")
@@ -4596,7 +4594,7 @@ if st.session_state.missao_ativa is not None:
         else:
             st.info("📚 Registre seus primeiros estudos para ver o gráfico de evolução!")
 
-        st.write("") # Espaçador
+        ("") # Espaçador
 
     # --- ABA: SIMULADOS (NOVA) ---
     elif menu == "Simulados":
@@ -4898,9 +4896,9 @@ if st.session_state.missao_ativa is not None:
                                             """, unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
                             except Exception:
-                                st.write(f"Ref: {comentario}")
+                                (f"Ref: {comentario}")
                         else:
-                            st.write(f"Notas: {comentario}")
+                            (f"Notas: {comentario}")
                             
                         st.markdown("</div>", unsafe_allow_html=True)
                         
@@ -4956,7 +4954,7 @@ if st.session_state.missao_ativa is not None:
                 with col_f3:
                     ordem = st.selectbox("Ordenar por:", ["Mais Recente", "Mais Antigo", "Maior Taxa", "Menor Taxa", "Maior Relevância"], key="ord_hist")
                 with col_f4:
-                    st.write("")  # Espaçamento
+                    ("")  # Espaçamento
             
                 # Aplicar filtros
                 df_filtered = df_h.copy()
@@ -5476,7 +5474,7 @@ if st.session_state.missao_ativa is not None:
                 )
             
             with col_principal2:
-                st.write("")  # Espaçamento
+                ("")  # Espaçamento
                 if st.button("⭐ Definir", use_container_width=True, type="primary", key="btn_definir_principal"):
                     try:
                         # PASSO 1: Remover is_principal de TODAS as linhas
@@ -5672,9 +5670,9 @@ if st.session_state.missao_ativa is not None:
         with st.container():
             st.markdown('<div class="modern-card">', unsafe_allow_html=True)
             st.markdown('### Dados do Edital', unsafe_allow_html=True)
-            st.write(f"**Concurso:** {missao}")
-            st.write(f"**Cargo:** {dados.get('cargo', '—')}")
-            st.write(f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
+            (f"**Concurso:** {missao}")
+            (f"**Cargo:** {dados.get('cargo', '—')}")
+            (f"**Data da Prova (atual):** {data_prova_atual.strftime('%d/%m/%Y') if data_prova_atual else '—'}")
             st.markdown('</div>', unsafe_allow_html=True)
 
         # Formulário para editar data da prova
@@ -5738,7 +5736,7 @@ if st.session_state.missao_ativa is not None:
                     with col_check:
                         selecionada = st.checkbox("", key=f"sel_{reg['id']}", help=f"Selecionar {reg['materia']} para exclusão")
                     with col_info:
-                        st.write(f"**{reg['materia']}** - {len(reg['topicos'] if reg['topicos'] else [])} assuntos")
+                        (f"**{reg['materia']}** - {len(reg['topicos'] if reg['topicos'] else [])} assuntos")
                 
                     if selecionada:
                         materias_selecionadas.append(reg)
