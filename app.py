@@ -1624,25 +1624,6 @@ if 'missao_semanal_status' not in st.session_state:
 if 'renomear_materia' not in st.session_state:
     st.session_state.renomear_materia = {}
 
-# Aplicar estilos base
-# DESABILITADO: apply_styles() - Substituído por css_completo_layout_fixo
-# apply_styles()
-
-# Configuração da página para responsividade
-st.markdown("""
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-""", unsafe_allow_html=True)
-
-# CSS Customizado para Layout Moderno - TEMA ROXO/CIANO
-# DESABILITADO: Todo CSS inline substituído por css_completo_layout_fixo
-"""
-st.markdown('''
-    <style>
-    # ESTE CSS FOI DESABILITADO PARA EVITAR CONFLITO COM O LAYOUT FIXO
-    # Todo o styling agora vem de css_completo_layout_fixo.py
-    </style>
-''', unsafe_allow_html=True)
-"""
 
 # --- NOVA FUNÇÃO: Processar assuntos em massa ---
 def processar_assuntos_em_massa(texto, separador=";"):
