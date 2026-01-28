@@ -4222,7 +4222,8 @@ if st.session_state.missao_ativa is not None:
                                     "rev_24h": not gerar_rev_reg, 
                                     "rev_07d": not gerar_rev_reg, 
                                     "rev_15d": not gerar_rev_reg, 
-                                    "rev_30d": not gerar_rev_reg
+                                    "rev_30d": not gerar_rev_reg,
+                                    "user_id": user_id  # MULTI-USER: Essencial para filtrar dados por usuário
                                 }
                                 supabase.table("registros_estudos").insert(payload).execute()
                                 
@@ -4665,7 +4666,8 @@ if st.session_state.missao_ativa is not None:
                                     "concurso": st.session_state.missao_ativa,
                                     "rev_24h": True, "rev_07d": True, "rev_15d": True, "rev_30d": True,
                                     "dificuldade": "Simulado",
-                                    "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}"
+                                    "comentarios": f"Banca: {banca_sim} | Detalhes: {detalhes}",
+                                    "user_id": user_id  # MULTI-USER: Essencial para filtrar dados por usuário
                                 }
                                 try:
                                     supabase.table("registros_estudos").insert(simulado_data).execute()
