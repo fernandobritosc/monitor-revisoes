@@ -836,18 +836,6 @@ def validar_tempo_hhmm(tempo_str):
     except Exception as e:
         return False, f"Erro ao processar tempo: {e}", 0
 
-# --- 1. CONFIGURAÇÃO E DESIGN SYSTEM ---
-st.set_page_config(
-    page_title="Monitor de Revisões Pro", 
-    layout="wide", 
-    initial_sidebar_state="collapsed",  # COLLAPSED por padrão para melhor UX
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': "MonitorPro - Sistema Inteligente de Gestão de Estudos"
-    }
-)
-
 # --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
 import os
 import streamlit as st
@@ -860,18 +848,34 @@ def init_supabase():
     IMPORTANTE: Formato atualizado para versão recente do supabase-py
     """
     
+    def init_supabase():
+    """Inicializa Supabase COM PERSISTÊNCIA DE SESSÃO"""
+    
+    # OPÇÕES CRÍTICAS PARA PERSISTÊNCIA
+    options = {
+        'auto_refresh_token': True,   # Renovar token automaticamente
+        'persist_session': True,       # Salvar sessão no localStorage
+    }
+    
     try:
-        # Produção: usar st.secrets (Streamlit Cloud)
+        # Produção: st.secrets (Streamlit Cloud)
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        
-        # Criação do cliente SEM o parâmetro options
-        client = create_client(url, key)
-        
-        # Para persistência, podemos configurar manualmente se necessário
-        # O cliente moderno já gerencia sessões automaticamente
-        
-        return client
+        return create_client(url, key, options=options)  # ✅ COM OPTIONS!
+    except Exception:
+        try:
+            # Desenvolvimento: variáveis de ambiente
+            import os
+            url = os.getenv("SUPABASE_URL")
+            key = os.getenv("SUPABASE_KEY")
+            if url and key:
+                return create_client(url, key, options=options)  # ✅ COM OPTIONS!
+            else:
+                st.error("❌ Credenciais Supabase não configuradas!")
+                return None
+        except Exception as e:
+            st.error(f"❌ Erro ao inicializar Supabase: {e}")
+            return None
         
     except Exception:
         try:
