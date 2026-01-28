@@ -836,17 +836,15 @@ def validar_tempo_hhmm(tempo_str):
     except Exception as e:
         return False, f"Erro ao processar tempo: {e}", 0
 
-# --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
+# =============================================================================
+# SUPABASE - INICIALIZAÇÃO CORRETA (PUBLISHABLE KEY)
+# =============================================================================
 
+import os
+import streamlit as st
 from supabase import create_client, Client
 
-def init_supabase():
-    """
-    Inicializa Supabase com persistência de sessão
-    
-    IMPORTANTE: Formato atualizado para versão recente do supabase-py
-    """
-    
+
 def init_supabase() -> Client | None:
     try:
         # 1️⃣ Streamlit Cloud
@@ -860,9 +858,7 @@ def init_supabase() -> Client | None:
             if not url.startswith("https://"):
                 raise ValueError("SUPABASE_URL inválida")
 
-            if len(key) < 100:
-                raise ValueError("SUPABASE_KEY inválida (muito curta)")
-
+            # ✅ NÃO validar tamanho da key (publishable é curta)
             return create_client(url, key)
 
         # 2️⃣ Ambiente local
@@ -886,9 +882,6 @@ if not supabase:
     st.error("❌ Erro ao conectar com Supabase. Verifique as configurações.")
     st.stop()
 
-
-# Inicializar Supabase
-supabase: Client | None = init_supabase()
 
 
 # =============================================================================
