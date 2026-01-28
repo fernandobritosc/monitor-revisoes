@@ -867,41 +867,37 @@ def init_supabase():
         'persist_session': True,      # Salvar sessão no localStorage do navegador
     }
     
+    from supabase import create_client, Client
+import os
+import streamlit as st
+
+def init_supabase():
     try:
-        # Tentar st.secrets (produção/Streamlit Cloud)
+        # Produção / Streamlit Cloud
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        client = create_client(url, key, options=options)
-        return client
-        
+        return create_client(url, key)
+
     except Exception:
         try:
-            # Tentar variáveis de ambiente (desenvolvimento local)
+            # Desenvolvimento local
             url = os.getenv("SUPABASE_URL")
             key = os.getenv("SUPABASE_KEY")
-            
+
             if url and key:
-                client = create_client(url, key, options=options)
-                return client
-            else:
-                st.error("❌ Credenciais Supabase não configuradas!")
-                st.info("Configure SUPABASE_URL e SUPABASE_KEY")
-                return None
-                
-        except Exception as e:
-            st.error(f"❌ Erro ao conectar ao Supabase: {str(e)}")
-            return None
-                
-        except Exception as e:
-            st.error(f"❌ Erro ao inicializar Supabase: {str(e)}")
-            st.info("📌 Dica: Execute 'pip install --upgrade supabase'")
+                return create_client(url, key)
+
+            st.error("❌ Credenciais Supabase não configuradas!")
             return None
 
+        except Exception as e:
+            st.error(f"❌ Erro ao conectar ao Supabase: {e}")
+            return None
+
+
 # Inicializar Supabase
-try:
-    supabase: Client = init_supabase()
-except Exception:
-    supabase = None
+supabase: Client | None = init_supabase()
+
 
 # =============================================================================
 # MULTI-USER: AUTENTICAÇÃO
