@@ -848,48 +848,49 @@ def init_supabase():
     IMPORTANTE: Formato atualizado para versão recente do supabase-py
     """
     
-    def init_supabase():
-    """Inicializa Supabase COM PERSISTÊNCIA DE SESSÃO"""
+  def init_supabase():
+    """
+    Inicializa cliente Supabase com persistência de sessão.
     
-    # OPÇÕES CRÍTICAS PARA PERSISTÊNCIA
+    As opções auto_refresh_token e persist_session são ESSENCIAIS
+    para manter o usuário logado após F5 ou reload da página.
+    
+    Returns:
+        Client: Cliente Supabase configurado
+    """
+    from supabase import create_client
+    import os
+    
+    # Configurações de persistência
     options = {
-        'auto_refresh_token': True,   # Renovar token automaticamente
-        'persist_session': True,       # Salvar sessão no localStorage
+        'auto_refresh_token': True,  # Renovar token automaticamente antes de expirar
+        'persist_session': True,      # Salvar sessão no localStorage do navegador
     }
     
     try:
-        # Produção: st.secrets (Streamlit Cloud)
+        # Tentar st.secrets (produção/Streamlit Cloud)
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key, options=options)  # ✅ COM OPTIONS!
-    except Exception:
-        try:
-            # Desenvolvimento: variáveis de ambiente
-            import os
-            url = os.getenv("SUPABASE_URL")
-            key = os.getenv("SUPABASE_KEY")
-            if url and key:
-                return create_client(url, key, options=options)  # ✅ COM OPTIONS!
-            else:
-                st.error("❌ Credenciais Supabase não configuradas!")
-                return None
-        except Exception as e:
-            st.error(f"❌ Erro ao inicializar Supabase: {e}")
-            return None
+        client = create_client(url, key, options=options)
+        return client
         
     except Exception:
         try:
-            # Desenvolvimento: usar variáveis de ambiente
+            # Tentar variáveis de ambiente (desenvolvimento local)
             url = os.getenv("SUPABASE_URL")
             key = os.getenv("SUPABASE_KEY")
             
             if url and key:
-                client = create_client(url, key)
+                client = create_client(url, key, options=options)
                 return client
             else:
                 st.error("❌ Credenciais Supabase não configuradas!")
-                st.info("Configure SUPABASE_URL e SUPABASE_KEY em .env ou secrets.toml")
+                st.info("Configure SUPABASE_URL e SUPABASE_KEY")
                 return None
+                
+        except Exception as e:
+            st.error(f"❌ Erro ao conectar ao Supabase: {str(e)}")
+            return None
                 
         except Exception as e:
             st.error(f"❌ Erro ao inicializar Supabase: {str(e)}")
