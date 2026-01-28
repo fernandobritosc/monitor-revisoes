@@ -848,7 +848,7 @@ def init_supabase():
     IMPORTANTE: Formato atualizado para versão recente do supabase-py
     """
     
-  def init_supabase():
+def init_supabase():
     """
     Inicializa cliente Supabase com persistência de sessão.
     
