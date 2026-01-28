@@ -837,8 +837,7 @@ def validar_tempo_hhmm(tempo_str):
         return False, f"Erro ao processar tempo: {e}", 0
 
 # --- INTEGRAÇÃO: SUPABASE (MULTI-USER MODE) ---
-import os
-import streamlit as st
+
 from supabase import create_client, Client
 
 def init_supabase():
