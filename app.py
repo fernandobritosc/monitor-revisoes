@@ -913,75 +913,71 @@ if supabase:
     # Usuário AUTENTICADO -> Obter user_id para usar nas queries
     user_id = auth.get_user_id()
     
-    # =============================================================================
-    # MULTI-USER: WIDGET DE USUÁRIO NA SIDEBAR
-    # =============================================================================
-    
-    with st.sidebar:
-        # Card do usuário
-        st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #8B5CF6 0%, #06B6D4 100%);
-            padding: 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">👤</div>
-            <div style="font-weight: 700; color: white; font-size: 1.1rem; margin-bottom: 0.25rem;">
-                {auth.get_user_name()}
-            </div>
-            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); word-break: break-all;">
-                {auth.get_user_email()}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🚪 Sair", use_container_width=True, type="secondary", key="logout_btn_main"):
-            result = auth.logout()
-            if result['success']:
-                st.rerun()
-        
-        st.markdown("---")
-else:
+# =============================================================================
+# INTEGRAÇÃO: SUPABASE (MULTI-USER MODE)
+# =============================================================================
+
+import os
+import streamlit as st
+from supabase import create_client, Client
+
+
+def init_supabase() -> Client | None:
+    """
+    Inicializa o cliente Supabase.
+
+    Compatível com:
+    - Streamlit Cloud (st.secrets)
+    - Ambiente local (.env / variáveis de ambiente)
+
+    NÃO usa options, persist_session ou auto_refresh_token
+    (incompatíveis / instáveis no Streamlit).
+    """
+    try:
+        # Streamlit Cloud / Produção
+        url = st.secrets.get("SUPABASE_URL")
+        key = st.secrets.get("SUPABASE_KEY")
+
+        if url and key:
+            return create_client(url, key)
+
+        # Fallback: ambiente local
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+
+        if url and key:
+            return create_client(url, key)
+
+        st.error("❌ SUPABASE_URL ou SUPABASE_KEY não configurados.")
+        return None
+
+    except Exception as e:
+        st.error(f"❌ Erro ao inicializar Supabase: {e}")
+        return None
+
+
+# Inicializar Supabase
+supabase: Client | None = init_supabase()
+
+# =============================================================================
+# MULTI-USER: AUTENTICAÇÃO
+# =============================================================================
+
+if not supabase:
     st.error("❌ Erro ao conectar com Supabase. Verifique as configurações.")
     st.stop()
 
-# --- INTEGRAÇÃO: LÓGICA ---
-def get_editais(supabase, user_id):
-    if not supabase: return {}
-    try:
-        response = supabase.table("editais_materias").select("*").eq("user_id", user_id).execute()
-        data = response.data
-        editais = {}
-        if data:
-            for item in data:
-                concurso = item.get("concurso")
-                if not concurso: continue
-                if concurso not in editais:
-                    editais[concurso] = {
-                        "cargo": item.get("cargo", ""),
-                        "data_prova": item.get("data_prova"),
-                        "materias": {}
-                    }
-                materia = item.get("materia")
-                topicos = item.get("topicos", [])
-                if materia:
-                    editais[concurso]["materias"][materia] = topicos
-        return editais
-    except Exception:
-        return {}
+# Inicializar gerenciador de autenticação
+auth = AuthManager(supabase)
 
-def excluir_concurso_completo(supabase, missao, user_id):
-    if not supabase or not missao: return False
-    try:
-        supabase.table("registros_estudos").delete().eq("concurso", missao).eq("user_id", user_id).execute()
-        supabase.table("editais_materias").delete().eq("concurso", missao).eq("user_id", user_id).execute()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao excluir concurso: {e}")
-        return False
+# Verificar autenticação
+if not auth.is_authenticated():
+    auth.render_login_page()
+    st.stop()
+
+# Usuário autenticado
+user_id = auth.get_user_id()
+
 
 # ============================================================================
 # FUNCIONALIDADE: TEMPLATES PÚBLICOS E CLONAGEM DE EDITAIS
